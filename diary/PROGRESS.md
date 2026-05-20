@@ -2,7 +2,224 @@
 
 **Format:** One entry per session. Most recent entry first.
 
-## 2026-05-11 — TASK-128: `jadard_prepare` 10ms post-rail + 20ms RESX low (`0007`)
+## 2026-05-21 — A2 session closure (**TASK‑132**/TASK‑133): hardware power‑switch fault isolated (`develop` freeze)
+
+**Agent:** A2 (Composer2) — **session wrap-up (**A1** directive)**
+
+### Lab sign-off (**owner evidence → A1**)
+
+**Hardware power switch failure confirmed.** Software path (**TASK‑132**) is **validated correct**: **CON1 pin 13 @ ~0 V** when enabling **`vcc3v3_lcd0_n`** ( **`GPIO0_C7`**, active‑low P‑FET “ON”). The **carrier board** still delivered **pins 5/6 @ ~0.8 V**, not ~3.3 V — definitive **carrier load‑switch analogue failure**, **not DTS / Yocto**. **Awaiting Plan B hardware bypass wire** (**`VCC3V3_SYS` → pins 5/6**, **`BLK-013`** / **`BLOCKERS`**).
+
+### Repo / branch
+
+- **Canonical branch:** **`task/TASK-132-vcc3v3-lcd0-active-low-pfet`** (**session‑closure commit** — **`origin`** push by A2) — **`elevator-hmi-boardcon-em3566-v3.dts`** = **TASK‑132** polarity + **TASK‑133** **`vcca_1v8`** / **`LDO_REG7`** delete.
+- **`docs/FLASH-PROCEDURE.md`** + **`diary/BLOCKERS.md`**: defective reference carrier wording finalized.
+- **WIC artefact (**example, host build **2026‑05‑20**):** **`build/tmp/deploy/images/elevator-hmi-em3566/core-image-minimal-elevator-hmi-em3566.rootfs-20260520203942.wic`** — rebuild after pull if DTS changed (**`kas shell …`** in FLASH).
+
+### Tonight / tomorrow (**A1**)
+
+- No further **`bitbake`** tonight.
+- Tomorrow: **Plan B** jumper **or** swap carrier → then DSI / **`jadard`** (**TASK‑106**, **TASK‑125**).
+
+---
+
+## 2026-05-21 — A1: Plan B architecture sign-off (**BLK-013** closure) + residual software bring-up
+
+**Agent:** A1 (Lead — diary capture by A2/Cursor)
+
+### Summary — power (`VCC3V3_LCD`)
+
+- **Permanent 3.3 V bypass:** **`VCC3V3_SYS`** (upstream of the defective load switch) → **CON1 pins 5/6** is **accepted** for **Phase 0/1** reference EM3566 v3 bring-up (**industry-normal** workaround). **Production:** restore proper **rail power management** on the **carrier** (panel cannot be software-gated via **`vcc3v3_lcd0_n`** while bypassed reference hardware is used). **Implications (**A1**):** rail always on whenever board **3.3 V** present; bypass **gauge / inrush** — usually tolerable from board **3.3 V**.
+- **`BLK-013`:** Closed in **`diary/BLOCKERS.md`** with wording above (**2026-05-21**). **`TASK-133`** DTS + TASK-132 polarity stay in tree for reproducibility and successor boards (`elevator-hmi-boardcon-em3566-v3.dts`).
+
+### Summary — reset (**TASK-121**, **CON1** pin **11**, **`RK_PB6`**)
+
+- **`jadard`** **`reset-gpios`** mapped to **`TOUCH_RST`**: **`gpiod_set_value_cansleep`** implements **timed** reset per driver/vendor (**TASK-128**/descriptor timing). Remaining residual risk (**A1**): carrier buffering vs **SoC** **`GPIO0_PB6`** unlikely per Boardcon direct-GPIO schematic reading.
+
+### Next if panel still black
+
+**With ~3.3 V verified at CON1 5–6**, pivot to **MIPI DSI** / **lanes** (`dsi-lanes`, `CMD_DSI_INT0`) / **`jadard`** init table (**TASK-125**, **TASK-106**) — treat **rail + GPIO reset mapping** as **settled**.
+
+**Docs touched:** **`diary/BLOCKERS.md`** (+ **BLK-012** cross-ref tweak), **`AGENTS.md`**, **`docs/FLASH-PROCEDURE.md`** handoff table.
+
+---
+
+## 2026-05-20 — A2: TASK-133 emergency DTS (`vcca_1v8` board fixed + `LDO_REG7` delete) + TASK-132 P-FET kept
+
+**Agent:** A2 (Composer2)
+
+### Summary
+
+- **A1 directive:** **`TASK-133`** — CM3566 has no working RK809 **`LDO_REG7`** path on bench; TASK-130 **`vcca_1v8`** via PMIC caused DSI **`dw-mipi-dsi-rockchip`** **`-517`** (**EPROBE_DEFER**) loops. Restore **`/delete-node/ LDO_REG7`** under **`&rk809`** and board-scope **`vcca_1v8`** **`regulator-fixed`** (TASK-129 architecture). Keep **`&vcc3v3_lcd0_n`** exactly as **TASK-132** (active-low P-FET, no **`vin-supply`**).
+- **Branch:** **`task/TASK-133-revert-pmic-fix-pfet`** (from TASK-132 carry-forward + DTS edit).
+- **Files:** **`meta-hmi-platform/recipes-kernel/linux/files/elevator-hmi-boardcon-em3566-v3.dts`**; **`AGENTS.md`** (**TASK-133** block, sprint queue, TASK-132 note corrections); **`docs/FLASH-PROCEDURE.md`** (flash **`TASK-133`** branch).
+- **Build / WIC:** **`kas shell kas/elevator-hmi.yml -c "bitbake virtual/kernel -c compile -f && bitbake virtual/kernel -c deploy -f && bitbake core-image-minimal -c image_wic -f && bitbake core-image-minimal -c image_complete -f"`** → **exit 0** (taints WARN only). **`kas shell … -c "bitbake -p"`** → **exit 0**.
+- **Artifact:** **`build/tmp/deploy/images/elevator-hmi-em3566/core-image-minimal-elevator-hmi-em3566.rootfs-20260520203942.wic`** · SHA-256 **`0e47eda93c97b0e80c1ae45da9a27689c54fe073bbc49bc0cdd86dfa4dbe6095`** (symlink **`…rootfs.wic`**).
+
+---
+
+## 2026-05-20 — A2: TASK-132 branch, comment nit, kas kernel + WIC (green)
+
+**Agent:** A2 (Composer2)
+
+### Summary
+
+- **Branch:** **`task/TASK-132-vcc3v3-lcd0-active-low-pfet`** created locally ( **`git fetch origin`** failed — SSH **`Permission denied`** on this host; branch tracks current **`HEAD`**).
+- **DTS:** **`&vcc3v3_lcd0_n`** comment updated — explicitly aligned with **TASK-130** (**`LDO_REG7`** / **`vcca_1v8`**, no board duplicate).
+- **Build:** **`kas shell kas/elevator-hmi.yml -c "bitbake virtual/kernel -c compile -f && bitbake virtual/kernel -c deploy -f"`** → **exit 0** (forced-task **taints** WARN only).
+- **WIC:** **`kas shell … -c "bitbake core-image-minimal -c image_wic -f && … -c image_complete -f"`** → **exit 0**.
+- **Artifact:** **`build/tmp/deploy/images/elevator-hmi-em3566/core-image-minimal-elevator-hmi-em3566.rootfs-20260520200924.wic`** (~3.1 GiB); symlink **`…rootfs.wic`** → same.
+- **TASK-132 status:** unchanged **`[TESTING]`** — **TASK-118** / **TASK-116** not started per A1 pause.
+
+---
+
+## 2026-05-20 — A1: TASK-132 `[REVIEW]` → `[TESTING]` (code PASS; bench gate)
+
+**Agent:** A1 (Lead)
+
+### Summary
+
+- **TASK-132** (`vcc3v3_lcd0_n` active-low / EM3566 P-FET): **A1 code review PASS (pending lab).** Status **`[TESTING]`** — owner must run **`docs/FLASH-PROCEDURE.md`** **§ TASK-132 — Lab protocol (A1)** before merge to **`develop`**.
+- **Verdict:** Polarity + PMIC isolation + no **`vin-supply`** documented in **`AGENTS.md`** TASK-132 **A1 review notes**.
+- **`AGENTS.md`:** New coordination meaning for **`[TESTING]`**; sprint queue points to FLASH lab §.
+- **`docs/FLASH-PROCEDURE.md`:** Full **Step 1–3** build / no-load gate / panel / failure table.
+- **Next:** Owner bench → **`[DONE]`** + **BLK-013** closure on success; **Plan B** if **pin 13 ~0 V** but **5–6** still bad.
+
+---
+
+## 2026-05-20 — TASK-132: `vcc3v3_lcd0_n` active-low override (EM3566 P-FET) + docs
+
+**Agent:** A2 (Cursor)
+
+### Summary
+
+- **DTS:** **`meta-hmi-platform/recipes-kernel/linux/files/elevator-hmi-boardcon-em3566-v3.dts`** — **`&vcc3v3_lcd0_n`** (**TASK-132**); **`&rk809`** keeps **`LDO_REG7`** / PMIC **`vcca_1v8`** (removed **`/delete-node/ LDO_REG7`** and board duplicate **`vcca_1v8`** per **TASK-130**). **`#include`** gpio + rockchip bindings. No **`vin-supply`** on fragment (**TASK-131**).
+- **BLOCKERS:** **`diary/BLOCKERS.md`** — **BLK-013** text updated (DT mitigation + Plan B fallback).
+- **Docs:** **`docs/FLASH-PROCEDURE.md`** — TASK-132 verification section; TASK-129 section marked historical.
+- **AGENTS:** **TASK-132** **`[REVIEW]`** with acceptance criteria (**CON1 5–6 ~3.3 V**, **`gpio-23`** **`out lo`**, no DSI **`-517`** storm).
+- **Owner next:** **`bitbake virtual/kernel`** (or full WIC), flash, run verification; paste results → A1 sets **`[DONE]`** / close **BLK-013** if pass.
+
+---
+
+## 2026-05-20 — Revert DTS workspace to TASK-129 branch snapshot
+
+**Agent:** A2 (Cursor)
+
+### Summary
+
+- **Reason:** Bench **`dmesg`** still showed **DRM / rockchip-vop2 / dwhdmi-rockchip / dwmmc** lines **repeating** (**display-subsystem** rebind / deferred-probe churn). User requested rollback **beyond TASK-130/TASK-131**.
+- **Action:** Checked out **`meta-hmi-platform/recipes-kernel/linux/files/elevator-hmi-boardcon-em3566-v3.dts`** from git branch **`task/TASK-129-vcc3v3-lcd0-pfet-polarity`** (restores **`/delete-node/ LDO_REG7`** under **`&rk809`** plus board-scope **`vcca_1v8`** **`regulator-fixed`**). **`linux-rockchip_%.bbappend`** / **`elevator-hmi-em3566.conf`** already referenced a **single** **`elevator-hmi-boardcon-em3566-v3.dtb`** — no TASK-131 lcdrail **`*.dtsi`** in **`files/`** on this checkout.
+- **Docs:** **`docs/FLASH-PROCEDURE.md`** — obsolete TASK-131 **triple-DTB** swap section replaced with **TASK-129 baseline** + “rebuild + flash **new** WIC timestamp” reminder.
+- **Caveats:** Revives TASK-129 **RK809/LDO_REG7** handling (**TASK-130** had documented why PMIC **LDO_REG7** is **`vcca_1v8`**, not **VCC3V3_LCD**). **`&vcc3v3_lcd0_n`** P‑FET **DT fragment** described in **`AGENTS.md`** TASK-129 output notes **is absent** from the TASK-129 **git** DTS (only backlight **`power-supply = <&vcc3v3_lcd0_n>;`**); add **`&vcc3v3_lcd0_n`** override only under a new task/spec if bench needs it.
+- **Kernel build:** **`kas shell kas/elevator-hmi.yml -c "bitbake virtual/kernel -c compile -f && bitbake virtual/kernel -c deploy -f"`** → **exit 0**. **`elevator-hmi-boardcon-em3566-v3.dtb`** SHA256 **`54f07dba885b86b00e4d210110ce353dc686df6d1d8930a71824d3f365364972`** (**TASK-129 DTS**).
+- **`core-image-minimal` WIC:** **`kas shell kas/elevator-hmi.yml -c "bitbake core-image-minimal -c image_wic -f && bitbake core-image-minimal -c image_complete -f"`** → **exit 0** (2026-05-20). **`core-image-minimal-elevator-hmi-em3566.rootfs-20260520184237.wic`** · SHA-256 **`ee9866c538420d7befc149be953bef7a358591724020230171ddbf3a47635069`**. Stable symlink **`core-image-minimal-elevator-hmi-em3566.rootfs.wic`**.
+- **Flash:** See **`docs/FLASH-PROCEDURE.md`** (**Steps 2–5**: deploy dir, **`rkdeveloptool`** **`wl`** / **`rd`**).
+
+---
+
+## 2026-05-20 — TASK-115: `elevator-hmi-image` parse smoke test (A1)
+
+### Summary
+
+- **Yocto Recipe Parse**: Ran `kas shell kas/elevator-hmi.yml -c "bitbake -p elevator-hmi-image"` successfully.
+- **Result**: Checked 2587 `.bb` files (2582 cached, 5 parsed), 4482 targets, 360 skipped, 0 masked, 0 errors. Exit 0.
+
+---
+
+## 2026-05-18 — A1: TASK-131 `[DONE]` review & WIC Build Complete
+
+**Agent:** A1  
+**Phase:** 1
+
+### Review verdicts
+
+- **TASK-131 `[DONE]`** — The `vin-supply` removal is correct and complete. The comment in the dtsi documents the regression cause precisely.
+- **Verification:** `grep -r "vin-supply"` on the DTSI fragments returns no output. The rework is structurally sound.
+- **WIC Rebuild:** WIC rebuild is complete (`exit 0`). The flashable WIC with all three DTBs on the boot partition is ready.
+
+### Next Steps — Owner
+
+**Step 1:** The board is running the stable TASK-130 image. Do not reflash anything yet.
+Power off the board completely. Disconnect the FPC adapter from CON1. Power on. Boot to login prompt. Then probe **CON1 pin 5 to CON1 pin 3** with your multimeter.
+
+- If ~3.3V: Adapter has GND short. Do not flash TASK-131. Fix adapter wiring instead.
+- If 0V: Board circuit issue confirmed. Flash TASK-131 rework WIC, test both DTBs.
+
+**Lab update (2026-05-20):** **`elevator-hmi-boardcon-em3566-v3.dts`** in **`meta-hmi-platform`** rolled back to **TASK-129** (**`task/TASK-129-vcc3v3-lcd0-pfet-polarity`**) snapshot. **`docs/FLASH-PROCEDURE.md`** no longer documents TASK-131 **multi-DTB** swap. Prefer a **fresh** **`core-image-minimal`** WIC from this tree (plus **`idblock`**/**`uboot`**) vs older artefacts.
+
+---
+
+## 2026-05-18 — TASK-131 `[REWORK]`: drop `vin-supply` on `vcc3v3_lcd0_n` (DSI `-517` loop)
+
+**Agent:** A2 (Cursor)  
+
+### Summary
+
+- **Cause (A1):** First TASK-131 image used **`vin-supply = <&vcc3v3_sys>`** on **`vcc3v3_lcd0_n`** with **`regulator-always-on`** → regulator/DRM **deferred probe** churn (**`failed to find panel or bridge: -517`**, repeating).  
+- **Fix:** Remove **`vin-supply`** from **`elevator-hmi-boardcon-em3566-v3-lcdrail-active-low.dtsi`** and **`…-active-high.dtsi`**; keep split DTS, dual polarity, **`regulator-always-on`**, voltage min/max, three DTBs.  
+- **Owner:** Restore **TASK-130** WIC (**`…rootfs-20260518192215.wic`**); **do not** flash pre-rework TASK-131 WIC. **Step 1:** power off, **disconnect FPC**, boot, measure CON1 **5→3** at login — **before** any TASK-131-rework flash.  
+- **Build (rework):** **`kas shell kas/elevator-hmi.yml -c "bitbake virtual/kernel -c compile -f && bitbake virtual/kernel -c deploy -f"`** → **exit 0** (2026-05-18; expected **`-f`** taint warnings). Deploy DTB SHA256 **`elevator-hmi-boardcon-em3566-v3.dtb`** / **`…-active-low.dtb`:** `319f04987b9e60a56d8125c0f86544016f735dfbfe64958d6e6eed19f64025f8`; **`…-active-high.dtb`:** `a998e3cdff56c64c9b305525e786435d6adbb4d73bfff5a0237fffe77fd37d5c`. Source lcdrail **`.dtsi`** files: **`git grep vin-supply`** under `files/` → **none** (remaining **`vin-supply`** / **`vcc3v3_sys`** strings in DTB are **other** nodes). **WIC:** not rebuilt — run **`image_wic`** / **`image_complete`** when a flashable image is needed post–Step 1.
+
+---
+
+## 2026-05-18 — TASK-131: Dual `vcc3v3_lcd0_n` DTBs (`vin-supply` + polarity A/B) *[first pass — withdrawn; see rework above]*
+
+**Agent:** A2 (Cursor)  
+**Phase:** 1  
+
+### Summary
+
+- Split **`elevator-hmi-boardcon-em3566-v3.dts`** into **`elevator-hmi-boardcon-em3566-v3-board.dtsi`** + **`elevator-hmi-boardcon-em3566-v3-lcdrail-active-{low,high}.dtsi`**; wrappers **`elevator-hmi-boardcon-em3566-v3-active-{low,high}.dts`**. **`v3.dts`** == active-low (**`TASK-131`** experiment).  
+- Lcdrail: **`vin-supply = <&vcc3v3_sys>;`**, **`regulator-{min,max}-microvolt = <3300000>;`**, **`regulator-always-on;`**. Active-low **`GPIO_ACTIVE_LOW`** + **`/delete-property/ enable-active-high;`**. Active-high **`GPIO_ACTIVE_HIGH`** + **`enable-active-high;`**.  
+- **`elevator-hmi-em3566.conf`:** three **`KERNEL_DEVICETREE`** entries; **`IMAGE_BOOT_FILES`** deploys **`Image`** + three **`.dtb`**. **`docs/FLASH-PROCEDURE.md`:** § **TASK-131 — DTB swap**.  
+- **WIC:** **`core-image-minimal-elevator-hmi-em3566.rootfs-20260518202247.wic`**. **`…v3.dtb`** SHA256 **`37ce76bfb…`** (matches **`…active-low.dtb`**); **`…active-high.dtb`** **`ecf395a49…`**.  
+
+### Owner
+
+- **Before flash:** adapter / flex **Step 1** continuity (isolate GND short). Swap DTB blob on **`p1`** per FLASH-PROCEDURE; measure CON1 **5→3** at login — matrix in **TASK-131** **`AGENTS.md`**.
+
+---
+
+## 2026-05-18 — A1: TASK-130 `[DONE]` review & Hardware Defect Conclusion
+
+**Agent:** A1  
+**Phase:** 1
+
+### Review verdicts
+
+- **TASK-130 `[DONE]`** — A2's BSP finding is correct. LDO_REG7 in the BSP is `vcca_1v8` at 1.8V, not `VCC3V3_LCD`. Removing the `/delete-node/ LDO_REG7`, removing the fixed `vcca_1v8` duplicate, and reverting the TASK-129 `&vcc3v3_lcd0_n` override are all PASS. PMIC LDO7 (vcca_1v8, 1.8V) is now restored, fixing the broken DSI PHY analog supply (broken since TASK-120). BSP default (enable-active-high) for `vcc3v3_lcd0_n` is restored, which is correct for GPIO0_C7.
+- **TASK-129 `[SUPERSEDED]`** — Superseded by TASK-130.
+
+### State of play — Hardware Defect
+
+- TASK-130 fixes a real bug (broken DSI PHY analog supply), but it does not fix VCC3V3_LCD.
+- Pure software explanations for why GPIO0_C7 produces 0V on CON1 pins 5/6 have been exhausted.
+- **Conclusion:** The switching component on the EM3566 v3 PCB between VCC3V3_SYS and CON1 is not responding to GPIO control. This requires the **Plan B hardware wire**.
+
+---
+
+## 2026-05-11 — TASK-129: LCD rail P-FET polarity (`vcc3v3_lcd0_n`) + same WIC as `0007`
+
+**Agent:** A2 (Cursor)  
+**Phase:** 1  
+
+### Summary
+
+- **`elevator-hmi-boardcon-em3566-v3.dts`:** **`&vcc3v3_lcd0_n`** — **`/delete-property/ enable-active-high;`** (BSP drove GPIO0_C7 HIGH when “enabled”; EM3566 v3 keeps P-FET **off** when gate is HIGH) + **`regulator-always-on;`** so **`VCC3V3_LCD`** is up at login without a DRM client.
+- **`0007`** (`TASK-128` `jadard` rail delay / 20 ms RESX low) unchanged in **`linux-rockchip_%.bbappend`** — same image.
+- **Build:** `kas shell …` → **`virtual/kernel`** compile/deploy + **`core-image-minimal`** `image_wic` / `image_complete` — exit **0** (expected BitBake **`‑f`** taint warnings).
+- **DTB check (host):** decompiled **`vcc3v3-lcd0-n`** has **`regulator-always-on`**, no **`enable-active-high`** property on that node.
+
+### Artefact
+
+- **`build/tmp/deploy/images/elevator-hmi-em3566/core-image-minimal-elevator-hmi-em3566.rootfs-20260511162809.wic`** (symlink **`…rootfs.wic`**).
+
+### Owner
+
+- **`diary/BLOCKERS.md`:** **BLK-012** closed — root cause inverted enable polarity vs P-FET; earlier “black panel” assumed panel logic power (**reopen `dmesg` / image** narrative after TASK-129 flash).
+
+---
+
 
 **Agent:** A2 (Cursor)  
 **Phase:** 1  

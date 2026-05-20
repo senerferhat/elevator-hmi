@@ -22,6 +22,26 @@ Public **EM3566 v3** materials (`library/EM3566/Usermanual/EM3566_hardware_manua
 
 ## Closed Blockers
 
+### BLK-013 — VCC3V3_LCD on EM3566 v3 (`vcc3v3_lcd0_n` / load switch)
+**Opened:** 2026-05-18 — **Closed:** 2026-05-21  
+**Severity was:** HIGH  
+**Resolution:**  
+**Bench — carrier load switch defective (hardware fault):** With **`TASK-132`** + **`TASK-133`** in tree, **CON1 pin 13** (`LCD_PWREN_H`, **`GPIO0_C7`**) was **~0 V** when the rail should be **ON** — software polarity is **validated correct**. **`VCC3V3_LCD`** (**pins 5/6**) did **not** reach **~3.3 V** (observed **~0.8 V** on this prototype reference carrier). Responsibility is isolated to **non-functional / defective analogue switch path on the carrier board**, not DTS or regulator glue in Yocto (stop Phase 1 software iteration on rails).
+
+**Permanent hardware mitigation —** jumper a clean **3.3 V** (`VCC3V3_SYS`, input side of the defective switch) to **CON1 pins 5/6** (`VCC3V3_LCD`). Standard Phase 0/1 bring-up when a **prototype carrier** load switch fails. **Rail power-management** (`vcc3v3_lcd0_n`-mediated sleep / cut-off) **deferred to production carrier** — panel stays powered whenever board 3.3 V is present; **TASK-133** DTS + TASK-132 polarity remain authoritative for reproducible builds and future boards. Caveats (**A1 2026-05-21**): no software power-down via that rail on reference hardware; ensure bypass wire gauge and rail capacity for panel **inrush** (usually acceptable from main 3.3 V).
+
+**Residual software bring-up:** With **TASK-121** **`reset-gpios`** on **CON1 pin 11** / **`RK_PB6`**, **`jadard`** owns a timed reset sequence — if the panel still **black** once **~3.3 V is confirmed at 5–6**, treat as **DSI / lane config / JD9365 init table** (**TASK-125** / **`jadard`**), not rail or trivial reset GPIO mapping.
+
+---
+
+### BLK-012 — Black panel while DRM / DSI / `jadard` / modeset are healthy
+**Opened:** 2026-05-07 — **Closed:** 2026-05-11  
+**Severity was:** HIGH  
+**Resolution:**  
+Bench confirmed **CON1 pins 5/6 (`VCC3V3_LCD`) stayed at ~0 V** with the adapter ruled out. Initially diagnosed as a polarity inversion vs P-FET (**TASK-129**). **TASK-130** showed the EM3566 v3 carrier load switch was not behaving as controlled by **`vcc3v3_lcd0_n`** alone. Resolution path finalized in **BLK-013** (**closed 2026-05-21**): **Plan B permanent 3.3 V bypass** to CON1 **5/6** for Phase 0/1; production carrier for proper rail sequencing.
+
+---
+
 ### BLK-011 — LMT101SX006C JD9365D DCS init sequence required from LCD Mall
 **Opened:** 2026-05-08 — **Closed:** 2026-05-09  
 **Severity was:** HIGH  

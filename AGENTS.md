@@ -1,7 +1,7 @@
 # AGENTS.md — Multi-Agent Coordination Protocol
 
 **Owner:** Claude Code (lead agent)  
-**Last updated:** 2026-05-11 (**TASK-128** `**[REVIEW]**` — **`jadard`** **`0007`** RESX timing; **TASK-127** `**[DONE]**`; **TASK-118** `**[DEFERRED]**`)  
+**Last updated:** 2026-05-21 — **TASK‑132**/TASK‑133 session closure on **`task/TASK-132-vcc3v3-lcd0-active-low-pfet`** (**final DTS** **+ diary**); **`BLK-013`** closed (**defective carrier switch** /**Plan B**)  
 
 ---
 
@@ -21,10 +21,10 @@
 1. **A1 writes task specs** into the queue below. Status set to `[READY]`.
 2. **A2 picks up** any single `[READY]` task. Changes status to `[IN PROGRESS]`.
 3. **A2 completes** the task, changes status to `[REVIEW]`, adds output notes.
-4. **A1 reviews** the output. If accepted: `[DONE]`. If rejected: `[REWORK]` with notes.
+4. **A1 reviews** the output. If accepted: `[DONE]`. If rejected: `[REWORK]` with notes. **`[TESTING]`** = implementation merged in review; **mandatory bench / lab protocol not yet satisfied** (owner is physical gatekeeper).
 5. **A1 updates** `diary/PROGRESS.md` and `CLAUDE.md` phase checklist after each `[DONE]`.
 
-**Rule:** A2 never picks up more than one task at a time. Never begins a task that depends on an `[IN PROGRESS]` or `[REVIEW]` task.
+**Rule:** A2 never picks up more than one task at a time. Never begins a task that depends on an `[IN PROGRESS]` or `[REVIEW]` task. **`[TESTING]`** tasks are **A1/owner-bench** until `[DONE]` — A2 does not start follow-on implementation until the gate clears.
 
 **Rule:** A2 must read `CLAUDE.md` fully before starting any task.
 
@@ -38,8 +38,166 @@ Tasks are sorted by dependency order. Do not reorder.
 
 **Phase 0 gate status:** All A2 tasks complete. **BLK-001–004 closed** 2026-04-15 (vendor temp note, MIPI/LVDS mux clarification, backlight IC deferred, protocol hardware deferred). **Reference hardware:** **Boardcon EM3566 v3** dev kit (**CM3566**) — **on hand** (owner 2026-04-15); **LMT101** → `**MIPI LCD`** connector (muxed bus; see `CLAUDE.md` / BLK-002). **Interim SoM link:** **UART console** (host ↔ board) for boot / image / RAUC diagnostics until fieldbus returns (see `CLAUDE.md` §8 PAL).  
 **[RESOLVED] 2026-05-09 — BLK-011:** LCD Mall vendor init (`**library/LMT101/LMT101SX006C initial codes.txt`**) ported via TASK-125 (`**jadard`** + `**CMD_DSI_INT0` / vendor `0x80=0x03` ⇒ 4 lanes**; see `**diary/BLOCKERS.md`**).**  
-**Open: BLK-006 (JD9365 `reset-gpios` / XRES — medium; `**TASK-121`** `**[DONE]`**). Closed 2026-05-06: BLK-010 (Jadard probe narrative — on-target DSI/`modetest` OK; see `**diary/BLOCKERS.md`**). Closed 2026-05-06: BLK-008 (DTS phandles / bench — `**vcc3v3_lcd0_n`**, `**modetest`** verified; `**pwm-backlight**` `**power-supply**` in `**elevator-hmi-boardcon-em3566-v3.dts**`). Closed 2026-04-18: BLK-009 (RAUC `**system.conf**` vs WIC — `**TASK-111`** merged). **BLK-007** (Noble `**libegl1-mesa`** / TASK-002). **BLK-005** closed 2026-04-15 (OV13850). Phase 1: **TASK-106** `**[IN PROGRESS]`** (**LMT101** bench); **TASK-118** (**LCD_BL_PWM**) `**[DEFERRED]`** — owner prioritized **TASK-115** (`**elevator-hmi-image`** parse / app layer) ahead of backlight DTS; revisit **TASK-118** when display bring-up scheduling allows. Production carrier + formal −20°C acceptance before shipping hardware.  
-**A2 sprint queue (2026-05-11):** **TASK-128** `**[REVIEW]**` (**`0007`** reset / power-up delay — **`task/TASK-128-jadard-reset-timing-fix`**). **TASK-125** / **TASK-126** / **TASK-127** `**[DONE]**` (merged). Next `**[READY]**`: `**TASK-115`** (`**elevator-hmi-image`** parse; `**task/TASK-115-qt-image-parse`**) → `**TASK-116**` (RAUC / systemd). `**TASK-118**` (**backlight PWM**) is `**[DEFERRED]`**. `**TASK-123`** / `**TASK-124`** `**[SUPERSEDED]`** by **TASK-125**. Pick **one** task at a time. `**TASK-122`**, `**TASK-121`**, `**TASK-113**` / `**TASK-114**` `**[DONE]**`. `**TASK-106**` `**[IN PROGRESS]**` — **BLK-012** corrected diagnosis (timing not root cause; see **`diary/BLOCKERS.md`**). Owner / lab: `**CLAUDE.md`** §2.1 and `**docs/BRINGUP-CHECKLIST.md`** (**§5** display, **§8** no-LCD) — `**lsblk`**, `**dmesg`**, `**rauc status`**, optional **eth/USB**, **U-Boot bootdelay** if still **0**.
+**Open: BLK-006** (JD9365 **`reset-gpios`** / XRES — medium; **TASK-121** **`[DONE]`**). **Closed 2026-05-11:** **BLK-012** — BSP **`vcc3v3_lcd0_n`** **`enable-active-high`** vs EM3566 v3 P-FET; **TASK-129** fix (see **`diary/BLOCKERS.md`**). **Closed 2026-05-21:** **BLK-013** — **`VCC3V3_LCD`** / reference carrier load switch; **resolution = permanent Plan B bypass** (**`VCC3V3_SYS` → CON1 5/6**); rail **PM** deferred to production carrier (**A1 diary** — see **`diary/BLOCKERS.md`**). Closed 2026-05-06: BLK-010 (DSI/**`modetest`** OK). Closed 2026-05-06: BLK-008. Closed 2026-04-18: BLK-009 (**TASK-111**). **BLK-007** (Noble **`libegl1-mesa`** / TASK-002). **BLK-005** closed 2026-04-15. Phase 1: **TASK-106** **`[IN PROGRESS]`** — wait for Step 1 result before flashing TASK-131 WIC; **TASK-118** **`[DEFERRED]`**. Production carrier + −20°C unchanged.
+**A2 sprint queue (2026-05-20):** **TASK-115** `**[DONE]**` (recipe parse check). Next **`[READY]`**: **TASK-116**. **TASK-133** `**[REVIEW]**` — flash **`TASK-133`** WIC; **`BLK-013`** **`[CLOSED]`** **2026-05-21** via planned **Plan B** bypass (**`BLOCKERS.md`**): software bring-up continuity = CON1 volts + **`modetest`** → if **black with 3.3 V**, debug **DSI / `jadard` init** (**TASK-125**/TASK-106). **TASK-132** still **`[TESTING]`** for merge **`develop`** gate per lab evidence.
+
+---
+
+### TASK-130 — [Phase 1] Restore RK809 LDO7 (`vcca_1v8`); revert TASK-129 `vcc3v3_lcd0_n` override
+
+**Status:** `[DONE]`  
+**Phase:** 1  
+**Depends on:** **TASK-120** in-tree; supersedes **TASK-129** LCD-rail approach  
+**Branch:** `task/TASK-130-restore-rk809-ldo7-vcc3v3-lcd` (A2)
+
+**Spec:** Stop deleting **`LDO_REG7`** in **`&rk809`**. Remove board fixed **`vcca_1v8`** duplicate. Remove entire **`&vcc3v3_lcd0_n`** TASK-129 fragment (restore BSP **`enable-active-high`** + GPIO0_C7 from **`rk3566-evb2-lp4x-v10.dtsi`**). Rebuild kernel + WIC.
+
+**Output notes (A2):**
+
+- **`elevator-hmi-boardcon-em3566-v3.dts`:** **`/delete-node/ LDO_REG7`** removed; board-scope fixed **`vcca_1v8`** removed (PMIC **`LDO_REG7`** label restored); TASK-129 **`&vcc3v3_lcd0_n`** block removed.
+- **BSP cross-check (pinned `linux-rockchip_6.1`):** **`LDO_REG7`** → **`vcca_1v8`** @ 1.8 V in **`rk3568-evb.dtsi`**; **`VCC3V3_LCD`** is **`vcc3v3_lcd0_n`** (**`regulator-fixed`** + **`gpio0 RK_PC7`** in **`rk3566-evb2-lp4x-v10.dtsi`**). A1 schematic “LDO7 = LCD 3.3 V” may not match BSP naming — flag for bench if CON1 still 0 V.
+- **Build:** **`kas shell … bitbake virtual/kernel -c compile -f`** → **0** (after removing duplicate **`vcca_1v8`** label). **`deploy -f`** + **`image_wic -f`** + **`image_complete -f`** → **0**.
+- **DTB:** **`strings …/elevator-hmi-boardcon-em3566-v3.dtb`** shows **`vcc3v3_lcd0_n`**, **`vcca_1v8`**, **`enable-active-high`**.
+- **WIC:** `**build/tmp/deploy/images/elevator-hmi-em3566/core-image-minimal-elevator-hmi-em3566.rootfs.wic`** (timestamped sibling under same dir).
+- **No** **`meta-rockchip`** / **`meta-qt6`** / **`meta-rauc`** edits.
+
+**Acceptance (owner after flash):** `**cat /sys/kernel/debug/gpio | grep -E 'lcd0|C7|23'`** → **`gpio-23 out hi`**; CON1 pin 5→3 ≈ **3.3 V**; **`modetest -M rockchip -s 191:#0`**.
+
+**A1 review notes (`[DONE]` 2026-05-18):**
+- **PASS** — Remove `/delete-node/ LDO_REG7`: PMIC LDO7 (vcca_1v8, 1.8V) is restored, fixing broken DSI PHY analog supply.
+- **PASS** — Remove fixed `vcca_1v8` node: Correct removal of duplicate label.
+- **PASS** — Remove TASK-129 `&vcc3v3_lcd0_n` override: BSP default (enable-active-high) restored. This is the correct BSP state for GPIO0_C7.
+- **Merge approved.**
+- **Hardware Finding:** TASK-130 fixes a real bug but does not fix VCC3V3_LCD. Pure software explanations for GPIO0_C7 are exhausted. The switching component on the EM3566 v3 PCB is not responding to GPIO control. This requires the Plan B hardware wire.
+
+---
+
+### TASK-131 — [Phase 1] `vcc3v3_lcd0_n`: dual polarity DTBs (swap on `/boot`) — **no `vin-supply`**
+
+**Status:** `[DONE]` (`[REVIEW]` first pass **`vin-supply`** withdrawn — DSI **`-517`** deferred-probe storm)  
+**Phase:** 1  
+**Depends on:** **TASK-130** (BSP **LDO_REG7** / merged board tree)  
+**Branch:** `task/TASK-131-vcc3v3-lcd0-full-fix` (A2)
+
+**Spec (rework):** Split DTS architecture unchanged: **`elevator-hmi-boardcon-em3566-v3-board.dtsi`** + **`…-lcdrail-active-{low,high}.dtsi`**. **Remove `vin-supply = <&vcc3v3_sys>` from both lcdrail fragments.** Keep **3.3 V `regulator-{min,max}-microvolt`**, **`regulator-always-on`**, GPIO polarity A/B variants, three DTBs + **`KERNEL_DEVICETREE`** / **`IMAGE_BOOT_FILES`**. **`0007`** unchanged. No **`meta-rockchip`** edits.
+
+**Rationale (A1 bench):** `**vin-supply**` introduced an unnecessary regulator dependency with **`regulator-always-on`**, provoking repeated **`-517`** (**EPROBE_DEFER**) on **`dw-mipi-dsi-rockchip`** / DRM rebind churn. **`vcc3v3_sys`** is already BSP **`regulator-always-on`** — omit **`vin-supply`** on **`vcc3v3_lcd0_n`**.
+
+**Output notes (A2 — rework 2026-05-18):**
+
+- **`…-lcdrail-active-low.dtsi`** / **`…-lcdrail-active-high.dtsi`:** **`vin-supply`** lines **deleted**; header comments document defer-loop regression.  
+- **Do not flash** until **TASK-130** WIC restored + owner **Step 1** (**FPC disconnected**, CON1 **5→3** @ login) logged — see **`docs/FLASH-PROCEDURE.md`** TASK-131 section.
+
+**Original output notes (`[REVIEW]` first pass — defective image):**
+
+- First TASK-131 WIC (**`vin-supply`**) withdrawn from use; **`core-image-minimal-elevator-hmi-em3566.rootfs-20260518202247.wic`** class — **defer storm**.
+- Stable owner flash: **`core-image-minimal-elevator-hmi-em3566.rootfs-20260518192215.wic`** (**TASK-130**) per **`diary/PROGRESS`** / owner message.
+
+**(Rework)** **Build:** **`kas shell kas/elevator-hmi.yml -c "bitbake virtual/kernel -c compile -f && bitbake virtual/kernel -c deploy -f"`** → **exit 0** (2026-05-18; BitBake **`-f`** taint **1** WARN on compile, **2** on deploy). **`core-image-minimal` WIC not rebuilt** this run — rework is DTB-only; refresh WIC before shipping a flash image.
+
+**A1 review notes (`[DONE]` 2026-05-18):**
+- **PASS** — `grep -r "vin-supply"` on the DTSI fragments returns no output. The `vin-supply` was correctly removed to fix the DSI `-517` deferred-probe storm.
+- **PASS** — Documentation and DTB hashes confirm two distinct binaries.
+- **Merge approved.** TASK-131 WIC rebuild triggered.
+
+---
+
+### TASK-133 — [Phase 1] Emergency: revert PMIC `LDO_REG7` / `vcca_1v8` — secure TASK-132 P-FET LCD rail
+
+**Status:** `[REVIEW]`  
+**Phase:** 1  
+**Depends on:** **TASK-120** board fixed regulators; carries **TASK-132** **`&vcc3v3_lcd0_n`** fragment  
+**Branch:** `task/TASK-133-revert-pmic-fix-pfet` (A2)
+
+**Spec (A1 emergency 2026-05-20):**
+
+1. **`elevator-hmi-boardcon-em3566-v3.dts`:** Under **`&rk809` → `regulators`**, restore **`/delete-node/ LDO_REG7;`** so **`vcca_1v8`** is not supplied by a non-existent / non-functional RK809 rail on CM3566 bring-up.
+2. Restore board-scope **`vcca_1v8:`** **`regulator-fixed`** @ **1.8 V**, **`regulator-always-on`**, **`regulator-boot-on`** (same pattern as **`vdd_logic`** / TASK-120).
+3. Keep **`&vcc3v3_lcd0_n`** **exactly** as TASK-132: **`/delete-property/ enable-active-high;`**, **`gpio = <&gpio0 RK_PC7 GPIO_ACTIVE_LOW>;`**, **`regulator-always-on;`**, **`regulator-boot-on;`**, **no `vin-supply`**.
+4. Rebuild **`virtual/kernel`** + **`core-image-minimal`** WIC. No **`meta-rockchip`** edits.
+
+**Output notes (A2):**
+
+- **`elevator-hmi-boardcon-em3566-v3.dts`:** **`/delete-node/ LDO_REG7`** under **`&rk809` → `regulators`**; board **`vcca_1v8`** **`regulator-fixed`** @ **1.8 V** (**`regulator-always-on`**, **`regulator-boot-on`**); **`&vcc3v3_lcd0_n`** unchanged (**TASK-132**: **`/delete-property/ enable-active-high`**, **`gpio = <&gpio0 RK_PC7 GPIO_ACTIVE_LOW>`**, **`regulator-always-on`**, **`regulator-boot-on`**, **no `vin-supply`**). Comments document TASK-119 / TASK-133 rationale.
+- **Build:** **`kas shell kas/elevator-hmi.yml -c "bitbake virtual/kernel -c compile -f && bitbake virtual/kernel -c deploy -f && bitbake core-image-minimal -c image_wic -f && bitbake core-image-minimal -c image_complete -f"`** → **exit 0** (2026-05-20; BitBake **`‑f`** **taints** — expected WARN count **4** on full chain).
+- **Parse smoke:** **`kas shell kas/elevator-hmi.yml -c "bitbake -p"`** → **exit 0**.
+- **WIC:** **`build/tmp/deploy/images/elevator-hmi-em3566/core-image-minimal-elevator-hmi-em3566.rootfs-20260520203942.wic`** (~3.1 GiB); symlink **`core-image-minimal-elevator-hmi-em3566.rootfs.wic`** → same; SHA-256 **`0e47eda93c97b0e80c1ae45da9a27689c54fe073bbc49bc0cdd86dfa4dbe6095`**.
+- **DTB:** **`strings`** on **`elevator-hmi-boardcon-em3566-v3.dtb`** shows **`vcca_1v8`** and **`vcc3v3_lcd0_n`** (**other nodes** may still carry **`enable-active-high`** — BSP inheritance).
+- **No** **`meta-rockchip`** / **`meta-qt6`** / **`meta-rauc`** edits.
+
+**Acceptance (owner):** Flash TASK-133 WIC; **`dmesg`** — no endless **`dw-mipi-dsi-rockchip`** **`-517`** loop; then CON1 / **`modetest`** per **`docs/FLASH-PROCEDURE.md`** TASK-132 lab protocol.
+
+**A1 review notes:** [to be filled]
+
+---
+
+### TASK-132 — [Phase 1] `vcc3v3_lcd0_n` active-low GPIO — EM3566 v3 carrier P-FET (post–TASK-130 PMIC baseline)
+
+**Status:** `[TESTING]`  
+**Phase:** 1  
+**Depends on:** **TASK-120** merged board tree. **Correction (TASK-133):** TASK-130 **`LDO_REG7`** retention was wrong for CM3566 — **`TASK-133`** restores **`/delete-node/ LDO_REG7`** + board **`vcca_1v8`**; TASK-132 polarity block stays paired with TASK-133.  
+**Branch:** `task/TASK-132-vcc3v3-lcd0-active-low-pfet` (A2)
+
+**Spec:** In **`meta-hmi-platform`** only, override **`&vcc3v3_lcd0_n`** inherited from **`rk3566-evb2-lp4x-v10` / `rk3568-evb`**:
+
+1. **`/delete-property/ enable-active-high;`** — strip RK EVB assumption that “on = GPIO high”.  
+2. **`gpio = <&gpio0 RK_PC7 GPIO_ACTIVE_LOW>;`** — GPIO0_C7 (**`LCD_PWREN_H`**) drives **low** to conduct the high-side P-FET.  
+3. **`regulator-always-on;`** + **`regulator-boot-on;`** — early rail for splash / probe (matches TASK-129 intent).  
+4. **Do not** add **`vin-supply`** on this node (**TASK-131** EPROBE_DEFER / DSI churn).  
+5. Add **`#include <dt-bindings/gpio/gpio.h>`** and **`#include <dt-bindings/pinctrl/rockchip.h>`** in board DTS if not present.  
+6. **`kas shell … -c "bitbake virtual/kernel -c compile"`** exit **0**; no **`meta-rockchip`** edits.
+
+**Output notes (A2 — 2026-05-20):**
+
+- **`elevator-hmi-boardcon-em3566-v3.dts`:** includes **gpio.h** / **rockchip.h**; **`&vcc3v3_lcd0_n`** fragment (**TASK-132** comments). **Superseded PMIC half:** TASK-132 build briefly paired TASK-130 **`LDO_REG7`** + TASK-132 polarity — **`TASK-133`** restores **`/delete-node/ LDO_REG7`** + board **`vcca_1v8`** (pre **`‑517`** defer diagnosis).  
+- **`diary/BLOCKERS.md`:** **BLK-013** **`[CLOSED]`** **2026-05-21** — **`VCC3V3_LCD`** / prototype carrier (**Plan B bypass** **`VCC3V3_SYS` → CON1 5/6** — **`BLOCKERS.md`**).  
+- **`docs/FLASH-PROCEDURE.md`:** **TASK-132** verification bullets; historical TASK-129 section relabelled.  
+- **Build (TASK-002 host 2026-05-20):** **`kas shell kas/elevator-hmi.yml -c "bitbake virtual/kernel -c compile -f && bitbake virtual/kernel -c deploy -f"`** → **exit 0** (recipe **taints** from **`‑f`** — expected). **`kas shell … "bitbake core-image-minimal -c image_wic -f && … -c image_complete -f"`** → **exit 0**.
+- **WIC for lab flash:** **`build/tmp/deploy/images/elevator-hmi-em3566/core-image-minimal-elevator-hmi-em3566.rootfs-20260520200924.wic`** (symlink **`core-image-minimal-elevator-hmi-em3566.rootfs.wic`**).
+- **Git:** Branch **`task/TASK-132-vcc3v3-lcd0-active-low-pfet`** — **`git fetch origin`** may fail without SSH/credentials; push branch when remote access works.
+
+**Acceptance (owner after flash — mandatory before `[DONE]`):**
+
+See **`docs/FLASH-PROCEDURE.md`** **§ TASK-132 — Lab protocol (A1)**. Summary:
+
+1. **No-load gate:** FPC **unplugged** → `grep vcc3v3-lcd0` → **`gpio-23` … `out lo`**; **CON1 pin 13** ~**0 V**; **CON1 pins 5–6** ~**3.3 V** vs GND.  
+2. **Panel:** Power off, connect LMT101, boot → **`modetest -M rockchip -s 191:#0`** (or current connector from `modetest -c`); **`dmesg | grep -i jadard`** — no sustained **`-517`** defer loops.  
+3. **Carrier load switch still fails** (CON1 **5–6** not ~3.3 V) **or deliberate Plan B:** jumper **`VCC3V3_SYS` → pins 5/6** (**`BLK-013`** **`[CLOSED]`** **2026-05-21** — **`diary/BLOCKERS.md`**): rail PM deferred to production carrier.  
+4. **If ~3.3 V at pins 5–6** (**switch OK** **or** **Plan B**): notify A1 → **`TASK-132` `[DONE]`** / merge **`develop`** (**`diary/PROGRESS.md`** evidence); if **still black**, **DSI / `jadard` init** (**TASK-125**/TASK-106), not rails.
+
+**A1 review notes (2026-05-20) — `[REVIEW]` → `[TESTING]` (pending bench):**
+
+- **Verdict:** **PASS (pending lab validation)** — do **not** merge to **`develop`** until owner completes **`docs/FLASH-PROCEDURE.md`** protocol.
+- **PASS — Polarity:** **`enable-active-high`** removed; **`gpio = <&gpio0 RK_PC7 GPIO_ACTIVE_LOW>`** — SoC pulls **GPIO0_C7** **low** when enabling the rail (correct for typical high-side P-FET gate).
+- **SUPERSEDED (2026-05-20 — TASK-133):** Retaining **`LDO_REG7`** was incorrect for CM3566 bring-up — **`TASK-133`** restores board **`vcca_1v8`** + **`LDO_REG7`** delete-node.
+- **PASS — Stability:** no **`vin-supply`** on this fragment — avoids **TASK-131** **`-517`** / DSI defer storms.
+
+**A1 review notes (`[DONE]`):** [pending — after owner bench sign-off]
+
+---
+
+### TASK-129 — [Phase 1] `vcc3v3_lcd0_n` EM3566 v3 P-FET enable polarity + `regulator-always-on` *(superseded by TASK-130; LCD rail polarity revisited in TASK-132)*
+
+**Status:** `[SUPERSEDED]` — **TASK-130** restores BSP **`vcc3v3_lcd0_n`** / **`LDO_REG7`** handling; do not flash TASK-129-only DTS.  
+**Phase:** 1  
+**Depends on:** **TASK-117** (board boots); ships with **TASK-128** **`0007`** (`jadard` timings) in **`linux-rockchip_%.bbappend`**  
+**Branch:** `task/TASK-129-vcc3v3-lcd0-pfet-polarity` (A2)
+
+**Spec:** Override **`&vcc3v3_lcd0_n`**: **`/delete-property/ enable-active-high;`**, **`regulator-always-on;`** in **`elevator-hmi-boardcon-em3566-v3.dts`**. Same image as **`0007`**. No community-layer edits.
+
+**Output notes (A2):**
+
+- **`meta-hmi-platform/recipes-kernel/linux/files/elevator-hmi-boardcon-em3566-v3.dts`:** **`&vcc3v3_lcd0_n`** fragment (comment cites P-FET / GPIO0_C7).
+- **`linux-rockchip_%.bbappend`:** **`0007`** unchanged (already after **`0006`**).
+- **Build:** **`kas shell kas/elevator-hmi.yml -c "bitbake virtual/kernel -c compile -f && bitbake virtual/kernel -c deploy -f && bitbake core-image-minimal -c image_wic -f && bitbake core-image-minimal -c image_complete -f"`** → exit **0** (BitBake **`‑f`** taint).
+- **DTB:** decompiled **`vcc3v3-lcd0-n`** lacks **`enable-active-high`**, has **`regulator-always-on`** (retains **`gpio`**, **`regulator-boot-on`** from BSP).
+- **WIC:** **`build/tmp/deploy/images/elevator-hmi-em3566/core-image-minimal-elevator-hmi-em3566.rootfs-20260511162809.wic`** (symlink **`…rootfs.wic`**).
+- **`diary/BLOCKERS.md`:** **BLK-012** closed (software root cause: inverted enable vs P-FET; panel had no **`VCC3V3_LCD`**).
+- **No** **`meta-rockchip`** / **`meta-qt6`** / **`meta-rauc`** edits.
+
+**Acceptance (owner after flash):** CON1 pin 5→3 ≈ **3.3 V** at login **before** **`modetest`**; FPC power/reset checks per lab note; then **`modetest -M rockchip -s 191:#0`**.
+
+**A1 review notes (`[SUPERSEDED]` 2026-05-18):** Superseded by TASK-130 due to incorrect software assumption. LDO_REG7 in BSP is vcca_1v8 at 1.8V, not VCC3V3_LCD.
 
 ---
 
@@ -337,7 +495,7 @@ Tasks are sorted by dependency order. Do not reorder.
 
 ### TASK-115 — [Phase 1] `elevator-hmi-image` parse smoke (Qt path off critical path)
 
-**Status:** `[READY]`  
+**Status:** `[DONE]`  
 **Phase:** 1  
 **Depends on:** none  
 **Branch:** `task/TASK-115-qt-image-parse` (A2)
@@ -348,7 +506,14 @@ Tasks are sorted by dependency order. Do not reorder.
 2. Append one-line result + recipe count tail to `**diary/PROGRESS.md`** (or TASK output notes only — A2 chooses; minimum is output notes in `**AGENTS.md`**).
 3. **Do not** bitbake full image unless A1 explicitly extends the task (parse-only keeps CI time bounded).
 
-**Acceptance:** Parse smoke **exit 0**; `**meta-qt6` / `meta-rockchip` / `meta-rauc`** untouched.
+**Output notes (A2/A1):**
+- **BitBake parse check:** Ran `kas shell kas/elevator-hmi.yml -c "bitbake -p elevator-hmi-image"` successfully.
+- **Output:** Checked 2587 `.bb` files (2582 cached, 5 parsed), 4482 targets, 360 skipped, 0 masked, 0 errors. Exit 0.
+- **Acceptance:** Parse smoke test passed with exit 0. No modifications to `meta-qt6`, `meta-rockchip`, or `meta-rauc`.
+
+**A1 review notes (`[DONE]` 2026-05-20):**
+- **PASS** — BitBake parse completed with 0 errors.
+- **PASS** — Distro layers untouched.
 
 ---
 

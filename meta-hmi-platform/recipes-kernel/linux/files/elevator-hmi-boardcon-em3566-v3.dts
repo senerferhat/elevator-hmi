@@ -15,11 +15,15 @@
 
 #include "rk3566-evb2-lp4x-v10-linux.dts"
 #include "elevator-hmi-lmt101sx006c-panel.dtsi"
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/pinctrl/rockchip.h>
 
 /*
- * TASK-120: CM3566 has no RK809 at 0x20. rk3568-evb.dtsi defines vdd_logic, vdd_gpu,
- * vdd_npu, vccio_sd, vcca_1v8 as PMIC children — duplicate labels if we only add fixed
- * rails. Delete those PMIC regulator nodes, then define the same labels at board scope.
+ * TASK-120 / TASK-119 / TASK-133: CM3566 has no functioning RK809 at 0x20 on this bring-up.
+ * rk3568-evb.dtsi still defines PMIC regulators — delete the nodes we replace with board
+ * `regulator-fixed` rails. **TASK-133:** restore **`/delete-node/ LDO_REG7`** so
+ * **`vcca_1v8`** is never bound to a ghost PMIC rail (fixes DSI **`-517`** defer loops
+ * seen after TASK-130). Board-scope **`vcca_1v8`** below matches TASK-129.
  */
 &rk809 {
 	regulators {
@@ -96,6 +100,7 @@
 		regulator-max-microvolt = <3300000>;
 	};
 
+	/* TASK-133: 1.8 V analog / DSI PHY rail — board fixed; PMIC LDO_REG7 deleted above. */
 	vcca_1v8: regulator-vcca-1v8 {
 		compatible = "regulator-fixed";
 		regulator-name = "vcca_1v8";
@@ -149,6 +154,20 @@
 
 &saradc {
 	vref-supply = <&vcca_1v8>;
+};
+
+/*
+ * TASK-132 / TASK-133: EM3566 v3 carrier switches VCC3V3_LCD with a high-side P-FET:
+ * Linux "enable" pulls GPIO0_C7 / RK_PC7 LOW (not EVB `enable-active-high`).
+ * **`vcca_1v8`** is board **`regulator-fixed`** (TASK-133); do not rely on PMIC LDO_REG7.
+ * Omit vin-supply — see TASK-131 (EPROBE_DEFER / dsi churn).
+ */
+&vcc3v3_lcd0_n {
+	status = "okay";
+	/delete-property/ enable-active-high;
+	gpio = <&gpio0 RK_PC7 GPIO_ACTIVE_LOW>;
+	regulator-always-on;
+	regulator-boot-on;
 };
 
 /*
