@@ -12,7 +12,7 @@
 
 ### Repo / branch
 
-- **Canonical branch:** **`task/TASK-132-vcc3v3-lcd0-active-low-pfet`** (**HEAD** on this clone; **TASK‑132/133 closure commit** atop **`develop`** ancestry). **`origin` push blocked** here (SSH **`Permission denied`**) — owner runs **`git push -u origin task/TASK-132-vcc3v3-lcd0-active-low-pfet`** (**and **`task/TASK-133-revert-pmic-fix-pfet`****) from a credentialled machine. DTS = **TASK‑132** polarity + **TASK‑133** **`vcca_1v8`** / **`LDO_REG7`** delete.
+- **Canonical branch:** **`task/TASK-132-vcc3v3-lcd0-active-low-pfet`** (**HEAD** on this clone). **`origin` push blocked** here (SSH **`Permission denied`**) — from a credentialled workstation run **`git push -u origin task/TASK-132-vcc3v3-lcd0-active-low-pfet`**; optionally **`git push -u origin task/TASK-133-revert-pmic-fix-pfet`** to keep **`TASK‑133`** in lockstep (**same `HEAD`**). DTS = **TASK‑132** polarity + **TASK‑133** **`vcca_1v8`** / **`LDO_REG7`** delete.
 - **`docs/FLASH-PROCEDURE.md`** + **`diary/BLOCKERS.md`**: defective reference carrier wording finalized.
 - **WIC artefact (**example, host build **2026‑05‑20**):** **`build/tmp/deploy/images/elevator-hmi-em3566/core-image-minimal-elevator-hmi-em3566.rootfs-20260520203942.wic`** — rebuild after pull if DTS changed (**`kas shell …`** in FLASH).
 
