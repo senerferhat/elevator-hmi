@@ -6,6 +6,9 @@
 
 **Agent:** A2 (Composer2) — **session wrap-up (**A1** directive)**
 
+**A1 handoff line:**
+> Hardware Power Switch Failure Confirmed: Software path (TASK-132) confirmed correct (Pin 13 @ 0V), but hardware rail (Pin 5/6 @ 0.8V). Awaiting Plan B hardware bypass wire.
+
 ### Lab sign-off (**owner evidence → A1**)
 
 **Hardware power switch failure confirmed.** Software path (**TASK‑132**) is **validated correct**: **CON1 pin 13 @ ~0 V** when enabling **`vcc3v3_lcd0_n`** ( **`GPIO0_C7`**, active‑low P‑FET “ON”). The **carrier board** still delivered **pins 5/6 @ ~0.8 V**, not ~3.3 V — definitive **carrier load‑switch analogue failure**, **not DTS / Yocto**. **Awaiting Plan B hardware bypass wire** (**`VCC3V3_SYS` → pins 5/6**, **`BLK-013`** / **`BLOCKERS`**).
