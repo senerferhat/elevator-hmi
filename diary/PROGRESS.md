@@ -2,6 +2,90 @@
 
 **Format:** One entry per session. Most recent entry first.
 
+## 2026-05-21 — A1: patch 0008 — jadard reset sequence bug found and fixed (hardware unblocked)
+
+**Agent:** A1 (Lead — Claude Code)
+
+### Context
+
+Owner confirmed: 3.3 V direct-wire to LMT101 FPC pins 2/3 (VDDIN), RESET on CON1 pin 11 (gpio0 RK_PB6), all MIPI lanes wired, 9 V backlight on VLEDA. Panel has valid power for the first time. A1 audited all driver patches to verify the initialization sequence is correct before the owner flashes.
+
+### Critical bug found in jadard_prepare() reset sequence
+
+**Root cause:** Patches 0002+0007 produced a 3-step sequence that, with `GPIO_ACTIVE_LOW` in the DTS, drives XRES asserted (physical LOW) for the final 120 ms hold — while `jadard_enable()` fires and sends MIPI init commands. The panel cannot respond while XRES is asserted.
+
+**Physical pin timeline before fix:**
+```
+initial HIGH (deasserted, GPIOD_OUT_LOW + ACTIVE_LOW)
+→ 10 ms (patch 0007 pre-power delay ✓)
+→ LOW  (gpiod_set_value(1), assert)  — 5 ms
+→ HIGH (gpiod_set_value(0), deassert) — 20 ms
+→ LOW  (gpiod_set_value(1), assert)  — 120 ms  ← MIPI commands sent here = NO RESPONSE
+```
+
+**Root cause detail:** The original 3-step code came from the cz101b4001 driver (designed for `GPIO_ACTIVE_HIGH`). With `GPIO_ACTIVE_HIGH`, value=1 means physical HIGH = XRES deasserted. With our `GPIO_ACTIVE_LOW` (correct for XRES signal), value=1 = physical LOW = XRES asserted — the polarity is inverted, flipping the entire sequence.
+
+**Vendor Q1 spec (authoritative):** Power On → 10 ms → XRES LOW → 20 ms → XRES HIGH → 120 ms → MIPI commands.
+
+**Physical pin timeline after fix:**
+```
+initial HIGH (deasserted)
+→ 10 ms
+→ LOW  (gpiod_set_value(1), assert)  — 20 ms
+→ HIGH (gpiod_set_value(0), deassert) — 120 ms
+→ jadard_enable() fires → MIPI init commands ✓
+```
+
+### Patch audit results
+
+| Patch | Parameter | Value in code | Vendor spec | Status |
+|-------|-----------|---------------|-------------|--------|
+| 0007 | Pre-power delay | 10 ms | 10 ms | CORRECT |
+| 0008 | XRES pulse width | 20 ms | 20 ms | CORRECT (was wrong order) |
+| 0005 | post_reset_delay (lmt101) | 120 ms | 120 ms | CORRECT |
+| 0005 | display_init_delay (sleep-out → display-on) | 120 ms | 120 ms | CORRECT |
+| 0005 | display_on_delay | 5 ms | 5 ms | CORRECT |
+| 0006 | generic_write for init burst | present | required | CORRECT |
+| 0003 | init cmd count | 196 entries | 196 entries | CORRECT |
+
+### DTS audit
+
+- `reset-gpios = <&gpio0 RK_PB6 GPIO_ACTIVE_LOW>` — correct (XRES is active-low)
+- Physical reset sequence after patch 0008: HIGH(init) → 10ms → LOW(20ms) → HIGH(120ms) → MIPI ✓
+- `dsi-lanes = <4>` ✓
+- `dsi-format = <0>` (RGB888) ✓
+- Default DTB: `elevator-hmi-boardcon-em3566-v3.dts` includes `&vcc3v3_lcd0_n` active-low fragment (TASK-132/TASK-133)
+
+### Fix: patch 0008
+
+Created `meta-hmi-platform/recipes-kernel/linux/files/0008-drm-panel-jadard-lmt101sx006c-timing-final.patch`. Added to `linux-rockchip_%.bbappend` after patch 0007. The patch removes the spurious first assert+deassert cycle and corrects the sequence to: assert(20ms) → deassert → msleep(post_reset_delay=120ms).
+
+### Build result
+
+```
+bitbake virtual/kernel + core-image-minimal → exit 0
+4391 tasks, all succeeded, 4 WARNING (taint-only)
+WIC: core-image-minimal-elevator-hmi-em3566.rootfs-20260521203230.wic
+```
+
+### Flash command for owner
+
+```bash
+rkdeveloptool db build/tmp/deploy/images/elevator-hmi-em3566/u-boot-rockchip-elevator-hmi-em3566.bin
+rkdeveloptool wl 0 build/tmp/deploy/images/elevator-hmi-em3566/core-image-minimal-elevator-hmi-em3566.rootfs-20260521203230.wic
+rkdeveloptool rd
+```
+
+### Next
+
+Owner to flash and observe `dmesg` for:
+- `jd9365da-h3` probe success (no `-EPROBE_DEFER`)
+- `dw-mipi-dsi-rockchip` link up
+- Run `modetest -M rockchip -s <connector_id>:<mode>` for pixel output
+- If black: check `dmesg` for `init cmd 0x` failures (patch 0006 logs generic_write errors)
+
+---
+
 ## 2026-05-21 — A2 session closure (**TASK‑132**/TASK‑133): hardware power‑switch fault isolated (`develop` freeze)
 
 **Agent:** A2 (Composer2) — **session wrap-up (**A1** directive)**

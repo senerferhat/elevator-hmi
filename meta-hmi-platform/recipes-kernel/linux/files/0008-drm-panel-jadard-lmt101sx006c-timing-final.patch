@@ -1,0 +1,40 @@
+From: Elevator HMI meta-hmi-platform
+Subject: [PATCH] drm: panel: jadard — LMT101SX006C final reset sequence (vendor Q1)
+
+With GPIO_ACTIVE_LOW in the DTS, gpiod_set_value(1) drives XRES physically LOW
+(asserted) and gpiod_set_value(0) drives it physically HIGH (deasserted).
+
+The 3-step sequence inherited from patch 0002 (cz101b4001, GPIO_ACTIVE_HIGH)
+produces the wrong physical order: LOW(5ms) → HIGH(20ms) → LOW(120ms) → MIPI.
+XRES is still asserted when jadard_enable() fires; the panel cannot respond.
+
+Vendor Q1 (authoritative): Power On → 10ms → XRES LOW → 20ms → XRES HIGH →
+120ms → MIPI commands.
+
+Fix: collapse to the two-step sequence that matches Q1 exactly.
+Physical result: HIGH(init) → 10ms → LOW(20ms) → HIGH(120ms) → MIPI.
+
+---
+diff --git a/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c b/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
+--- a/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
++++ b/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
+@@ -172,14 +172,11 @@ static int jadard_prepare(struct drm_panel *panel)
+
+ 	if (jadard->reset) {
+ 		gpiod_set_value(jadard->reset, 1);
+-		msleep(5);
+-
+-		gpiod_set_value(jadard->reset, 0);
+-		msleep(20); /* vendor spec: 20ms XRES pulse width */
+-
+-		gpiod_set_value(jadard->reset, 1);
+-		msleep(jadard->desc->post_reset_delay ?
+-		       jadard->desc->post_reset_delay : 5);
++		msleep(20); /* vendor Q1: XRES active-low, 20 ms pulse */
++
++		gpiod_set_value(jadard->reset, 0);
++		msleep(jadard->desc->post_reset_delay ?
++		       jadard->desc->post_reset_delay : 5);
+ 	} else {
+ 		/* Allow rail ramp when XRES is not under software control. */
+ 		msleep(135);

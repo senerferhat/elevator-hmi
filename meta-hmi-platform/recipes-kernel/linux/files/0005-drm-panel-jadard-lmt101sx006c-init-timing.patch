@@ -1,0 +1,98 @@
+From: Elevator HMI meta-hmi-platform
+Subject: [PATCH] drm: panel: jadard jd9365da — LMT101 per-panel init timing (TASK-126)
+
+Vendor LMT101SX006C: expose post-reset dwell and sleep-out / display-on delays from
+LCD Mall initial codes via jadard_panel_desc. cz101b4001_desc explicitly sets
+post_reset_delay = 120 ms (legacy Radxa waveform).
+
+---
+diff --git a/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c b/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
+index 674486dff116..8b0827b2f2e1 100644
+--- a/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
++++ b/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
+@@ -39,6 +39,10 @@ struct jadard_panel_desc {
+ 	const struct jadard_init_cmd *init_cmds;
+ 	u32 num_init_cmds;
+ 	unsigned int enable_seq;
++	unsigned int post_reset_delay;	/* ms after XRES deassert before DCS; 0 => 5 ms */
++	unsigned int sleep_mode_delay;	/* optional ms before init cmd burst (LMT101: 0) */
++	unsigned int display_init_delay;	/* ms after sleep-out (0x11) before Display On path */
++	unsigned int display_on_delay;	/* ms after Display On (0x29) */
+ };
+ 
+ struct jadard {
+@@ -65,8 +69,11 @@ static int jadard_enable(struct drm_panel *panel)
+ 	unsigned int i;
+ 	int err;
+ 
+-	if (desc->enable_seq != JADARD_ENABLE_SEQ_LMT101)
+-		msleep(10);
++	if (desc->enable_seq != JADARD_ENABLE_SEQ_LMT101) {
++		msleep(desc->sleep_mode_delay ? desc->sleep_mode_delay : 10);
++	} else if (desc->sleep_mode_delay) {
++		msleep(desc->sleep_mode_delay);
++	}
+ 
+ 	for (i = 0; i < desc->num_init_cmds; i++) {
+ 		const struct jadard_init_cmd *cmd = &desc->init_cmds[i];
+@@ -83,7 +90,7 @@ static int jadard_enable(struct drm_panel *panel)
+ 		if (err < 0)
+ 			DRM_DEV_ERROR(dev, "failed to exit sleep mode ret = %d\n", err);
+ 
+-		msleep(120);
++		msleep(desc->display_init_delay ? desc->display_init_delay : 120);
+ 
+ 		err = mipi_dsi_dcs_write_buffer(dsi, e0_page0, JD9365DA_INIT_CMD_LEN);
+ 		if (err < 0)
+@@ -93,7 +100,8 @@ static int jadard_enable(struct drm_panel *panel)
+ 		if (err < 0)
+ 			DRM_DEV_ERROR(dev, "failed to set display on ret = %d\n", err);
+ 
+-		msleep(5);
++		if (desc->display_on_delay)
++			msleep(desc->display_on_delay);
+ 		return 0;
+ 	}
+ 
+@@ -148,7 +156,8 @@ static int jadard_prepare(struct drm_panel *panel)
+ 		msleep(10);
+ 
+ 		gpiod_set_value(jadard->reset, 1);
+-		msleep(120);
++		msleep(jadard->desc->post_reset_delay ?
++		       jadard->desc->post_reset_delay : 5);
+ 	} else {
+ 		/* Allow rail ramp when XRES is not under software control. */
+ 		msleep(135);
+@@ -423,6 +432,10 @@ static const struct jadard_panel_desc cz101b4001_desc = {
+ 	.format = MIPI_DSI_FMT_RGB888,
+ 	.init_cmds = cz101b4001_init_cmds,
+ 	.num_init_cmds = ARRAY_SIZE(cz101b4001_init_cmds),
++	.post_reset_delay = 120,
++	.sleep_mode_delay = 0,
++	.display_init_delay = 0,
++	.display_on_delay = 0,
+ 	.enable_seq = JADARD_ENABLE_SEQ_DEFAULT,
+ };
+ 
+@@ -430,7 +443,8 @@ static const struct jadard_panel_desc cz101b4001_desc = {
+  * LMT101SX006C official vendor init sequence from LCD Mall.
+  * Source of truth: library/LMT101/LMT101SX006C initial codes.txt (TASK-125).
+  * {0x80, 0x03} = 4 lanes (CMD_DSI_INT0 bits[1:0]=11).
+- * Register block ends at 0xE7; vendor tail (0x11, 120ms, E0 00, 0x29, 5ms) = patch 0004 + enable_seq.
++ * Register block ends at 0xE7; vendor tail (0x11, 120ms, E0 00, 0x29, 5ms) = patch 0004 + enable_seq;
++ * explicit delays in lmt101sx006c_desc (TASK-126 / patch 0005).
+  */
+ static const struct jadard_init_cmd lmt101sx006c_init_cmds[] = {
+ 	{ .data = { 0xE0, 0x00 } },
+@@ -653,6 +667,10 @@ static const struct jadard_panel_desc lmt101sx006c_desc = {
+ 	.format = MIPI_DSI_FMT_RGB888,
+ 	.init_cmds = lmt101sx006c_init_cmds,
+ 	.num_init_cmds = ARRAY_SIZE(lmt101sx006c_init_cmds),
++	.post_reset_delay = 120,
++	.sleep_mode_delay = 0,
++	.display_init_delay = 120,
++	.display_on_delay = 5,
+ 	.enable_seq = JADARD_ENABLE_SEQ_LMT101,
+ };
+ 
