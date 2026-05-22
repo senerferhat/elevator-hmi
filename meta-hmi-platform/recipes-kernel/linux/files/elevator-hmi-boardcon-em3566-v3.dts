@@ -157,38 +157,45 @@
 };
 
 /*
- * TASK-132 / TASK-133: EM3566 v3 carrier switches VCC3V3_LCD with a high-side P-FET:
- * Linux "enable" pulls GPIO0_C7 / RK_PC7 LOW (not EVB `enable-active-high`).
- * **`vcca_1v8`** is board **`regulator-fixed`** (TASK-133); do not rely on PMIC LDO_REG7.
- * Omit vin-supply — see TASK-131 (EPROBE_DEFER / dsi churn).
+ * EM3566 v3 VCC3V3_LCD (CON1 pins 5/6): PWM0_M0 → R457 → Q18 (NPN) → Q17 (P-MOSFET).
+ * SoM pin 140 / GPIO0_B7 — logic HIGH turns the rail ON (not RK_EVB GPIO0_C7).
+ * No pinctrl-0 here (gpiod muxes the line); pinctrl on regulator-fixed provoked
+ * DSI/panel **-517** defer storms with backlight **power-supply** (TASK-131 class).
+ * Omit vin-supply on this node.
  */
 &vcc3v3_lcd0_n {
 	status = "okay";
-	/delete-property/ enable-active-high;
-	gpio = <&gpio0 RK_PC7 GPIO_ACTIVE_LOW>;
+	gpio = <&gpio0 RK_PB7 GPIO_ACTIVE_HIGH>;
+	enable-active-high;
 	regulator-always-on;
 	regulator-boot-on;
+	regulator-min-microvolt = <3300000>;
+	regulator-max-microvolt = <3300000>;
+};
+
+/* BSP rk3566-evb2 repurposes RK_PB7 as work_led — conflicts with PWM0_M0 LCD rail. */
+&work_led {
+	status = "disabled";
 };
 
 /*
- * TASK-121: CON1 pin maps TOUCH_RST to gpio0 RK_PB6 (Boardcon); touch `gt1x` claims it
- * in BSP — disable so `jadard` panel can drive panel reset (temporary hijack per spec).
+ * TASK-121: CON1 pin 11 (TOUCH_RST) → gpio0 RK_PC6 (SoM pin 131, SPI0_CS0_M0).
+ * Panel XRES: GPIO0_C6 direct to CON1 pin 11 — GPIO_ACTIVE_LOW (vendor Q1).
+ * CON1 pins 9–10 = I2C2 only. `gt1x` off.
  */
 &gt1x {
 	status = "disabled";
 };
 
 /*
- * BSP rk3568-evb.dtsi pwm-backlight nodes often reference a supply label that does not
- * resolve on CM3566 (BOARDCON deletes/replaces PMIC children — TASK-120). Kernel then
- * uses a dummy regulator and logs "supply power not found". Tie the backlight supply to
- * the same LCD rail the panel uses so enable/disable sequencing matches real hardware.
- * TASK-118 may still refine pwms = <> routing for LCD_BL_PWM specifically.
+ * Omit power-supply on pwm-backlight — linking to vcc3v3_lcd0_n caused panel/DSI
+ * **-517** defer/rebind loops on EM3566 v3 (same class as TASK-131 vin-supply).
+ * Dummy regulator warning in dmesg is acceptable for bring-up.
  */
 &backlight {
-	power-supply = <&vcc3v3_lcd0_n>;
+	/delete-property/ power-supply;
 };
 
 &backlight1 {
-	power-supply = <&vcc3v3_lcd0_n>;
+	/delete-property/ power-supply;
 };

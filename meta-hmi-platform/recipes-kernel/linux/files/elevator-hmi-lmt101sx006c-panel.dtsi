@@ -7,7 +7,7 @@
  *
  * Phandle alignment (BSP tree at linux-rockchip_6.1 SRCREV, files
  * arch/arm64/boot/dts/rockchip/rk3566-evb2-lp4x-v10.dtsi + rk3568-evb.dtsi):
- *   vcc3v3_lcd0_n — GPIO-regulated rail used for dsi0_panel in rk3566-evb2
+ *   vcc3v3_lcd0_n — VCC3V3_LCD rail; EM3566 v3 enables via PWM0_M0 / GPIO0_B7 (board DTS)
  *   vcca_1v8 — rk809 PMIC LDO in rk3568-evb.dtsi (panel IO / VCCIO)
  *   backlight — pwm-backlight node in rk3568-evb.dtsi
  *
@@ -15,8 +15,11 @@
  *   library/EM3566/Usermanual/EM3566_hardware_manual.md §2.8 CON1
  *   library/EM3566/Schematic/em3566_v3sch.md
  *
- * BLK-006 / TASK-121: reset-gpios on gpio0 RK_PB6 (CON1 TOUCH_RST repurposed as
- * panel XRES; `gt1x` disabled in board DTS).
+ * BLK-006 / TASK-121: reset-gpios on gpio0 RK_PC6 (SoM pin 131 SPI0_CS0_M0 → CON1
+ * pin 11 TOUCH_RST). Bench 2026-05-22: GPIO_ACTIVE_HIGH + out lo → pin 11 ~0.9 V
+ * (SoM driven low) — direct path, not inverted; use GPIO_ACTIVE_LOW per vendor
+ * Q1 active-low XRES. CON1 pins 9–10 (I2C2) not used for XRES.
+ * `gt1x` disabled in board DTS.
  * TASK-125: vendor init — **4-lane DSI** (`{0x80,0x03}` CMD_DSI_INT0 bits[1:0]=11; `library/LMT101/LMT101SX006C initial codes.txt`).
  */
 
@@ -45,7 +48,7 @@
 		vdd-supply = <&vcc3v3_lcd0_n>;
 		vccio-supply = <&vcca_1v8>;
 		backlight = <&backlight>;
-		reset-gpios = <&gpio0 RK_PB6 GPIO_ACTIVE_LOW>;
+		reset-gpios = <&gpio0 RK_PC6 GPIO_ACTIVE_LOW>;
 
 		port {
 			panel_in_dsi: endpoint {

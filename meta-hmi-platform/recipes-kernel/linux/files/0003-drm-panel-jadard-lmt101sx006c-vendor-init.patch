@@ -6,9 +6,9 @@
  
 +/*
 + * LMT101SX006C official vendor init sequence from LCD Mall.
-+ * Received 2026-05-09. TASK-125. Supersedes TASK-123/124 ESP32 array.
++ * Source of truth: library/LMT101/LMT101SX006C initial codes.txt (TASK-125).
 + * {0x80, 0x03} = 4 lanes (CMD_DSI_INT0 bits[1:0]=11).
-+ * 0x11 and 0x29 omitted — handled by jadard_panel_enable().
++ * Register block ends at 0xE7; vendor tail (0x11, 120ms, E0 00, 0x29, 5ms) = patch 0004 + enable_seq.
 + */
 +static const struct jadard_init_cmd lmt101sx006c_init_cmds[] = {
 +	{ .data = { 0xE0, 0x00 } },
