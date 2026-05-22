@@ -1,0 +1,44 @@
+From: Elevator HMI meta-hmi-platform
+Subject: [PATCH] drm: panel: jadard — bring-up trace prints for LMT101 lifecycle
+
+Add dev_info at prepare/enable entry so dmesg confirms whether the DRM state
+machine called each phase on a given modetest run.  Removes ambiguity about
+whether XRES pulsed or init commands were sent.  Remove before production.
+
+---
+diff --git a/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c b/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
+--- a/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
++++ b/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
+@@ -154,7 +154,9 @@ static int jadard_prepare(struct drm_panel *panel)
+ {
+ 	struct jadard *jadard = panel_to_jadard(panel);
++	struct device *dev = panel->dev;
+ 	int ret;
+
++	dev_info(dev, "jadard prepare: enabling rails\n");
++
+ 	ret = regulator_enable(jadard->vdd);
+ 	if (ret)
+ 		return ret;
+@@ -170,10 +172,14 @@ static int jadard_prepare(struct drm_panel *panel)
+
+ 	if (jadard->reset) {
++		dev_info(dev, "jadard prepare: asserting XRES (20 ms pulse)\n");
+ 		gpiod_set_value(jadard->reset, 1);
+ 		msleep(20); /* vendor Q1: XRES active-low, 20 ms pulse */
+
+ 		gpiod_set_value(jadard->reset, 0);
++		dev_info(dev, "jadard prepare: XRES released, waiting %u ms\n",
++			 jadard->desc->post_reset_delay ?
++			 jadard->desc->post_reset_delay : 5);
+ 		msleep(jadard->desc->post_reset_delay ?
+ 		       jadard->desc->post_reset_delay : 5);
+ 	} else {
+@@ -190,6 +196,8 @@ static int jadard_enable(struct drm_panel *panel)
+ 	struct mipi_dsi_device *dsi = jadard->dsi;
+ 	int err;
+
++	dev_info(dev, "jadard enable: sending init table (%u cmds)\n",
++		 desc->num_init_cmds);
++
+ 	if (desc->enable_seq != JADARD_ENABLE_SEQ_LMT101) {
