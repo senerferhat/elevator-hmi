@@ -37,10 +37,11 @@ library/**
 # ...and allow .md files specifically
 !library/EM3566/**/*.md
 
-# LMT101 vendor drop: tracked index only (`*.txt`/other vendor files remain local/untracked).
+# LMT101: README + LCD Mall authoritative init table; other vendor drops remain untracked.
 !library/LMT101/
 library/LMT101/*
 !library/LMT101/README.md
+!library/LMT101/LMT101SX006C initial codes.txt
 
 # Re-ignore large binary directories (vendor firmware images and source — 70 GB+)
 # These were unignored by the ** rule above; explicitly re-exclude them.

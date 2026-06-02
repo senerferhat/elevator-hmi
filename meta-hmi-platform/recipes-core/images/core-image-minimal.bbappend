@@ -4,7 +4,7 @@ inherit rockchip-image
 WKS_FILE = "${ELEVATOR_HMI_EMMC_WKS}"
 IMAGE_OVERHEAD_FACTOR = "1.1"
 
-IMAGE_INSTALL:append = " rauc elevator-hmi-rauc-system-conf gptfdisk libdrm-tests util-linux test-display"
+IMAGE_INSTALL:append = " rauc elevator-hmi-rauc-system-conf gptfdisk libdrm-tests util-linux test-display libgpiod libgpiod-tools"
 
 # Prevent rauc-conf (upstream example system.conf) from being pulled in as a
 # weak dependency of rauc — it conflicts with our elevator-hmi-rauc-system-conf.

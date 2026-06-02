@@ -7,16 +7,51 @@
 
 ## Open Blockers
 
-### BLK-006 — JD9365 / LMT101 panel reset (XRES) not documented on EM3566 CON1
-**Opened:** 2026-04-15  
-**Severity:** MEDIUM — display bring-up risk until bench-validated  
+### BLK-006 — JD9365 / LMT101 panel reset (XRES) — wrong GPIO; GPIO contention on RK_PC7
+**Opened:** 2026-04-15 — **Reopened:** 2026-06-02 (TASK-134 audit)  
+**Severity:** **HIGH** — panel reset cannot work; GPIO double-claim blocks display init  
 **Owner:** A1  
-**Details:**  
-Public **EM3566 v3** materials (`library/EM3566/Usermanual/EM3566_hardware_manual.md` §2.8 CON1, `library/EM3566/Schematic/em3566_v3sch.md`) name **VCC3V3_LCD**, **LCD_PWREN_H**, **LCD_BL_PWM**, and MIPI DSI lanes, but do **not** map **JD9365 XRES** (driver `reset-gpios`) to a specific RK3566 GPIO. TASK-101 therefore ships a **DSI fragment** without `reset-gpios`, and kernel patch **0002** makes `reset-gpios` **optional** in the binding/driver so the node can parse and probe when reset is hard-wired or tolerates software-only sequencing.  
-**Required action:**  
-- On first **EM3566 v3 + LMT101** bench session: confirm display init; if unstable, trace **XRES** on the carrier / flex and add `reset-gpios` to `elevator-hmi-lmt101sx006c-panel.dtsi` (or board DTS) with a cited source (schematic or Boardcon BSP `.dts`).  
-  **Update (2026-05-07):** Hardwiring XRES to 3.3V failed to initialize the panel. **TASK-121** implemented a fix to map `reset-gpios` to `<&gpio0 RK_PB6>` (hijacking the `TOUCH_RST` pin on CON1) to allow the `jadard` driver to provide the precise 5ms reset pulse before DCS commands. Awaiting hardware validation.
-**Resolution criteria:** `reset-gpios` added with documented GPIO **or** bench log confirms stable operation without it and blocker closed with rationale.
+
+#### Root-Cause Analysis (TASK-134 — 2026-06-02)
+
+**Two distinct faults** identified by cross-referencing the EM3566 v3 carrier schematic, SoM connector pinout, BSP DTS, and the deployed DTB:
+
+**Fault 1 — `reset-gpios` is on the wrong pad (RK_PC7 ≠ TOUCH_RST):**
+The panel DTSI (`elevator-hmi-lmt101sx006c-panel.dtsi`) previously mapped `reset-gpios = <&gpio0 RK_PC7 GPIO_ACTIVE_LOW>` (GPIO0_C7). However, per the hardware manual and schematic PDF (owner-locked):
+
+| CON1 pin | Signal name    | SoM pin | SoC GPIO    | Mux function     |
+|----------|---------------|---------|-------------|------------------|
+| **11**   | **TOUCH_RST** | 131     | **GPIO0_C6** | SPI0_CS0_M0      |
+| **12**   | **TOUCH_INT** | 132     | **GPIO0_C5** | SPI0_MISO_M0     |
+| **13**   | **LCD_PWREN_H** | 139   | **GPIO0_C7** | *(GPIO-only)*    |
+
+`RK_PC7` (**CON1 pin 13**) is **`LCD_PWREN_H`** — the LCD power-enable signal, **not** the touch/panel reset. The **physical XRES trace** runs to **CON1 pin 11** = **`GPIO0_C6`**. The `jadard` driver was toggling the wrong pin.
+
+**Fault 2 — GPIO0_C7 double-claim (vcc3v3_lcd0_n vs reset-gpios):**
+Both nodes claimed `GPIO0_C7`. Restoring the reset GPIO to `GPIO0_C6` eliminates this contention.
+
+#### Summary — 3-Column Net Map (deployed DTB vs hardware)
+
+| Signal / CON1 pin | Schematic GPIO (ground truth) | DTB GPIO (actual) | Status |
+|---|---|---|---|
+| **TOUCH_RST** (pin 11) | **GPIO0_C6** (SPI0_CS0_M0) | `reset-gpios` in panel@0 | ✅ Correctly assigned (RK_PC6 / gpio-22) |
+| **TOUCH_INT** (pin 12) | **GPIO0_C5** (SPI0_MISO_M0) | *Not assigned* | — (unused; sits on C5 / gpio-21) |
+| **LCD_PWREN_H** (pin 13) | **GPIO0_C7** | *Not assigned* | — (unclaimed) |
+| **LCD_BL_PWM** (pin 14) | **GPIO0_B7** (PWM0_M0) | `vcc3v3_lcd0_n` gpio | ⚠️ Overridden from BSP |
+| **VCC3V3_LCD** (pins 5-6) | via load switch + `GPIO0_C7` | `vcc3v3_lcd0_n` → RK_PB7 | ⚠️ BSP default ≠ board override |
+| **gt1x rst** (BSP I2C2) | **GPIO0_B6** (SPI0_MOSI_M0) | `goodix,rst-gpio` (disabled) | ✅ Disabled, no conflict |
+
+#### IO-Domain Voltage
+
+GPIO0 bank operates at **3.3 V** (PMU IO domains confirmed in deployed DTB). No voltage mismatch.
+
+#### Required Fix (Completed)
+
+1. **Change `reset-gpios`** in `elevator-hmi-lmt101sx006c-panel.dtsi` from `<&gpio0 RK_PC7 …>` back to `<&gpio0 RK_PC6 GPIO_ACTIVE_LOW>`.
+2. **Disable `spi0`** in board DTS to avoid SPI0_CS0_M0 drive conflict on `GPIO0_C6`.
+3. **Verify** no other node claims `GPIO0_C6` in the active tree.
+
+**Resolution criteria:** `reset-gpios` on verified **GPIO0_C6** (`TOUCH_RST`, CON1 pin 11), `spi0` disabled, bench validation of timed reset pulse on oscilloscope.
 
 ---
 

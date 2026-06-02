@@ -179,11 +179,14 @@
 };
 
 /*
- * Panel XRES: gpio0 RK_PC7 (LCD_PWREN_H, SoM pin 139, CON1 pin 13) GPIO_ACTIVE_LOW.
- * RK_PC6 (SPI0_CS0_M0, CON1 pin 11) was stuck LOW — SPI0 holds CS asserted.
- * RK_PC7 is free: BSP EVB2 vcc3v3_lcd0_n assignment overridden to RK_PB7 here.
- * `gt1x` off.
+ * Panel XRES: gpio0 RK_PC6 (TOUCH_RST, CON1 pin 11, gpiochip0 line 22).
+ * SPI0_CS0_M0 shares PC6 — disable SPI0 so jadard owns the reset line.
+ * VCC3V3_LCD switch: RK_PB7 (PWM0_M0), not PC7. `gt1x` off.
  */
+&spi0 {
+	status = "disabled";
+};
+
 &gt1x {
 	status = "disabled";
 };

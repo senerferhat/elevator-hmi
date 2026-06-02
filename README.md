@@ -58,3 +58,5 @@ All upstream repos are pinned to **40-character commit SHAs** in `kas/elevator-h
 Hardware, roadmap, and ADRs are described in `CLAUDE.md` and the PDFs referenced there.
 
 **Lab bring-up:** [`docs/BRINGUP-CHECKLIST.md`](docs/BRINGUP-CHECKLIST.md) — TASK-002 host, `kas` builds, deploy paths, UART, MIPI LCD, flash doc pointers (no guessed offsets).
+
+**Panel vendor / LCD Mall support (connections → Linux → verification):** [`docs/VENDOR-SUPPORT-LMT101-BRINGUP.md`](docs/VENDOR-SUPPORT-LMT101-BRINGUP.md). **Plain-text email to paste:** [`docs/VENDOR-SUPPORT-LMT101-BRINGUP-EMAIL.txt`](docs/VENDOR-SUPPORT-LMT101-BRINGUP-EMAIL.txt).

@@ -207,7 +207,8 @@ Flash the resulting **`*.wic`** with **`rkdeveloptool wl 0 …`** per **Step 3**
 1. Power off, connect **LMT101** to **MIPI LCD**, power on.
 2. `modetest -M rockchip -c` — note connector id (e.g. **191**).
 3. `modetest -M rockchip -s <connector>:#0` (example: **`-s 191:#0`**).
-4. `dmesg | grep -i jadard` — no flood of errors; watch for sustained **`-517`** defer loops.
+4. `dmesg | grep -i jadard` — expect patch **0009** trace: `reset gpio = gpio-22`, `XRES assert` / `XRES release`, `init table: … cmds, rc=0`; no sustained **`-517`** defer loops.
+5. **XRES scope gate (recommended):** dual capture **CON1 pin 11** + **FPC pin 5** during step 3 — **`~20 ms` LOW** on both. Full procedure: **`docs/LMT101-XRES-SCOPE-PROCEDURE.md`**. **libgpiod:** `gpiochip0` **line 22**; **`gpioset` → EBUSY** while driver bound is correct.
 
 ### Handoff / failure
 
