@@ -24,16 +24,20 @@
 - `strings Image | grep "H4a sent"` → no match (**H4a sequence ABSENT**)
 - `strings Image | grep "DIAG15"` → 9 DIAG15 strings present (**DIAG15 intact**)
 
-**Expected on-target result after flash:**
+**On-target result confirmed (2026-06-10 22:54):**
 ```
-dmesg | grep "jadard:"
-jadard: GET_POWER_MODE(0x0A) pre-TE=0x1c   ← same as DIAG15 session
-jadard: DIAG15 ID=0x93 0x00 0x00
-jadard: DIAG15 self-diag=0xC0
-jadard: DIAG15 scanline=0x00
-jadard: DIAG15
+[    3.685899] jadard: FAE page-4 clock fix (pre-SLPOUT)
+[    3.688009] jadard: SLPOUT sent
+[    3.811604] jadard: DISON sent
+[    3.884678] jadard: GET_POWER_MODE(0x0A) pre-TE=0x1c
+[    3.901740] jadard: DIAG15 ID=0x93 0x00 0x00 (expect 93 65 04)
+[    3.918992] jadard: DIAG15 self-diag=0xc0 (0xC0=OK ...)
+[    3.931554] jadard: FAE TE on (0x35,0x00)
+[    3.967908] jadard: DIAG15 scanline=0x00 (non-0=timing-ctrl-running)
+[    3.967947] jadard: DIAG15
+[    3.967955] jadard: init table: 196 cmds, rc=0
 ```
-No H4a line. This is the stable diagnostic baseline for K1/K2 ammeter test and vendor handoff.
+No `H4a sent` line — **revert confirmed**. Board running clean DIAG15 baseline. Ready for K1/K2 ammeter test.
 
 ---
 
