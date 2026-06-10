@@ -2,6 +2,41 @@
 
 **Format:** One entry per session. Most recent entry first.
 
+## 2026-06-10 (session 5) — A2: DIAG15 reverted build — H4a removed, clean baseline WIC
+
+**Agent:** A2 (Composer2 — implementation)
+
+### DIAG15 reverted build
+
+`cleansstate` → full kernel rebuild → WIC. Patch 0016 (H4a) confirmed absent from binary.
+
+**Artifact triple:**
+
+| Field | Value |
+|---|---|
+| **WIC SHA-256** | `e215a94a4dd10aedb470a8c69f3334c43a5c87929a21104d0e23b37c8270e38f` |
+| **WIC file** | `core-image-minimal-elevator-hmi-em3566.rootfs-20260610191946.wic` |
+| **Symlink** | `core-image-minimal-elevator-hmi-em3566.rootfs-diag15.wic` |
+| **git HEAD** | `5e18127` (branch `task/TASK-132-vcc3v3-lcd0-active-low-pfet`) |
+| **dmesg signature** | `jadard: DIAG15` (0x04/0x0F/0x45 reads; no H4a sequence) |
+
+**Binary verification:**
+- `strings Image | grep "H4a sent"` → no match (**H4a sequence ABSENT**)
+- `strings Image | grep "DIAG15"` → 9 DIAG15 strings present (**DIAG15 intact**)
+
+**Expected on-target result after flash:**
+```
+dmesg | grep "jadard:"
+jadard: GET_POWER_MODE(0x0A) pre-TE=0x1c   ← same as DIAG15 session
+jadard: DIAG15 ID=0x93 0x00 0x00
+jadard: DIAG15 self-diag=0xC0
+jadard: DIAG15 scanline=0x00
+jadard: DIAG15
+```
+No H4a line. This is the stable diagnostic baseline for K1/K2 ammeter test and vendor handoff.
+
+---
+
 ## 2026-06-10 (session 4) — A2: H4a on-target result + software investigation closure
 
 **Agent:** A2 (Composer2 — analysis)
