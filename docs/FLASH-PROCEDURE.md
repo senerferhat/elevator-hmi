@@ -6,6 +6,46 @@ Run `**rkdeveloptool**` on the **host** (not inside a Docker/kas-only environmen
 
 ---
 
+## BUILD B — FAE clock fix (2026-06-10 canonical artifact)
+
+**Flash this for bench Step B2 (TASK-135).** Do not use `ls -t *.wic | head -1` for this target — use the exact filename.
+
+```bash
+DEPLOY=build/tmp/deploy/images/elevator-hmi-em3566
+
+# 1. Verify SHA before flashing (mandatory per artifact-triple rule)
+sha256sum "$DEPLOY/core-image-minimal-elevator-hmi-em3566.rootfs-fae-clock.wic"
+# Expected: dd5be78dec198a984dce271a658219b3e44006df58d04709a3bed66fbb9728ad
+# File:     core-image-minimal-elevator-hmi-em3566.rootfs-20260610170030.wic
+# git HEAD: e19ae163b81db9c08b1b04813b313079787f0ff0
+
+# 2. Enter Maskrom: power off → hold RECOVERY → plug USB OTG → release after 2s
+lsusb | grep 2207   # 2207:350a = Maskrom  /  2207:0006 = Loader (skip db below)
+
+# 3. Flash (Maskrom path)
+cd "$DEPLOY"
+sudo rkdeveloptool db loader.bin
+sudo rkdeveloptool wl 0 core-image-minimal-elevator-hmi-em3566.rootfs-fae-clock.wic
+sudo rkdeveloptool wl 64 idblock.img
+sudo rkdeveloptool wl 0x4000 uboot.img
+sudo rkdeveloptool rd
+
+# 4. Open UART (1500000 baud) immediately after rd
+sudo minicom -D /dev/ttyACM0 -b 1500000
+```
+
+**After boot — first check (decisive):**
+```bash
+dmesg | grep -i jadard
+# MUST see: jadard: FAE page-4 clock fix (pre-SLPOUT)
+# MUST see: jadard: GET_POWER_MODE(0x0A) pre-TE=0x??  ← record this value
+# MUST NOT: jadard: BIST armed
+```
+
+See `docs/LAB-LMT101-TEST-CHEATSHEET.md` **Phase J** for the full BUILD B test suite and decision matrix.
+
+---
+
 ## Build — TASK‑129 DTS `core-image-minimal` (Yocto host)
 
 From **repository root** on a TASK‑002-class host (**Ubuntu** 22.04/24.04, `**scripts/setup-build-host.sh**`, **`kas`**, **`lz4c`**). The DTS is **`task/TASK-129-vcc3v3-lcd0-pfet-polarity`** snapshot: **`elevator-hmi-boardcon-em3566-v3.dts`** (single **`…v3.dtb`** on **`/boot`**).
