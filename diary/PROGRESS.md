@@ -77,15 +77,30 @@ Paste numbers in this diary with the artifact triple: WIC = `d2ce5af7...`, dmesg
 
 ---
 
-### BUILD B rebuild — [DONE]
+### BUILD B rebuild — [DONE] (A2 — 2026-06-10, cleansstate build)
 
-BUILD B rebuild succeeded with exit code 0.
-- **WIC file**: `core-image-minimal-elevator-hmi-em3566.rootfs-20260610164058.wic`
-- **WIC SHA-256**: `0df2fb49d9d8816200d84dc2fc43691fe189f66cbc1e702658a96c3e508fc42e`
-- **Git HEAD commit**: `e37602165c7161b4028828b6d80ef7de4ee0c058`
-- **Log do_patch proof**: No failed patches. All patches (0009–0014) applied cleanly via Reduced Context applying fallback in `log.do_patch`.
+**A2 note (2026-06-10):** The A1-recorded `164058` / `0df2fb49` artifact was built earlier today **before** cleansstate. Per the directive (descriptor-only swap = stale sstate risk), A2 ran `bitbake linux-rockchip -c cleansstate` before recompiling. New canonical BUILD B artifact:
 
-**B2 gate (on-target signature check):** Flash the newly generated BUILD B image. `dmesg | grep -i jadard` must show `FAE page-4 clock fix` and must NOT show `BIST armed`.
+| Field | Value |
+|-------|-------|
+| **WIC filename** | `core-image-minimal-elevator-hmi-em3566.rootfs-20260610170030.wic` |
+| **WIC SHA-256** | `dd5be78dec198a984dce271a658219b3e44006df58d04709a3bed66fbb9728ad` |
+| **symlink** | `…rootfs-fae-clock.wic` → `…20260610170030.wic` (updated) |
+| **Git HEAD** | `e19ae163b81db9c08b1b04813b313079787f0ff0` (branch `task/TASK-132-vcc3v3-lcd0-active-low-pfet`) |
+| **Build** | `cleansstate` → compile (990 tasks, all succeeded) → deploy → image_wic -f → image_complete -f |
+| **do_patch proof** | Patches 0011, 0013, 0014 fell back from `git am` → `git apply` (INFO level, standard Yocto behavior). No fuzz/reject/FAILED lines. All three applied cleanly. |
+
+**Kernel strings verified (BUILD B):**
+- ✅ `jadard: FAE page-4 clock fix (pre-SLPOUT)` — BUILD B runtime signature
+- ✅ `jadard: GET_POWER_MODE(0x0A) pre-TE=0x%02x` — pre-TE read path compiled in
+- ✅ `jadard: FAE TE on (0x35,0x00)` — TE enable compiled in
+- ℹ️ `jadard: BIST armed (500ms post-unlock)` — in binary (both paths compiled; descriptor 0013 selects CLOCK at runtime, BIST branch will NOT execute)
+
+**B2 gate (on-target):** Flash `…rootfs-fae-clock.wic` (SHA `dd5be78d…`). On first boot:
+- `dmesg | grep -i jadard` MUST show `jadard: FAE page-4 clock fix (pre-SLPOUT)` and `jadard: FAE TE on`
+- MUST NOT print `jadard: BIST armed`
+- Record `GET_POWER_MODE(0x0A) pre-TE=0x??` — **0x80 set = booster up = H2 confirmed; 0x18 = booster still off = H1/H4 domain**
+- Log with artifact triple: WIC SHA `dd5be78d…` + dmesg signature + git HEAD `e19ae163`
 
 ---
 
