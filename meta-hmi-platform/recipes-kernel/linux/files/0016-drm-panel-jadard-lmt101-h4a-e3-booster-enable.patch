@@ -1,0 +1,65 @@
+From: Elevator HMI meta-hmi-platform
+Subject: [PATCH] drm: panel: jadard -- LMT101 H4a: F0,55/F1,AA/E0,01/E3,01 booster enable
+
+H4a hypothesis test: the FAE BIST sequence writes F0,55/F1,AA/E0,01/E3,01
+after DISON; the standard vendor init table (196 cmds) does NOT write E3
+on page 1. Page-1 E3 may be the charge pump (JD5001 booster) enable register
+that starts AVDD/AVEE/VGH/VGL generation.
+
+Evidence from DIAG15 (patch 0015 result):
+  0x0F = 0xC0 -- registers loaded OK, IC logic functional (rules out H4b/H6)
+  0x0A = 0x1c -- booster bit 0x80 still OFF (charge pump never started)
+  0x45 = 0x00 -- scan not running (consistent with no VGH/VGL)
+
+This patch inserts the 5-command sequence immediately after DISON in the
+FAE_CLOCK path, before the existing 50ms settle and 0x0A read. If the booster
+starts, dmesg will show GET_POWER_MODE(0x0A) >= 0x9C (bit 7 set) on the next
+boot -- confirming H4a and making this sequence the production fix.
+
+F0,55 / F1,AA: Jadard unlock password for protected command registers.
+E0,01:         select page 1.
+E3,01:         write target register (booster/charge-pump enable candidate).
+E0,00:         restore page 0 for TE and normal scanout.
+
+Applies after patches 0001-0015 (requires FAE_CLOCK path from 0011+0013).
+
+---
+diff --git a/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c b/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
+index b0f77b8228a6..d5d5c4d8ac92 100644
+--- a/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
++++ b/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
+@@ -177,7 +177,33 @@ static int jadard_enable(struct drm_panel *panel)
+ 			u8 self_diag;
+ 			ssize_t rd;
+ 
+-			/* Clean 0x0A read: ~50 ms after DISON, before TE / page churn */
++			/*
++			 * H4a test (PATCH-0016): FAE BIST writes F0,55/F1,AA/E0,01/E3,01
++			 * after DISON; the standard vendor init table does NOT write E3
++			 * on page 1. Page-1 E3 may be the charge pump (booster) enable
++			 * register. F0,55/F1,AA unlock the Jadard protected command set
++			 * before E3 can be written. E0,00 restores page 0 for TE/scanout.
++			 * If 0x0A reads 0x9C after this (booster bit 0x80 set), H4a
++			 * is confirmed and this write sequence is the production fix.
++			 */
++			err = jadard_generic_reg_val(dsi, dev, 0xf0, 0x55);
++			if (err < 0)
++				dev_info(dev, "jadard: H4a F0,55 err=%d\n", err);
++			err = jadard_generic_reg_val(dsi, dev, 0xf1, 0xaa);
++			if (err < 0)
++				dev_info(dev, "jadard: H4a F1,AA err=%d\n", err);
++			err = jadard_generic_reg_val(dsi, dev, 0xe0, 0x01);
++			if (err < 0)
++				dev_info(dev, "jadard: H4a E0,01 err=%d\n", err);
++			err = jadard_generic_reg_val(dsi, dev, 0xe3, 0x01);
++			if (err < 0)
++				dev_info(dev, "jadard: H4a E3,01 err=%d\n", err);
++			err = jadard_generic_reg_val(dsi, dev, 0xe0, 0x00);
++			if (err < 0)
++				dev_info(dev, "jadard: H4a E0,00 err=%d\n", err);
++			dev_info(dev, "jadard: H4a sent F0,55/F1,AA/E0,01/E3,01/E0,00\n");
++
++			/* Clean 0x0A read: ~50 ms after H4a writes, before TE / page churn */
+ 			msleep(50);
+ 			rd = mipi_dsi_dcs_read(dsi, 0x0a, &pwr_mode, 1);
+ 			if (rd < 0)

@@ -2,6 +2,49 @@
 
 **Format:** One entry per session. Most recent entry first.
 
+## 2026-06-10 (session 3) — A2: TASK-136 patch 0016 — H4a E3,01 booster enable
+
+**Agent:** A2 (Composer2 — implementation)
+
+### Patch 0016 — H4a booster enable test
+
+**Motivation:** DIAG15 result (`0x0F=0xC0`) eliminated H4b and H6. Booster still off
+(`0x0A=0x1c`). H4a hypothesis: the standard init table never writes page-1 `E3` — which
+the FAE BIST sequence explicitly does (`E0,01 / E3,01` after DISON). Adding the full FAE
+unlock + E3 write to the standard clock-fix path tests H4a directly.
+
+**What patch 0016 adds** (inserted in FAE_CLOCK path, before `msleep(50)` / `0x0A` read):
+```
+F0,55  — Jadard unlock byte 1 (password for protected registers)
+F1,AA  — Jadard unlock byte 2
+E0,01  — select page 1
+E3,01  — write E3 (charge pump / booster enable candidate)
+E0,00  — restore page 0 for TE + scanout
+```
+The existing 50ms settle + `0x0A` read in DIAG15 immediately reports the result.
+No new diagnostic code needed.
+
+**Artifact triple:**
+| Field | Value |
+|---|---|
+| **WIC SHA-256** | `0b486efef44d058b14d912e3fc05e1f9a6e91302da700c66ad6e40dfb23d74f7` |
+| **WIC file** | `core-image-minimal-elevator-hmi-em3566.rootfs-20260610184840.wic` |
+| **Symlink** | `core-image-minimal-elevator-hmi-em3566.rootfs-h4a.wic` |
+| **git HEAD** | `883b364` (branch `task/TASK-132-vcc3v3-lcd0-active-low-pfet`) |
+| **dmesg signature** | `jadard: H4a sent F0,55/F1,AA/E0,01/E3,01/E0,00` |
+
+**Kernel strings confirmed:** H4a sequence + DIAG15 (0x04/0x0F/0x45) all present in Image binary.
+
+**On-target acceptance — what to look for:**
+```bash
+dmesg | grep "jadard:"
+```
+- `jadard: H4a sent F0,55/F1,AA/E0,01/E3,01/E0,00` — confirms sequence was sent
+- `jadard: GET_POWER_MODE(0x0A) pre-TE=0x9c` — **H4a CONFIRMED, booster started**
+- `jadard: GET_POWER_MODE(0x0A) pre-TE=0x1c` — H4a NOT the cause, proceed to ammeter (H1)
+
+---
+
 ## 2026-06-10 (session 2) — A2: TASK-136 DIAG15 kernel build — patch 0015 verified + WIC artifact
 
 **Agent:** A2 (Composer2 — implementation)
