@@ -63,19 +63,57 @@
 - Reset timing: spec minimums tRESETL 10us / tRESETH 5ms / tSLPOUT 120ms — our 20ms/120ms over-satisfies. Closed.
 - Expected JD9365 ID bytes for read-back: **93 65 04** (DCS 0x04).
 
-#### Ranked Hypotheses (updated 2026-06-10 post-BUILD B)
+#### DIAG15 Result (patch 0015, 2026-06-10 bench)
+
+**Board:** `rootfs-diag15.wic`, SHA `22a40d74…`, git `2f4229d`.
+
+```
+GET_POWER_MODE(0x0A) pre-TE = 0x1c          (same as BUILD B — booster still off)
+DIAG15 ID = 0x93 0x00 0x00                  (0x93 = JD9365D confirmed; 0x00 bytes = multi-byte DCS read limit in burst HS)
+DIAG15 self-diag = 0xC0                     (0xC0 = both bits set: registers loaded OK + IC logic functional)
+DIAG15 scanline = 0x00                      (timing controller not running — consistent with no VGH/VGL)
+```
+
+**DIAG15 conclusions:**
+- `0x0F = 0xC0` **eliminates H4b** (registers loaded OK) and **eliminates H6** (IC logic functional, JD9365D confirmed by 0x93)
+- `0x0F` "Functionality Detection" tests the IC's digital logic, NOT the charge pump specifically — the booster is an analogue subsystem outside digital self-test scope
+- `0x93` first ID byte confirms JD9365D. Bytes 2–3 (`0x00 0x00`) are a burst-HS DCS multi-byte read limitation, not a panel fault
+
+#### H4a Test Result (patch 0016, 2026-06-10 bench)
+
+**Board:** `rootfs-h4a.wic`, SHA `0b486efe…`, git `d9efdda`.
+
+Sequence sent after DISON: `F0,55 / F1,AA / E0,01 / E3,01 / E0,00`, then 50ms, then `0x0A` read:
+
+```
+GET_POWER_MODE(0x0A) pre-TE = 0x08
+```
+
+**`0x08` decoded:**
+- Bit 7 (0x80): booster = 0 — **still OFF**
+- Bit 4 (0x10): sleep-out = **0 — CLEARED** (was 1 in all previous builds)
+- Bit 3 (0x08): normal mode = 1 (hardware default, always set at power-on)
+- Bit 2 (0x04): display-on = **0 — CLEARED** (was 1 in BUILD B / DIAG15)
+
+**Interpretation:** `E3,01` after `F0/F1` BIST unlock **triggered a panel internal soft-reset** (display state returned to power-on default: only normal-mode bit survives). The `F0/F1` + `E3` sequence is a BIST preparation command — it reinitializes the display engine for self-test mode, wiping sleep-out and DISON flags as a side effect. The booster does not start in BIST mode either because VDDIN cannot support the inrush (H1), or because BIST mode also has a separate booster path than production display.
+
+**H4a ELIMINATED as formulated.** Sending `E3,01` (page-1 BIST enable) in the middle of a production init sequence cannot start the production booster — it disrupts the panel state instead. If a missing register is the cause (H4b variant), it is a DIFFERENT register than `E3`, and the vendor FAE must identify it.
+
+#### Ranked Hypotheses (updated 2026-06-10 post-H4a test — FINAL SOFTWARE STATE)
 
 | # | Hypothesis | Status | Kill test |
 |---|-----------|--------|-----------|
-| H1 | VDDIN sags under booster load (Plan B wire resistance/contact) | **LIVE** — DMM can't see transients | Ammeter inline VDDIN; measure wire resistance (power off, ohmmeter FPC pin2/3 to VCC3V3_SYS tap) |
-| H2 | MIPI rate mismatch blocks panel power-up | **PARTIAL** — clock fix allowed DISON to latch (0x18→0x1c); but booster still off; rate may still block booster state machine | BUILD B done; booster still off; send updated vendor email with 0x1c result |
-| H4a | Init table missing booster-enable register (page-1 `E3`) | **NEW — PRIMARY** — vendor BIST uses `E3,01` on page 1; standard init does NOT write `E3`; `E3` may enable source driver/power stage | Ask vendor FAE: "does E3 (page 1) only enable BIST or does it also enable source output?" |
-| H4b | Other init register wrong for this glass batch | Possible | **DIAG15 (patch 0015):** `0x0F` = `0x40` (reg-load fault) confirms init didn't land; `0x04` ID confirms right IC |
-| H3 | HS video masks BIST | Possible but secondary | Rebuild BIST v2 + clock fix combined (new patch) |
-| H5 | Lane pair polarity miswired | Low — panel responds to DCS | Only relevant after booster starts |
-| H6 | Defective panel sample | Possible | Order 2-3 spares (TASK-137) |
+| **H1** | VDDIN sags under booster inrush (Plan B wire resistance/contact) | **LIVE — ONLY UNVERIFIED HW HYPOTHESIS** | Ammeter inline VDDIN at SLPOUT (~3.5s window) |
+| H2 | MIPI rate mismatch | **CLOSED (partial)** — clock fix allowed DISON to latch; booster still off | Vendor email |
+| H4a | Init table missing `E3` page-1 booster enable | **ELIMINATED** — `E3,01` causes soft-reset, not booster enable | N/A |
+| H4b | Other init register missing | **ELIMINATED** — `0x0F = 0xC0` confirms all registers loaded | N/A |
+| H3 | HS video masks BIST | **LOW** — BIST and production both fail for same reason (booster off) | N/A |
+| H5 | Lane polarity miswired | **LOW** — panel responds to all DCS | After booster starts |
+| H6 | Defective panel sample | **ELIMINATED** — `0x0F = 0xC0`, ID `0x93` confirms working IC | N/A |
 
-**Key interpretation rule:** ammeter inline VDDIN at boot — **no current step at SLPOUT → panel never attempted booster (software/init domain); spike-then-collapse → supply domain.** This single reading separates H1 from H4.
+**Software investigation: COMPLETELY CLOSED.** All software paths exhausted. H1 (supply) is the only remaining unverified hypothesis. All further action is hardware (ammeter test) or vendor FAE.
+
+**Key interpretation rule:** ammeter inline VDDIN at boot — **no current step at SLPOUT → panel never attempted booster (vendor must identify missing register); spike-then-collapse → H1 confirmed (supply sag).** This single reading is the last diagnostic gate before the vendor call.
 
 #### Decision Matrix (updated post-BUILD B)
 

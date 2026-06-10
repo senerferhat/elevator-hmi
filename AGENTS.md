@@ -1,7 +1,7 @@
 # AGENTS.md — Multi-Agent Coordination Protocol
 
 **Owner:** Claude Code (lead agent)  
-**Last updated:** 2026-06-02 — **TASK-106** software lab closed (**BLK-014**); vendor mail **`docs/VENDOR-SUPPORT-LMT101-BRINGUP-EMAIL.txt`**; **`BLK-006`** closed (XRES **GPIO0_C6**)  
+**Last updated:** 2026-06-10 — **TASK-136** software investigation CLOSED; H4a (`E3,01`) ELIMINATED (caused panel soft-reset → `0x08`); H1 (VDDIN supply) is only remaining hypothesis; **TASK-138** [READY] (vendor email update + K1/K2 owner actions). **BLK-014** software layer exhausted.  
 
 ---
 
@@ -41,7 +41,7 @@ Tasks are sorted by dependency order. Do not reorder.
 **Phase 0 gate status:** All A2 tasks complete. **BLK-001–004 closed** 2026-04-15 (vendor temp note, MIPI/LVDS mux clarification, backlight IC deferred, protocol hardware deferred). **Reference hardware:** **Boardcon EM3566 v3** dev kit (**CM3566**) — **on hand** (owner 2026-04-15); **LMT101** → `**MIPI LCD`** connector (muxed bus; see `CLAUDE.md` / BLK-002). **Interim SoM link:** **UART console** (host ↔ board) for boot / image / RAUC diagnostics until fieldbus returns (see `CLAUDE.md` §8 PAL).  
 **[RESOLVED] 2026-05-09 — BLK-011:** LCD Mall vendor init (`**library/LMT101/LMT101SX006C initial codes.txt`**) ported via TASK-125 (`**jadard`** + `**CMD_DSI_INT0` / vendor `0x80=0x03` ⇒ 4 lanes**; see `**diary/BLOCKERS.md`**).**  
 **Closed 2026-06-02:** **BLK-006** (XRES on **GPIO0_C6** / gpio-22 — dmesg pulse OK). **Open: BLK-014** (backlit black, full DRM scanout — vendor + scope). **Closed 2026-05-11:** **BLK-012** — BSP **`vcc3v3_lcd0_n`** **`enable-active-high`** vs EM3566 v3 P-FET; **TASK-129** fix (see **`diary/BLOCKERS.md`**). **Closed 2026-05-21:** **BLK-013** — **`VCC3V3_LCD`** / reference carrier load switch; **resolution = permanent Plan B bypass** (**`VCC3V3_SYS` → CON1 5/6**); rail **PM** deferred to production carrier (**A1 diary** — see **`diary/BLOCKERS.md`**). Closed 2026-05-06: BLK-010 (DSI/**`modetest`** OK). Closed 2026-05-06: BLK-008. Closed 2026-04-18: BLK-009 (**TASK-111**). **BLK-007** (Noble **`libegl1-mesa`** / TASK-002). **BLK-005** closed 2026-04-15. Phase 1: **TASK-106** **`[TESTING]`** — software bench **PASS** (2026-06-02); display gate = **BLK-014** (vendor FAE + MIPI scope); **TASK-118** **`[DEFERRED]`**. Production carrier + −20°C unchanged.
-**A2 sprint queue (2026-06-10 session 2):** FAE patches **0011–0015** in-tree; **`bbappend`** defaults to **BUILD B + DIAG15** (clock fix + DCS readbacks). Board currently runs BUILD B (`0x0A=0x1c`; booster still off). **TASK-134** **`[DONE]`**. **TASK-135** **`[TESTING]`** — BUILD B on-target `0x1c` result; **TASK-136** **`[IN PROGRESS]`** — patch 0015 implemented (0x04/0x0F/0x45 reads); **needs build + flash for acceptance**. **TASK-137** **`[READY]`** (spare panels — owner action). **TASK-116** still **`[READY]`**.
+**A2 sprint queue (2026-06-10 session 4 — SOFTWARE INVESTIGATION CLOSED):** All six patches 0011–0016 in-tree. **TASK-134** `[DONE]`. **TASK-135** `[TESTING]`. **TASK-136** `[REVIEW]` — H4a (`E3,01`) result: `0x0A=0x08` (panel soft-reset; H4a eliminated). Software hypothesis table: H1 only remaining. **TASK-137** `[READY]` (owner). **TASK-138** `[READY]` (vendor email update with `0x08` data + K1/K2 owner actions). **TASK-116** `[READY]`.
 
 ---
 
@@ -82,28 +82,74 @@ Tasks are sorted by dependency order. Do not reorder.
 
 ---
 
-### TASK-136 — [Phase 1] Diagnostic patch 0015 — DCS read-back after DISON
+### TASK-136 — [Phase 1] Diagnostic patches 0015 + 0016 — DIAG15 + H4a test
 
-**Status:** `[IN PROGRESS]`  
+**Status:** `[REVIEW]`  
 **Phase:** 1  
-**Depends on:** BUILD B `[TESTING]` (bench result `0x0A=0x1c`); **A2 implementing 2026-06-10**  
-**Branch:** `task/TASK-132-vcc3v3-lcd0-active-low-pfet` (same branch as TASK-134/135 — no dedicated branch needed for in-progress patch)
+**Depends on:** BUILD B `[TESTING]` (bench result `0x0A=0x1c`); implemented 2026-06-10  
+**Branch:** `task/TASK-132-vcc3v3-lcd0-active-low-pfet`
 
-**Spec (updated 2026-06-10):** Patch 0015 extends the BUILD B (FAE_CLOCK) post-DISON block — **not** before DISON. Reads added to the existing 50ms post-DISON window + 20ms post-TE:
-- `0x04` — Display ID (3 bytes, expect `93 65 04`)
-- `0x0F` — Self-Diagnostic Result (bit7=reg-load, bit6=func-OK; expect `0xC0`; `0x80` = func-fault = booster failed)
-- `0x45` — Get Scanline (after TE; non-zero = timing controller running)
-
-Sentinel: `jadard: DIAG15` emitted last. One patch, stacked on 0011+0013. Added to `bbappend` as patch 0015. No other changes.
+**Spec (updated 2026-06-10):** Patches 0015 + 0016 added to the BUILD B (FAE_CLOCK) post-DISON block:
+- `0015`: `0x04` (Display ID), `0x0F` (Self-Diagnostic Result), `0x45` (Get Scanline) with sentinel `jadard: DIAG15`
+- `0016`: After DISON, send `F0,55/F1,AA/E0,01/E3,01/E0,00` (H4a booster enable test), then existing `0x0A` read
 
 **Output notes (A2 — 2026-06-10):**
-- **`0015-drm-panel-jadard-lmt101-diag15-dcs-readback.patch`** — extends existing Block 1 (`u8 disp_id[3]`, `u8 self_diag` added; 0x04 + 0x0F reads after 0x0A); extends Block 2 (nested block for `scanline` + 0x45 read after 20ms post-TE; `jadard: DIAG15` sentinel).
-- **`linux-rockchip_%.bbappend`** — 0015 added after 0013.
-- **Rationale for post-DISON vs pre-DISON:** 0x0F self-diagnostic is most informative AFTER DISON because it reflects whether the display function worked; 0x04 ID can be read at any time; 0x45 must be after TE armed.
+- **`0015-drm-panel-jadard-lmt101-diag15-dcs-readback.patch`** — 0x04 + 0x0F + 0x45 reads; `jadard: DIAG15` sentinel.
+- **`0016-drm-panel-jadard-lmt101-h4a-e3-booster-enable.patch`** — `F0,55/F1,AA/E0,01/E3,01/E0,00` + dev_info.
+- **`linux-rockchip_%.bbappend`** — 0015 + 0016 both active.
 
-**Acceptance:** `dmesg | grep -i diag15` shows four lines: `ID=`, `self-diag=`, `scanline=`, `jadard: DIAG15`. Artifact triple logged.
+**On-target results (all builds):**
 
-**A1 review notes:** [pending build + bench]
+| Build | WIC SHA | git | `0x0A` result |
+|---|---|---|---|
+| BIST v1 | `…151107` | `d2ce5af7` | `0x18` (booster off, DISON not latched) |
+| BUILD B | `dd5be78d…` | `e19ae16` | `0x1c` (booster off, DISON latched) |
+| DIAG15 | `22a40d74…` | `2f4229d` | `0x1c`; `0x0F=0xC0`; `0x04=0x93`; `0x45=0x00` |
+| H4a | `0b486efe…` | `883b364` | **`0x08`** (panel soft-reset; sleep-out + DISON cleared) |
+
+**DIAG15 conclusions:**
+- `0x0F = 0xC0`: IC logic healthy, all registers loaded → H4b and H6 **eliminated**
+- `0x04 = 0x93`: JD9365D confirmed
+- `0x45 = 0x00`: timing controller not running (consistent with no VGH/VGL)
+
+**H4a conclusions:**
+- `0x08`: `E3,01` after `F0/F1` BIST unlock triggered internal panel soft-reset (sleep-out + DISON cleared)
+- `E3` on page 1 = BIST preparation command, not production booster enable
+- **H4a ELIMINATED**; booster still off regardless
+
+**Software investigation: CLOSED. H1 (VDDIN supply sag) is the only remaining hypothesis.**
+
+**A1 review notes:** TASK-136 produced definitive results. Patch 0016 (H4a) eliminated the last software hypothesis. `0x0F=0xC0` eliminated H4b and H6. All three non-supply hypotheses closed. Next action is owner hardware: K1 (wire resistance) + K2 (ammeter) + TASK-138 (vendor email update).
+
+---
+
+### TASK-138 — [Phase 1] Updated vendor email — three-build 0x0A data + H4a result
+
+**Status:** `[READY]`  
+**Phase:** 1  
+**Depends on:** TASK-136 `[REVIEW]` — H4a result `0x0A=0x08` is the new data point  
+**Branch:** (owner action — draft and send email; no A2 code)
+
+**Spec:** Owner sends updated second email to `sales06@alltouchdisplay.com` (or FAE contact from previous thread) containing:
+
+1. **Three-build `0x0A` progression:**
+   - BIST v1: `0x18` (booster off, DISON not latched)
+   - BUILD B: `0x1c` (clock fix working — DISON latched, booster still off)
+   - DIAG15: `0x1c`; `0x0F=0xC0` (IC logic healthy, all registers loaded); `0x45=0x00` (timing controller not running)
+
+2. **H4a test and result:**
+   - We sent `F0,55/F1,AA/E0,01/E3,01/E0,00` after DISON
+   - Result: `0x0A=0x08` — panel returned to power-on default (sleep-out and DISON bits cleared)
+   - Conclusion: `E3,01` after F0/F1 BIST unlock triggers an internal display-engine reset, not a production booster enable
+   - **Question for FAE:** Is `E3` (page 1) only for BIST mode, or does it have a separate function in production? What production register starts the JD5001 charge pump (AVDD/AVEE/VGH/VGL)?
+
+3. **Supply status:** VDDIN = 3.3V constant (DMM). Cannot rule out 10-50ms inrush transient (DMM blind window). Ammeter test pending.
+
+4. **Explicit request:** Vendor to provide the correct production booster-enable register sequence, if different from the standard `LMT101SX006C initial codes.txt` init table already in use.
+
+**Acceptance:** Email sent; reply tracked in `diary/PROGRESS.md` with date + FAE response summary.
+
+**A1 review notes:** [owner action]
 
 ---
 

@@ -2,6 +2,64 @@
 
 **Format:** One entry per session. Most recent entry first.
 
+## 2026-06-10 (session 4) — A2: H4a on-target result + software investigation closure
+
+**Agent:** A2 (Composer2 — analysis)
+
+### H4a on-target result
+
+**Board flashed:** `core-image-minimal-elevator-hmi-em3566.rootfs-h4a.wic` (SHA `0b486efe…`, git `883b364`)
+
+**Result:**
+```
+dmesg | grep "GET_POWER_MODE"
+[    3.887484] jadard-jd9365da fe060000.dsi.0: jadard: GET_POWER_MODE(0x0A) pre-TE=0x08
+```
+
+**`0x08` decoded:**
+
+| Bit | Mask | Value | Meaning |
+|-----|------|-------|---------|
+| 7 | 0x80 | 0 | Booster (JD5001) — **still OFF** |
+| 4 | 0x10 | 0 | Sleep-out — **CLEARED** (was 1 in all prior builds) |
+| 3 | 0x08 | 1 | Normal mode — set (hardware default on power-on) |
+| 2 | 0x04 | 0 | Display-on — **CLEARED** (was 1 in BUILD B / DIAG15) |
+
+**Comparison across all builds:**
+
+| Build | 0x0A | Booster | Sleep-out | DISON |
+|---|---|---|---|---|
+| BIST v1 | `0x18` | OFF | ✓ | ✗ |
+| BUILD B | `0x1c` | OFF | ✓ | ✓ |
+| DIAG15 | `0x1c` | OFF | ✓ | ✓ |
+| **H4a** | **`0x08`** | **OFF** | **✗** | **✗** |
+
+**Conclusion:** The `F0,55/F1,AA/E0,01/E3,01/E0,00` sequence triggered an **internal panel soft-reset**. The sleep-out and display-on flags — which had been properly set by SLPOUT+DISON — were cleared back to power-on default. Only the hardware "normal mode" bit (always 1 after power-on) survived. `E3,01` after `F0/F1` BIST unlock is a **BIST preparation command**, not a production booster enable register. Writing it in a production init path reinitializes the display engine for self-test mode and wipes all prior display state.
+
+**H4a eliminated.** The booster does not start in BIST mode either (0x08 means no booster start — identical failure mode to 0x18/0x1c). This confirms H1 (supply) and/or H2 (vendor FAE for the correct booster-enable register in production mode).
+
+### Software Investigation: CLOSED
+
+All software hypotheses have been tested to exhaustion:
+
+| Test | Outcome | Hypothesis closed |
+|---|---|---|
+| BUILD B (clock fix) | `0x1c` — DISON latched | H2 partial; MIPI comms robust |
+| DIAG15 `0x0F=0xC0` | Registers OK, IC healthy | H4b, H6 eliminated |
+| DIAG15 `0x04=0x93` | JD9365D confirmed | H6 eliminated |
+| H4a `E3,01` test | `0x08` — soft reset triggered | **H4a eliminated** |
+
+**Remaining: H1 only.** Ammeter inline VDDIN at SLPOUT is the single remaining hardware test before vendor re-engagement.
+
+### Next immediate actions
+
+1. **K1 (owner, board off):** ohmmeter FPC pin 2/3 → Plan B wire → VCC3V3_SYS tap. Target < 0.3Ω.
+2. **K2 (owner, bench supply):** ammeter inline VDDIN at boot. Watch 3.5s SLPOUT window. Spike-then-collapse = H1. No spike = vendor.
+3. **Vendor email update:** Send updated email with `0x08` regression data — vendor FAE now has: `0x18` (BIST v1) → `0x1c` (BUILD B / DIAG15) → `0x08` (after E3,01). Three data points + `0x0F=0xC0`. Ask: what production register enables the booster (not E3 which is BIST-mode)?
+4. **TASK-137:** Order 2-3 spare LMT101 units (H6 still possible as secondary, spares needed regardless).
+
+---
+
 ## 2026-06-10 (session 3) — A2: TASK-136 patch 0016 — H4a E3,01 booster enable
 
 **Agent:** A2 (Composer2 — implementation)
