@@ -571,6 +571,73 @@ Priority order:
 
 ---
 
+### Phase L — BUILD B + DIAG15 (patch 0015) — DCS panel self-diagnosis
+
+**Status:** patch 0015 in-tree; rebuild required (same `bbappend` as BUILD B + one new patch)
+
+**When to run:** next reflash after BUILD B result (0x1c) — this is the next firmware build.
+
+**Build command (host):**
+```bash
+kas shell kas/elevator-hmi.yml -c "bitbake linux-rockchip -c cleansstate && \
+  bitbake virtual/kernel -c compile -f && bitbake virtual/kernel -c deploy -f && \
+  bitbake core-image-minimal -c image_wic -f && bitbake core-image-minimal -c image_complete -f"
+```
+
+**Flash:** same procedure as BUILD B — `rkdeveloptool db + wl + rd` then power cycle.
+
+**L1 — Acceptance check (on board after flash):**
+```bash
+dmesg | grep -i jadard
+```
+
+Must see ALL of the following lines:
+```
+jadard: FAE page-4 clock fix (pre-SLPOUT)
+jadard: DISON sent
+jadard: GET_POWER_MODE(0x0A) pre-TE=0x??
+jadard: DIAG15 ID=0x?? 0x?? 0x?? (expect 93 65 04)
+jadard: DIAG15 self-diag=0x?? (0xC0=OK 0x80=func-fault 0x40=reg-fault 0x00=dead)
+jadard: FAE TE on (0x35,0x00)
+jadard: DIAG15 scanline=0x?? (non-0=timing-ctrl-running)
+jadard: DIAG15
+```
+
+**L2 — Interpret 0x0F self-diagnostic:**
+
+| `0x0F` value | Meaning | Next action |
+|---|---|---|
+| `0xC0` | Both bits set — registers loaded AND booster running | Pixel problem elsewhere (H3 backlight, H6 orientation) |
+| `0x80` | **Functionality fault** — registers loaded but booster failed | Confirms H1 (supply) or H4a (missing register). Check 0x0A: if still 0x1c, booster is off despite DISON. Do ammeter K2. |
+| `0x40` | Register loading fault — init table didn't land | H4b: init commands not reaching panel. Check DSI error injection. |
+| `0x00` | Both faults — total panel failure | H6: defective sample. Order spares (TASK-137). |
+
+**L3 — Interpret 0x04 panel ID:**
+
+| `0x04` value | Meaning |
+|---|---|
+| `93 65 04` | JD9365 confirmed ✓ |
+| `00 00 00` | Panel not responding to reads — MIPI RX fault |
+| Any other | Wrong IC or firmware mismatch |
+
+**L4 — Interpret 0x45 scanline:**
+
+| `0x45` value | Meaning |
+|---|---|
+| Non-zero (e.g. 0x05, 0x3A…) | Timing controller running; panel's internal refresh cycle is alive |
+| `0x00` | Timing controller not started — booster likely off; display engine dead |
+
+**L5 — Log results (artifact triple required):**
+```bash
+sha256sum /path/to/fae-clock-diag15.wic
+dmesg | grep -i jadard
+git rev-parse HEAD
+```
+
+Paste all three into `diary/PROGRESS.md` under `2026-06-XX — Phase L DIAG15`.
+
+---
+
 ## 7. Lab status (2026-06-10)
 
 | Item | Status |
@@ -582,10 +649,10 @@ Priority order:
 | Visible pixels on glass | **FAIL** — BLK-014 (booster never starts) |
 | Current image on eMMC | **BUILD B** (`dd5be78d…` `…20260610170030.wic`) |
 | VDDIN at bench | **3.3V constant on DMM** — transients unknown (ammeter test needed) |
-| FAE patches in-tree | **0011–0014** committed HEAD `e19ae163` |
-| bbappend | **BUILD B default** (0011+0014+0013 active, 0012 commented) |
+| FAE patches in-tree | **0011–0015** (0015 added 2026-06-10 session 2) |
+| bbappend | **BUILD B + DIAG15** (0011+0014+0013+0015 active, 0012 commented) |
 | BIST v2 WIC | **Broken symlink** — `20260606161609.wic` gone from disk; rebuild required |
-| Next gate | **Phase K** above — ammeter test + vendor email booster/`E3` question |
+| Next gate | **Phase L** — rebuild + flash DIAG15 image; read 0x0F self-diagnostic |
 
 ## 8. Reference files (repo)
 

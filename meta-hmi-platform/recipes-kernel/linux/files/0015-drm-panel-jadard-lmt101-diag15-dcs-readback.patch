@@ -1,0 +1,100 @@
+From: Elevator HMI meta-hmi-platform
+Subject: [PATCH] drm: panel: jadard -- LMT101 DIAG15: DCS read-back 0x04/0x0F/0x45
+
+Extends the BUILD B (FAE_CLOCK) post-DISON diagnostic block to read three
+additional DCS registers, giving maximum diagnostic information from a
+single boot without a logic analyser.
+
+Added reads (all inside existing BUILD B path):
+
+  Block 1 -- existing 50ms post-DISON window, extended:
+    0x04  Display ID (3 bytes)   -- expect 93 65 04 for JD9365 LMT101SX006C
+    0x0F  Self-Diagnostic Result -- bit7=reg-load, bit6=func; expect 0xC0
+          0xC0 = both OK (registers loaded, booster running)
+          0x80 = functionality fault (booster/AVDD/VGH never started)
+          0x40 = register loading fault (init table did not land)
+          0x00 = both faults (defective panel)
+
+  Block 2 -- after TE armed, 20ms settle:
+    0x45  Get Scanline -- non-zero = timing controller running
+
+Sentinel: "jadard: DIAG15" emitted after all reads.
+
+Applies after patches 0001-0014 (requires FAE_CLOCK path from 0011+0013).
+
+---
+diff --git a/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c b/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
+index 7b07eb1769f5..b0f77b8228a6 100644
+--- a/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
++++ b/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
+@@ -173,6 +173,8 @@ static int jadard_enable(struct drm_panel *panel)
+ 
+ 		if (desc->enable_seq == JADARD_ENABLE_SEQ_LMT101_FAE_CLOCK) {
+ 			u8 pwr_mode;
++			u8 disp_id[3] = { 0 };
++			u8 self_diag;
+ 			ssize_t rd;
+ 
+ 			/* Clean 0x0A read: ~50 ms after DISON, before TE / page churn */
+@@ -182,6 +184,32 @@ static int jadard_enable(struct drm_panel *panel)
+ 				dev_info(dev, "jadard: GET_POWER_MODE pre-TE read failed: %zd\n", rd);
+ 			else
+ 				dev_info(dev, "jadard: GET_POWER_MODE(0x0A) pre-TE=0x%02x\n", pwr_mode);
++
++			/* DIAG15: panel manufacturer ID (3 bytes, expect 93 65 04) */
++			rd = mipi_dsi_dcs_read(dsi, 0x04, disp_id, 3);
++			if (rd < 0)
++				dev_info(dev, "jadard: DIAG15 0x04 read err=%zd\n", rd);
++			else
++				dev_info(dev,
++					 "jadard: DIAG15 ID=0x%02x 0x%02x 0x%02x (expect 93 65 04)\n",
++					 disp_id[0], disp_id[1], disp_id[2]);
++
++			/*
++			 * DIAG15: DCS self-diagnostic result (0x0F).
++			 * Bit 7 (0x80): Register Loading Detection -- 1 = no fault
++			 * Bit 6 (0x40): Functionality Detection    -- 1 = normal (booster OK)
++			 * Expected healthy: 0xC0
++			 * 0x80: functionality fault -- registers landed but booster failed
++			 * 0x40: register loading fault -- init table did not land
++			 * 0x00: both faults -- defective panel
++			 */
++			rd = mipi_dsi_dcs_read(dsi, 0x0f, &self_diag, 1);
++			if (rd < 0)
++				dev_info(dev, "jadard: DIAG15 0x0F read err=%zd\n", rd);
++			else
++				dev_info(dev,
++					 "jadard: DIAG15 self-diag=0x%02x (0xC0=OK 0x80=func-fault 0x40=reg-fault 0x00=dead)\n",
++					 self_diag);
+ 		}
+ 
+ 		if (desc->display_on_delay)
+@@ -194,6 +222,28 @@ static int jadard_enable(struct drm_panel *panel)
+ 				goto enable_done;
+ 			}
+ 			dev_info(dev, "jadard: FAE TE on (0x35,0x00)\n");
++
++			/*
++			 * DIAG15: scanline (0x45) read after TE armed + 20ms settle.
++			 * Non-zero means the panel timing controller started its
++			 * internal refresh cycle -- display engine is live.
++			 * Persistent 0x00 = timing controller not running (booster off).
++			 */
++			{
++				u8 scanline = 0;
++				ssize_t scan_rd;
++
++				msleep(20);
++				scan_rd = mipi_dsi_dcs_read(dsi, 0x45, &scanline, 1);
++				if (scan_rd < 0)
++					dev_info(dev, "jadard: DIAG15 0x45 read err=%zd\n",
++						 scan_rd);
++				else
++					dev_info(dev,
++						 "jadard: DIAG15 scanline=0x%02x (non-0=timing-ctrl-running)\n",
++						 scanline);
++			}
++			dev_info(dev, "jadard: DIAG15\n");
+ 		}
+ 
+ 		if (desc->enable_seq == JADARD_ENABLE_SEQ_LMT101_FAE_BIST) {

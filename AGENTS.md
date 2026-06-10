@@ -41,7 +41,7 @@ Tasks are sorted by dependency order. Do not reorder.
 **Phase 0 gate status:** All A2 tasks complete. **BLK-001–004 closed** 2026-04-15 (vendor temp note, MIPI/LVDS mux clarification, backlight IC deferred, protocol hardware deferred). **Reference hardware:** **Boardcon EM3566 v3** dev kit (**CM3566**) — **on hand** (owner 2026-04-15); **LMT101** → `**MIPI LCD`** connector (muxed bus; see `CLAUDE.md` / BLK-002). **Interim SoM link:** **UART console** (host ↔ board) for boot / image / RAUC diagnostics until fieldbus returns (see `CLAUDE.md` §8 PAL).  
 **[RESOLVED] 2026-05-09 — BLK-011:** LCD Mall vendor init (`**library/LMT101/LMT101SX006C initial codes.txt`**) ported via TASK-125 (`**jadard`** + `**CMD_DSI_INT0` / vendor `0x80=0x03` ⇒ 4 lanes**; see `**diary/BLOCKERS.md`**).**  
 **Closed 2026-06-02:** **BLK-006** (XRES on **GPIO0_C6** / gpio-22 — dmesg pulse OK). **Open: BLK-014** (backlit black, full DRM scanout — vendor + scope). **Closed 2026-05-11:** **BLK-012** — BSP **`vcc3v3_lcd0_n`** **`enable-active-high`** vs EM3566 v3 P-FET; **TASK-129** fix (see **`diary/BLOCKERS.md`**). **Closed 2026-05-21:** **BLK-013** — **`VCC3V3_LCD`** / reference carrier load switch; **resolution = permanent Plan B bypass** (**`VCC3V3_SYS` → CON1 5/6**); rail **PM** deferred to production carrier (**A1 diary** — see **`diary/BLOCKERS.md`**). Closed 2026-05-06: BLK-010 (DSI/**`modetest`** OK). Closed 2026-05-06: BLK-008. Closed 2026-04-18: BLK-009 (**TASK-111**). **BLK-007** (Noble **`libegl1-mesa`** / TASK-002). **BLK-005** closed 2026-04-15. Phase 1: **TASK-106** **`[TESTING]`** — software bench **PASS** (2026-06-02); display gate = **BLK-014** (vendor FAE + MIPI scope); **TASK-118** **`[DEFERRED]`**. Production carrier + −20°C unchanged.
-**A2 sprint queue (2026-06-10):** FAE patches **0011–0014** in-tree; **`bbappend`** defaults to **BUILD B** (clock fix). Board currently runs **BIST v1** (`…151107` / `d2ce5af7`); BUILD B and BIST v2 were never flashed. **TASK-134** **`[DONE]`** — BIST v1 black (booster off; see BLK-014 booster-bit diagnosis). **TASK-135** **`[TESTING]`** — BUILD B rebuild in progress, gated on bench Step B2. **TASK-136** **`[BLOCKED]`** (diag patch 0015, gated on B1–B3). **TASK-137** **`[READY]`** (spare panels). **TASK-116** still **`[READY]`**.
+**A2 sprint queue (2026-06-10 session 2):** FAE patches **0011–0015** in-tree; **`bbappend`** defaults to **BUILD B + DIAG15** (clock fix + DCS readbacks). Board currently runs BUILD B (`0x0A=0x1c`; booster still off). **TASK-134** **`[DONE]`**. **TASK-135** **`[TESTING]`** — BUILD B on-target `0x1c` result; **TASK-136** **`[IN PROGRESS]`** — patch 0015 implemented (0x04/0x0F/0x45 reads); **needs build + flash for acceptance**. **TASK-137** **`[READY]`** (spare panels — owner action). **TASK-116** still **`[READY]`**.
 
 ---
 
@@ -82,18 +82,28 @@ Tasks are sorted by dependency order. Do not reorder.
 
 ---
 
-### TASK-136 — [Phase 1] Diagnostic patch 0015 — DCS read-back after SLPOUT
+### TASK-136 — [Phase 1] Diagnostic patch 0015 — DCS read-back after DISON
 
-**Status:** `[BLOCKED]`  
+**Status:** `[IN PROGRESS]`  
 **Phase:** 1  
-**Depends on:** Bench Steps B1–B3 inconclusive; **owner ACK required** before A2 starts  
-**Branch:** (to be created by A2)
+**Depends on:** BUILD B `[TESTING]` (bench result `0x0A=0x1c`); **A2 implementing 2026-06-10**  
+**Branch:** `task/TASK-132-vcc3v3-lcd0-active-low-pfet` (same branch as TASK-134/135 — no dedicated branch needed for in-progress patch)
 
-**Spec:** Patch 0015 on the clock build (BUILD B base): after SLPOUT+120ms and BEFORE DISON, read and `dev_info`: DCS **0x04** (expect **93 65 04**), **0x0A**, **0x0F**. One patch, one signature string `jadard: DIAG15`, regenerated from a named commit, diffed by A1 before build. No other changes.
+**Spec (updated 2026-06-10):** Patch 0015 extends the BUILD B (FAE_CLOCK) post-DISON block — **not** before DISON. Reads added to the existing 50ms post-DISON window + 20ms post-TE:
+- `0x04` — Display ID (3 bytes, expect `93 65 04`)
+- `0x0F` — Self-Diagnostic Result (bit7=reg-load, bit6=func-OK; expect `0xC0`; `0x80` = func-fault = booster failed)
+- `0x45` — Get Scanline (after TE; non-zero = timing controller running)
 
-**Acceptance:** `dmesg` shows `jadard: DIAG15` with three register values. Artifact triple logged.
+Sentinel: `jadard: DIAG15` emitted last. One patch, stacked on 0011+0013. Added to `bbappend` as patch 0015. No other changes.
 
-**A1 review notes:** [gated — do not start until B1–B3 results logged]
+**Output notes (A2 — 2026-06-10):**
+- **`0015-drm-panel-jadard-lmt101-diag15-dcs-readback.patch`** — extends existing Block 1 (`u8 disp_id[3]`, `u8 self_diag` added; 0x04 + 0x0F reads after 0x0A); extends Block 2 (nested block for `scanline` + 0x45 read after 20ms post-TE; `jadard: DIAG15` sentinel).
+- **`linux-rockchip_%.bbappend`** — 0015 added after 0013.
+- **Rationale for post-DISON vs pre-DISON:** 0x0F self-diagnostic is most informative AFTER DISON because it reflects whether the display function worked; 0x04 ID can be read at any time; 0x45 must be after TE armed.
+
+**Acceptance:** `dmesg | grep -i diag15` shows four lines: `ID=`, `self-diag=`, `scanline=`, `jadard: DIAG15`. Artifact triple logged.
+
+**A1 review notes:** [pending build + bench]
 
 ---
 

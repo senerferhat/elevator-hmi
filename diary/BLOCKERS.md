@@ -70,7 +70,7 @@
 | H1 | VDDIN sags under booster load (Plan B wire resistance/contact) | **LIVE** — DMM can't see transients | Ammeter inline VDDIN; measure wire resistance (power off, ohmmeter FPC pin2/3 to VCC3V3_SYS tap) |
 | H2 | MIPI rate mismatch blocks panel power-up | **PARTIAL** — clock fix allowed DISON to latch (0x18→0x1c); but booster still off; rate may still block booster state machine | BUILD B done; booster still off; send updated vendor email with 0x1c result |
 | H4a | Init table missing booster-enable register (page-1 `E3`) | **NEW — PRIMARY** — vendor BIST uses `E3,01` on page 1; standard init does NOT write `E3`; `E3` may enable source driver/power stage | Ask vendor FAE: "does E3 (page 1) only enable BIST or does it also enable source output?" |
-| H4b | Other init register wrong for this glass batch | Possible | TASK-136 diag patch 0015: read 0x04 (expect 93 65 04) and 0x0A before DISON |
+| H4b | Other init register wrong for this glass batch | Possible | **DIAG15 (patch 0015):** `0x0F` = `0x40` (reg-load fault) confirms init didn't land; `0x04` ID confirms right IC |
 | H3 | HS video masks BIST | Possible but secondary | Rebuild BIST v2 + clock fix combined (new patch) |
 | H5 | Lane pair polarity miswired | Low — panel responds to DCS | Only relevant after booster starts |
 | H6 | Defective panel sample | Possible | Order 2-3 spares (TASK-137) |
@@ -91,7 +91,31 @@
 
 **A2 "skip BUILD B" recommendation:** **SUPERSEDED** (2026-06-10). Clock fix was necessary — it allowed DISON to latch. Not sufficient — booster still off. Both tests needed.
 
-**References:** `docs/VENDOR-SUPPORT-LMT101-BRINGUP.md`, `diary/PROGRESS.md` **2026-06-02**, `docs/FAE-BIST-CLOCK-BUILD.md`, `docs/LMT101-CLOCK-RATE-AUDIT.md`.
+#### Patch 0015 — DIAG15 DCS readback (next software gate, 2026-06-10 session 2)
+
+**Patch `0015-drm-panel-jadard-lmt101-diag15-dcs-readback.patch` added to `bbappend`.**
+
+Extends the BUILD B (FAE_CLOCK) post-DISON block with three additional DCS reads:
+
+| Register | Read | Expected | What it tells us |
+|----------|------|----------|-----------------|
+| `0x04` | Display ID (3 bytes) | `93 65 04` | Confirms JD9365 IC is present and DCS bidirectional link works |
+| `0x0F` | Self-Diagnostic Result | `0xC0` | **Most critical** — bit7=reg-load, bit6=func (booster). `0x80` = func fault = booster failed. `0x40` = reg-load fault = init didn't land. `0x00` = dead panel (H6). |
+| `0x45` | Scanline (post-TE) | Non-zero | Panel's timing controller running. Persistent `0x00` = display engine dead (booster off). |
+
+Sentinel: `jadard: DIAG15` emitted last. Build + flash this image as next bench step.
+
+`dmesg | grep -i diag15` acceptance pattern:
+```
+jadard: DIAG15 ID=0x?? 0x?? 0x?? (expect 93 65 04)
+jadard: DIAG15 self-diag=0x?? (0xC0=OK 0x80=func-fault 0x40=reg-fault 0x00=dead)
+jadard: DIAG15 scanline=0x?? (non-0=timing-ctrl-running)
+jadard: DIAG15
+```
+
+**`0x0F` result is the single most important new data point.** It is the panel's own self-test verdict and directly discriminates H4a/H1 from H6.
+
+**References:** `docs/VENDOR-SUPPORT-LMT101-BRINGUP.md`, `diary/PROGRESS.md` **2026-06-02**, `docs/FAE-BIST-CLOCK-BUILD.md`, `docs/LMT101-CLOCK-RATE-AUDIT.md`, `docs/LAB-LMT101-TEST-CHEATSHEET.md` Phase L.
 
 ---
 

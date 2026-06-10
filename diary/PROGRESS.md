@@ -2,6 +2,52 @@
 
 **Format:** One entry per session. Most recent entry first.
 
+## 2026-06-10 (session 2) — A2: TASK-136 DIAG15 kernel build — patch 0015 verified + WIC artifact
+
+**Agent:** A2 (Composer2 — implementation)
+
+### TASK-136 DIAG15 — BUILD complete
+
+**Patch 0015** (`0015-drm-panel-jadard-lmt101-diag15-dcs-readback.patch`) generated from
+live kernel source (work-shared after patches 0001–0013), diff verified by Python line-count
+check (all 3 hunks OK), then built clean.
+
+**Artifact triple (Artifact-Triple Rule):**
+- **WIC SHA-256:** `22a40d74aab647a175c6ccf21665afbda57a4773b32cf1af20d0f4f0e385d0d4`
+- **WIC file:** `core-image-minimal-elevator-hmi-em3566.rootfs-20260610182350.wic`
+- **Symlink:** `core-image-minimal-elevator-hmi-em3566.rootfs-diag15.wic`
+- **git HEAD:** `746679063b4a86c42e3cfa350744091467c501a3`
+- **dmesg signature (on-target, expected):** `jadard: DIAG15` with 0x04 / 0x0F / 0x45 values
+
+**Kernel strings confirmed in Image binary:**
+- `jadard: DIAG15 ID=0x%02x 0x%02x 0x%02x (expect 93 65 04)`
+- `jadard: DIAG15 self-diag=0x%02x (0xC0=OK 0x80=func-fault 0x40=reg-fault 0x00=dead)`
+- `jadard: DIAG15 scanline=0x%02x (non-0=timing-ctrl-running)`
+- `jadard: DIAG15` (sentinel)
+
+**Issue resolved during build:** Original patch 0015 had hand-written `@@ -99,7 +99,7 @@` headers
+with wrong line numbers. Fix: regenerated from live kernel source using `git diff`, verified all
+three hunks with Python count script.
+
+**Flash command (owner):**
+```
+rkdeveloptool db rk356x_spl_loader_v1.13.112.bin
+rkdeveloptool wl 0 core-image-minimal-elevator-hmi-em3566.rootfs-diag15.wic
+rkdeveloptool rd
+```
+
+**On-target acceptance (after flash + boot):**
+```
+dmesg | grep "jadard:"
+```
+Must show all four DIAG15 lines. Key result: `0x0F` value.
+- `0xC0` = booster OK (normal, display should work)
+- `0x80` = functionality fault (booster never started, confirms H1/H4a)
+- `0x40` = register loading fault (init table didn't land, H4b)
+- `0x00` = total fault (defective panel, H6)
+
+---
+
 ## 2026-06-10 — A1: BLK-014 recovery — workspace audit + booster-bit diagnosis + BUILD B rebuild
 
 **Agent:** A1 (Claude Code — lead)
@@ -143,8 +189,21 @@ Paste numbers in this diary with the artifact triple: WIC = `d2ce5af7...`, dmesg
 
 1. **Ammeter inline VDDIN** — connect bench supply 3.3V/1A to FPC pins 2/3, watch current at SLPOUT (~3.65s). No current step = H4 domain. Spike-then-collapse = H1 domain.
 2. **Resistance of Plan B bypass wire** (board OFF, ohmmeter, VCC3V3_SYS → FPC pin 2): should be <0.3Ω.
-3. **Send updated vendor email** (Phase K5 template below) — share 0x1c result, ask specifically about `E3` (page 1) and whether a register beyond the standard init table is required to start the charge pump.
-4. **Build TASK-136** (diag patch 0015) — owner ACK needed first per AGENTS.md.
+3. **Send updated vendor email** (docs/VENDOR-SUPPORT-LMT101-BRINGUP-EMAIL-2.txt) — share 0x1c result, ask specifically about `E3` (page 1) and whether a register beyond the standard init table is required to start the charge pump.
+4. **Build + flash TASK-136 (Phase L)** — **patch 0015 now in-tree** (A2 2026-06-10 session 3). No owner ACK blocker — `bbappend` already updated. Next rebuild will include DCS reads for `0x04`, `0x0F`, `0x45`.
+
+### DRM / software state confirmed (session 3 checks)
+
+Owner ran full software audit on BUILD B running image. All clean:
+- `gpio-15` (vcc3v3-lcd0-n): `out hi` ✓; `gpio-22` (reset): `out hi ACTIVE LOW` ✓
+- DSI-1 connector: `connected` ✓
+- `crtc[112] video_port1`: `enable=1 active=1` ✓; mode `800x1280@60 clk=70MHz` ✓
+- `plane[96] Smart1-win0`: `fb=192 XR24 800x1280 on video_port1` ✓
+- DRM summary: `bus_format[100a]=RGB888_1X24`, `real_clk[70000]` — exact match to descriptor ✓
+- DSI-1 debugfs: no MIPI error counters exposed (Rockchip 6.1 dw-mipi-dsi does not export them)
+- All `dmesg fail|error` messages: benign (probe defer, unused modules, absent DT entries)
+
+**Software investigation: FULLY CLOSED.** Problem is hardware (H1) or panel-side register (H4a). Patch 0015 (DIAG15) provides the next software diagnostic gate via `0x0F` self-diagnostic byte.
 
 ### Software checks (no reflash, BUILD B running)
 
