@@ -104,6 +104,63 @@ Paste numbers in this diary with the artifact triple: WIC = `d2ce5af7...`, dmesg
 
 ---
 
+## 2026-06-10 (session 2) — BUILD B bench result: 0x1c — clock fix worked, booster still off
+
+**Agent:** A1 (Claude Code — analysis + doc update)
+
+### BUILD B On-Target Result
+
+**WIC:** `…20260610170030.wic` / SHA `dd5be78d…` / git `e19ae163` — BUILD B (FAE page-4 clock fix)  
+**Bench:** Owner flashed and booted. `dmesg` confirmed:
+
+```
+[3.649868] jadard: FAE page-4 clock fix (pre-SLPOUT)
+[3.850310] jadard: GET_POWER_MODE(0x0A) pre-TE=0x1c
+[3.863667] jadard: FAE TE on (0x35,0x00)
+[3.863712] jadard: init table: 196 cmds, rc=0
+```
+
+**VDDIN:** Owner reports 3.3V constant on DMM.  
+**Glass:** Still backlit black.
+
+### Analysis
+
+`0x1c` decoded vs BIST v1 `0x18`:
+
+| Bit | Mask | BIST v1 | BUILD B | Change |
+|-----|------|---------|---------|--------|
+| 7 | 0x80 | 0 | 0 | Booster still OFF |
+| 4 | 0x10 | 1 | 1 | Sleep-out ✓ |
+| 3 | 0x08 | 1 | 1 | Normal mode ✓ |
+| **2** | **0x04** | **0** | **1** | **DISON now ACKed — clock fix worked** |
+
+**Conclusion:** The FAE page-4 clock fix had a real, measurable effect — the panel now properly acknowledges DISON. This proves MIPI communication is reliable enough for full command delivery. However, the booster (JD5001 charge pump for AVDD/AVEE/VGH/VGL) never started in either build. Two hypotheses remain:
+
+- **H1 (supply):** VDDIN 3.3V static on DMM. DMM response time (~250ms) cannot see 10-50ms booster startup transient. At 200mA through a 2Ω Plan B wire, VDDIN sags to 2.9V (below JD5001 UVLO). **Ammeter test is the definitive kill test.**
+- **H4a (missing init register):** Reading the vendor init table (`library/LMT101/LMT101SX006C initial codes.txt`): page-1 (`E0,01`) block does NOT write register `E3`. The FAE BIST sequence explicitly writes `E0,01` → `E3,01` after DISON. In JD9365D, page-1 `E3` may enable the source driver or power stage beyond just "BIST self-test." If `E3` (page 1) is needed to enable the charge pump and the standard init doesn't write it, the booster never starts.
+
+### Immediate next steps
+
+1. **Ammeter inline VDDIN** — connect bench supply 3.3V/1A to FPC pins 2/3, watch current at SLPOUT (~3.65s). No current step = H4 domain. Spike-then-collapse = H1 domain.
+2. **Resistance of Plan B bypass wire** (board OFF, ohmmeter, VCC3V3_SYS → FPC pin 2): should be <0.3Ω.
+3. **Send updated vendor email** (Phase K5 template below) — share 0x1c result, ask specifically about `E3` (page 1) and whether a register beyond the standard init table is required to start the charge pump.
+4. **Build TASK-136** (diag patch 0015) — owner ACK needed first per AGENTS.md.
+
+### Software checks (no reflash, BUILD B running)
+
+```bash
+mount -t debugfs none /sys/kernel/debug 2>/dev/null || true
+echo "=== regulators ==="
+cat /sys/kernel/debug/regulator/vcca_1v8/enable 2>/dev/null && echo "vcca_1v8 ok"
+cat /sys/kernel/debug/regulator/vcc3v3-lcd0-n/enable 2>/dev/null && echo "vcc3v3-lcd0-n ok"
+echo "=== any errors ==="
+dmesg | grep -E '(jadard|vcc|regul|1v8)' | grep -iE '(fail|error|WARN)' | head -10
+echo "=== jadard full ==="
+dmesg | grep -i jadard
+```
+
+---
+
 ## 2026-06-06 — BUILD A (FAE BIST) image built and ready to flash
 
 **Host:** TASK-002-class, `kas shell` — **exit 0**

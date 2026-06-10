@@ -271,11 +271,10 @@ echo "  modetest -M rockchip -s ${CONN}:#0"
 
 ---
 
-### Phase J — BUILD B (FAE page-4 clock fix) — **CURRENT BENCH TARGET**
+### Phase J — BUILD B (FAE page-4 clock fix) — **RESULT: 0x1c (2026-06-10)**
 
-> **Decisive test:** `GET_POWER_MODE(0x0A) pre-TE`. Booster bit = 0x80.  
-> A healthy panel after SLPOUT + clock fix reads **0x9C**. Board currently reads **0x18** (booster off).  
-> This phase determines which fault domain owns the failure.
+> **BUILD B result:** `GET_POWER_MODE(0x0A) pre-TE = 0x1c`. Clock fix worked — DISON bit (0x04) now SET vs 0x18 in BIST v1. Booster (0x80) still CLEAR.  
+> Next gate: **Phase K** (VDDIN ammeter + page-1 `E3` investigation). See below.
 
 #### J0 — Flash (host, before powering the panel)
 
@@ -334,9 +333,9 @@ Read the `GET_POWER_MODE(0x0A) pre-TE=0x??` value from J1:
 | `0x0A` value | Bit 7 (0x80) | Meaning | Next action |
 |---|---|---|---|
 | **`0x9C`** | **SET** | Booster up, sleep-out+normal+display-on | Glass test (J4) then modetest (J5). If still black → H5 lane continuity |
-| `0x18` | **CLEAR** | Booster still off despite clock fix | Combine with B1 VDDIN measurement → H1 (power) or H4 (init table) domain |
+| **`0x1c`** ← **current** | **CLEAR** | **Booster off, but DISON acknowledged (clock fix worked)** | **Phase K** — ammeter test + page-1 `E3` investigation |
+| `0x18` | **CLEAR** | Booster off, DISON not acknowledged | BIST v1 result; clock fix needed |
 | `0x08` | CLEAR | Booster off + sleep-out dropped | Brown-out on VDDIN during charge-pump start attempt → H1 (power) |
-| `0x9E` or `0x1C` | SET / depends | Partial | Note value, continue to J4 |
 
 **DCS 0x0A bit map:**
 
@@ -489,9 +488,86 @@ echo "  git HEAD: e19ae163b81db9c08b1b04813b313079787f0ff0"
 |---|---|---|---|---|
 | 3.1–3.5 V solid, current steps up at SLPOUT | **0x9C** (0x80 set) | **Color bars visible** | **FULL PASS — BLK-014 CLOSED** | Log, push, A1 review |
 | 3.1–3.5 V solid, current steps up | 0x9C set | Still black | Booster OK, video path fail | H5: lane continuity FPC 8–21 vs spec; then non-burst exact-420 descriptor |
-| 3.1–3.5 V solid, **no current step** | 0x18 | Black | Panel never attempted booster despite good power + clock fix | Vendor (B5 email update + booster question) + H6 spare panels |
-| Sag / collapse / low reading at FPC | any | any | Supply domain (H1) | Fix Plan B jumper (gauge/contact); bench-supply VDDIN permanently; re-run J1–J4 |
-| 3.1–3.5 V solid | 0x18 | — | Clock fix did not unlock booster | Check if 0x0A was read before or after DISON; consider diag patch 0015 (TASK-136) |
+| **3.3 V DMM constant, no ammeter yet** | **0x1c ← current** | **Black** | **Clock fix worked; booster still off; supply transient unknown** | **Phase K: ammeter test + vendor email (booster/E3 question)** |
+| 3.1–3.5 V solid, **no current step** at SLPOUT | 0x1c or 0x18 | Black | Panel never attempts booster → software/init domain (H4: missing `E3`?) | Send vendor email + build TASK-136 (0x0A before DISON) |
+| Sag / collapse / low at FPC pin 2/3 | any | any | Supply domain (H1) | Fix Plan B jumper (gauge/contact); bench-supply VDDIN permanently; re-run J1–J4 |
+
+---
+
+### Phase K — VDDIN Ammeter + Page-1 `E3` Investigation
+
+> **Current board state:** BUILD B running, `0x0A = 0x1c` (DISON acked, booster off), VDDIN 3.3V static on DMM.  
+> **This phase determines the root cause of booster-not-starting without a new firmware build.**
+
+#### K1 — VDDIN Wire Resistance (hardware, board powered OFF)
+
+**Why:** The Plan B bypass wire (VCC3V3_SYS → CON1 5/6) has unknown resistance. At 200mA booster load, 2Ω = 0.4V drop → FPC sees 2.9V (JD5001 UVLO ~3.0V). DMM at idle shows 3.3V; it cannot see the sag.
+
+```
+Equipment: DMM in ohmmeter mode
+1. Power board OFF, FPC disconnected.
+2. Measure between VCC3V3_SYS supply point (where Plan B wire starts) and CON1 pin 5.
+3. Measure between CON1 pin 5 and FPC connector pin 2 (at the connector end, not the board end).
+Record total path resistance:  _____ Ω
+PASS: < 0.3 Ω     WARNING: 0.3–1 Ω     FAIL: > 1 Ω (fix wire or use bench supply)
+```
+
+#### K2 — VDDIN Ammeter (hardware, preferred — definitively separates H1 from H4)
+
+```
+Equipment: bench supply 3.3V / 1A with ammeter or USB power meter in-line.
+1. Remove Plan B bypass wire. Connect bench supply: 3.3V+ → FPC pin 2 & 3, GND → FPC pin 4.
+2. Power on board.
+3. Watch current from t=3.0s onward (SLPOUT fires at ~3.65s):
+   Before SLPOUT: ___ mA (logic only, ~5-20mA)
+   At SLPOUT (~3.65s): step up? YES / NO
+   Peak current: ___ mA    Duration: ___ ms
+   Steady current: ___ mA
+
+Interpretation:
+  No step at SLPOUT    → panel never attempted booster → H4 (init/register domain)
+  Step then collapse   → supply too weak for JD5001 → H1 (fix supply)
+  Step and holds ~30-150mA → booster started; if 0x0A still 0x1c, likely H4b or H6
+```
+
+#### K3 — Software checks on current BUILD B image (no reflash)
+
+```bash
+# Run on board as root (BUILD B already flashed)
+
+echo "=== Regulators ==="
+mount -t debugfs none /sys/kernel/debug 2>/dev/null || true
+cat /sys/kernel/debug/regulator/vcca_1v8/enable 2>/dev/null && echo "vcca_1v8 enable" || \
+  ls /sys/kernel/debug/regulator/ | head -20
+
+echo "=== Any jadard/regulator errors ==="
+dmesg | grep -E '(jadard|vcc|regul|1v8)' | grep -iE '(fail|error|WARN|ERR)' | head -20
+
+echo "=== Full jadard trace ==="
+dmesg | grep -i jadard
+
+echo "=== vcc3v3-lcd0-n state ==="
+cat /sys/kernel/debug/regulator/vcc3v3-lcd0-n/enable 2>/dev/null
+cat /sys/kernel/debug/regulator/vcc3v3-lcd0-n/voltage 2>/dev/null
+```
+
+**Expected on BUILD B:** no jadard errors, vcca_1v8 enable=1, vcc3v3-lcd0-n enable=1. Any regulator error here is a new clue.
+
+#### K4 — New observation: page-1 register `E3` is absent from standard init
+
+Reading the vendor init table (`library/LMT101/LMT101SX006C initial codes.txt`): the page-1 block (`E0,01`) writes registers 00,01,03,04,0C,17,18,19,1A,1B,1C,35,37–3F,40–45,55,57,59,5A,5B,5D–82. **Register `E3` is NOT written.** The FAE BIST sequence explicitly adds `{E0,01}, {E3,01}` after DISON. In JD9365D, page-1 `E3` may control source driver enable or power management beyond BIST. If the booster requires `E3` (page 1, non-zero) to start and the standard init omits it, the booster never starts in BUILD B. This is **hypothesis H4a**.
+
+**Kill test:** ask vendor FAE directly — "Does register E3 on page 1 only enable the internal BIST self-test, or does it also affect the charge pump / source driver enable?"
+
+#### K5 — Next firmware builds (if K2 ammeter shows no current step)
+
+Priority order:
+
+1. **TASK-136 (diag patch 0015):** After SLPOUT+120ms, BEFORE DISON, read DCS `0x04` (expect `93 65 04`), `0x0A`, `0x0F`. If `0x0A` reads non-zero before DISON, the booster starts and then something kills it. If `0x0A = 0x00` before DISON, the panel never wakes from reset.
+
+2. **BIST v2 + clock fix combined (new patch):** Current BIST v2 (`0012+0014`) uses no clock fix. A new sequence `JADARD_ENABLE_SEQ_LMT101_FAE_BIST_CLOCK` would: (a) send page-4 clock fix, (b) SLPOUT+120ms+DISON, (c) then `E0,01` + `E3,01` (BIST), (d) no-burst mode. If BIST pattern appears, proves `E3,01` on page 1 enables something the standard init doesn't.
+
+3. **H4a fix (if vendor confirms `E3`):** Add `{E0,01}, {E3,X}, {E0,00}` after init table but before SLPOUT (or after DISON per vendor guidance). Single-register patch.
 
 ---
 
@@ -502,13 +578,14 @@ echo "  git HEAD: e19ae163b81db9c08b1b04813b313079787f0ff0"
 | GPIO / rails / reset (**PC6 / gpio-22**) | **PASS** (BLK-006 closed) |
 | `jadard` init + DSI link (**196 cmds, rc=0**) | **PASS** |
 | DRM scanout plane **96** @ **60.08 Hz** | **PASS** |
-| `GET_POWER_MODE(0x0A)` | **0x18** — booster bit D7 CLEAR (BLK-014) |
+| `GET_POWER_MODE(0x0A)` BUILD B | **0x1c** — DISON bit SET (clock fix worked); booster (0x80) still CLEAR |
 | Visible pixels on glass | **FAIL** — BLK-014 (booster never starts) |
-| Current image on eMMC | **BIST v1** (`d2ce5af7…`) |
-| **Flash target** | **BUILD B** `dd5be78d…` (`…20260610170030.wic`) |
+| Current image on eMMC | **BUILD B** (`dd5be78d…` `…20260610170030.wic`) |
+| VDDIN at bench | **3.3V constant on DMM** — transients unknown (ammeter test needed) |
 | FAE patches in-tree | **0011–0014** committed HEAD `e19ae163` |
 | bbappend | **BUILD B default** (0011+0014+0013 active, 0012 commented) |
-| Next gate | **Phase J** above — booster-bit verdict after BUILD B flash |
+| BIST v2 WIC | **Broken symlink** — `20260606161609.wic` gone from disk; rebuild required |
+| Next gate | **Phase K** above — ammeter test + vendor email booster/`E3` question |
 
 ## 8. Reference files (repo)
 

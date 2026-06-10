@@ -1,0 +1,123 @@
+================================================================================
+EMAIL — FOLLOW-UP #2 (send after Phase K1/K2 hardware tests)
+================================================================================
+
+To:      sales06@alltouchdisplay.com
+Cc:      sales@alltouchdisplay.com
+From:    senerferhat01@gmail.com
+Subject: Re: LMT101SX006C — FAE Test 1 (clock fix) RESULT: 0x0A=0x1c (booster
+         still off) — urgent booster question
+
+Thread: "Technical Support Request: JD9365D Initialization Array for LMT101SX006C"
+
+================================================================================
+
+Dear Abby / LCD Mall FAE,
+
+We have completed both tests from your June 5 reply.
+
+TEST 1 RESULT — RK3566 MIPI Clock Fix:
+
+We implemented your page-4 registers exactly as specified:
+  {E0,04}, {0x37,0x58}, {0x35,0x08}, {0x36,0x49}, {0x2C,0x06}, {E0,00}
+  inserted BEFORE 0x11 (Sleep Out), followed by 0x11 → 120ms → 0x29 → 5ms → 0x35,0x00.
+
+Reading DCS register 0x0A (GET_POWER_MODE) just after DISPLAY_ON, we now see:
+
+  BEFORE clock fix (our original init):    0x0A = 0x18
+  AFTER  clock fix (TEST 1 image):         0x0A = 0x1c
+
+The change from 0x18 → 0x1c shows that bit 2 (Display On / 0x04) is now SET.
+The clock fix allowed DISPLAY_ON to be properly acknowledged by the panel.
+This confirms the MIPI rate mismatch was real and your fix addressed it.
+
+HOWEVER: Bit 7 (0x80) — the booster / internal charge pump — is still CLEAR
+in both readings. A healthy JD9365D should read 0x9C (booster+display-on+normal+sleep-out).
+
+FULL POWER_MODE 0x0A BIT DECODE:
+  0x18 (before): booster=OFF, sleep-out=ON, normal=ON, display-on=OFF
+  0x1c (after):  booster=OFF, sleep-out=ON, normal=ON, display-on=ON
+  0x9C (target): booster=ON,  sleep-out=ON, normal=ON, display-on=ON
+
+TEST 2 RESULT — BIST Self-Test:
+We ran the BIST sequence in a separate image:
+  {F0,0x55}, {F1,0xAA}, {E0,0x01}, {E3,0x01} — after DISPLAY_ON.
+Result: glass still black. No internal BIST pattern visible.
+
+The booster never starts in either image. Without VGH/VGL/AVDD/AVEE from the
+internal charge pump, the TFT array cannot switch — both external video and
+internal BIST produce a black glass for the same reason.
+
+CURRENT HARDWARE STATE:
+  - VDDIN (FPC pins 2/3): 3.3V confirmed.
+  - Reset (FPC pin 5): GPIO pulse confirmed in Linux (10ms low / 120ms wait).
+  - DSI: 4 lanes, 468 Mbps per lane, HS video+burst, mode_flags=0x203.
+  - DRM scanout: CRTC active 800x1280@60Hz, sustained 60.08Hz page-flip.
+  - Panel ID bytes: not yet verified (DCS read-back not yet implemented).
+
+
+FAE QUESTIONS:
+
+Q1 (CRITICAL — booster enable):
+  In our standard init table (your LMT101SX006C initial codes.txt), page-1 block
+  (E0=01) writes registers 00,01,03,04,0C,17,18,19,1A,1B,1C,35,37–3F,40–45,
+  55,57,59,5A,5B,5D–82. Register E3 is NOT written in the standard init.
+  In the BIST sequence, you specifically write {E0,01}, {E3,01} after DISPLAY_ON.
+  
+  QUESTION: Does page-1 register E3 only enable the BIST self-test, or does
+  it also affect the charge pump start / source driver enable?
+  Is there a specific register write (page 1 or page 4) required to START the
+  JD5001 charge pump that is NOT included in the standard LMT101SX006C init table?
+
+Q2 (power state machine):
+  After SLPOUT (0x11), should GET_POWER_MODE(0x0A) bit 7 (booster) become SET
+  automatically within 120ms (based on page-1 power register settings), or does
+  the booster require an explicit enable command after DISPLAY_ON?
+
+Q3 (confirm init sequence order for LMT101):
+  For LMT101SX006C specifically, is this the correct order?
+    a) Send full init table (196 register pairs, pages 0/1/2/4)
+    b) Send page-4 clock fix registers (E0,04 → 37,58 / 35,08 / 36,49 / 2C,06 → E0,00)
+    c) SLPOUT (0x11) → 120ms
+    d) DISPLAY_ON (0x29) → 5ms
+    e) TE enable (0x35,0x00)
+  Or is there a different required sequence for this glass?
+
+Q4 (VDDIN current spec):
+  What is the peak current draw from VDDIN (3.3V) during charge pump startup?
+  We are using a direct wire bypass (3.3V supply → FPC pins 2/3). If peak
+  current > 500mA, the wire resistance could cause a UVLO condition.
+
+NEXT STEP FROM OUR SIDE:
+We will implement a kernel diagnostic patch to read 0x04 (panel ID, expect 93 65 04)
+and 0x0A BEFORE DISPLAY_ON (while panel is in sleep-out state) to confirm the
+booster start time relative to the command sequence.
+
+We have also ordered 2–3 spare LMT101SX006C units to eliminate sample defect.
+
+Please forward to your JD9365 application engineer. This is the most complete
+technical brief we have from our Linux bring-up. We are one register question
+away from lighting the display.
+
+Thank you.
+
+Best regards,
+Ferhat Sener
+Freelancer Developer — Elevator HMI Project (RK3566)
+
+================================================================================
+ATTACHMENTS (include with email):
+  - This brief (or docs/VENDOR-SUPPORT-LMT101-BRINGUP.md)
+  - dmesg excerpt (attach below):
+
+  [3.457xxx] jadard-jd9365da fe060000.dsi.0: jadard: XRES assert
+  [3.473xxx] jadard-jd9365da fe060000.dsi.0: jadard: XRES release
+  [3.614xxx] jadard-jd9365da fe060000.dsi.0: jadard: dsi mode_flags=0x00000203 lanes=4 format=0 video=1 burst=1
+  [3.649xxx] jadard-jd9365da fe060000.dsi.0: jadard: FAE page-4 clock fix (pre-SLPOUT)
+  [3.650xxx] jadard-jd9365da fe060000.dsi.0: jadard: SLPOUT sent
+  [3.780xxx] jadard-jd9365da fe060000.dsi.0: jadard: DISON sent
+  [3.850xxx] jadard-jd9365da fe060000.dsi.0: jadard: GET_POWER_MODE(0x0A) pre-TE=0x1c
+  [3.863xxx] jadard-jd9365da fe060000.dsi.0: jadard: FAE TE on (0x35,0x00)
+  [3.863xxx] jadard-jd9365da fe060000.dsi.0: jadard: init table: 196 cmds, rc=0
+
+================================================================================
