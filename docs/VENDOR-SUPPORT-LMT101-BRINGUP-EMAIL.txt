@@ -1,0 +1,291 @@
+================================================================================
+EMAIL HEADERS (fill before sending)
+================================================================================
+
+To:      sales06@alltouchdisplay.com
+         (or FAE / engineering — add direct technical address if known)
+Cc:      (internal team optional)
+From:    senerferhat01@gmail.com
+Subject: LMT101SX006C on RK3566 — FAE Test 2 BIST fail + Test 1 pending —
+         HS video timing, MIPI rate, backlit black
+
+Attachments (optional):
+  - docs/VENDOR-SUPPORT-LMT101-BRINGUP.md (Markdown brief)
+  - Redacted dmesg excerpt (jadard + DSI + DRM plane state)
+  - Photo of FPC / CON1 wiring (if allowed)
+
+Thread context:
+  - 2026-05-08: We requested JD9365 MIPI init; you sent "LMT101SX006C initial codes".
+  - 2026-05–06: We integrated your table; rail/reset GPIO corrections on EM3566 v3.
+  - 2026-06-02: Software scanout PASS; backlit black.
+  - 2026-06-06: FAE Test 2 (BIST) implemented — commands OK, no pattern on glass.
+
+================================================================================
+BODY — paste below this line into your mail client (plain text)
+================================================================================
+
+Dear Abby / LCD Mall Sales,
+
+Please forward this message to your FAE or JD9365 application engineer. We have
+completed a full Linux bring-up on Rockchip RK3566 with your initial codes.
+The SoC reports a healthy four-lane DSI link, bound panel driver, active 800x1280
+scanout, and successful DCS communication — but the glass shows no image (only
+external backlight illumination). We need your help on MIPI video mode and panel
+source path.
+
+
+--------------------------------------------------------------------------------
+0. LEAD FINDING — BOOSTER BIT CLEAR (2026-06-10 analysis)
+--------------------------------------------------------------------------------
+
+DCS GET_POWER_MODE (0x0A) reads 0x18 after SLPOUT + 120 ms + DISON.
+
+  Expected healthy value:  0x9C (booster 0x80 + sleep-out 0x10 + normal 0x08
+                                + display-on 0x04)
+  Our actual value:        0x18 (sleep-out 0x10 + normal 0x08 ONLY)
+
+  Missing bits:
+    - bit 7 (0x80) = booster / internal charge pump (JD5001) — NEVER STARTS
+    - bit 2 (0x04) = display-on — NEVER LATCHES
+
+This means the internal DC/DC converter that generates AVDD, AVEE, VGH (~+15 V),
+VGL (~-11 V) from the 3.3 V VDDIN supply NEVER activates. Without these rails
+the TFT array cannot switch — explaining why BOTH SoC video AND internal BIST
+show only backlit black.
+
+QUESTION FOR FAE — please confirm what blocks JD5001 charge-pump start on
+LMT101SX006C:
+  (a) VDDIN current requirement at sleep-out? (How many mA must VDDIN source
+      during SLPOUT for the charge pump to start? We supply via a jumper wire
+      from 3.3V_SYS — is wire resistance sufficient to cause sag?)
+  (b) Are there mandatory page-1 power registers (VCOM, VGH/VGL boost config)
+      beyond your initial codes that must be set before booster start?
+  (c) Does MIPI HS clock rate dependency exist? Our SoC sends 468 Mbps/lane
+      (burst mode with 10/9 margin over 420 Mbps) — does the JD9365D reject
+      booster start if the MIPI rate does not match PLL_CLOCK=420 exactly?
+
+We are flashing your page-4 MIPI clock fix (Test 1: E0,04 / 37,58 / 35,08 /
+36,49 / 2C,06 / E0,00 before SLPOUT, then 35,00 after DISON) now. We will
+re-read 0x0A after that flash and report whether the booster bit sets.
+
+B1 VDDIN measurement results will be appended when available.
+
+
+--------------------------------------------------------------------------------
+0b. PREVIOUS SUMMARY (2026-06-06 — FAE Test 2 + follow-up, for reference)
+--------------------------------------------------------------------------------
+
+FAE TEST 2 (BIST) — IMPLEMENTED, VISUAL FAIL:
+  - Sequence per your mail: full init table (196 cmds, rc=0), then 0x11, 0x29,
+    then F0,55 / F1,AA / E0,01 / E3,01 (self-test enable).
+  - dmesg: SLPOUT -> DISON -> "BIST armed" (no extra DCS after unlock).
+  - VDDIN ~3.3 V at FPC; vcc3v3_lcd0_n enabled; backlight glow visible.
+  - RESULT: No self-test pattern on glass (backlit black only).
+  - ANALYSIS: BIST black is now explained by booster-off (see section 0 above).
+
+TIMING (same boot, dmesg timestamps):
+  - 3.827934 s  jadard: BIST armed
+  - 3.828027 s  dw-mipi-dsi: final DSI-Link bandwidth: 468 x 4 Mbps
+  HS video starts in the SAME millisecond as BIST unlock. Question: must
+  BIST run with NO HS video from the SoC after E3,01?
+
+FAE TEST 1 (MIPI clock page-4 + 0x35,00): flashing now.
+
+ASK:
+  - PRIMARY: What blocks JD5001 charge-pump start? (see section 0 above)
+  - Is HS burst video (VIDEO | VIDEO_BURST) correct for this panel?
+  - What scope signature on CLK/D0-D3 confirms valid pixel data vs backlit-only?
+  - Any mandatory sequence after DISPLAY_ON for JD9365 source / gamma blocks?
+
+
+--------------------------------------------------------------------------------
+1. HOW WE IMPLEMENTED YOUR INITIAL CODES (unchanged summary)
+--------------------------------------------------------------------------------
+
+Source: library/LMT101/LMT101SX006C initial codes.txt (your attachment)
+
+  a) Driver: jadard (JD9365DA-H3) in Linux 6.1 Rockchip BSP fork.
+  b) Init array: lmt101sx006c_init_cmds[] — 196 {reg,val} pairs through 0xE7,0x0C;
+     0x11 / 0x29 and delays in jadard_enable() per your tail.
+  c) Four lanes: {0x80, 0x03} CMD_DSI_INT0; dsi-lanes = <4>.
+  d) Mode: 800x1280, ~70 MHz pixel clock, porches from your PLL_CLOCK=420 snippet.
+  e) Init writes: mipi_dsi_generic_write() (2-byte) with dmesg errors on failure.
+
+We can share patch excerpts under NDA if FAE wants line-by-line confirmation.
+
+
+--------------------------------------------------------------------------------
+2. HARDWARE / WIRING (EM3566 v3 bring-up, 2026-06)
+--------------------------------------------------------------------------------
+
+  SoM:     Compulab CM3566 (RK3566) on Boardcon EM3566 v3, connector CON1.
+  Panel:   LMT101SX006C, 40-pin FPC, portrait 800x1280, 4-lane MIPI-DSI.
+
+  Power:
+    - VCC3V3_LCD (CON1 pins 5-6): Plan B bypass VCC3V3_SYS -> pins 5/6 (~3.3 V
+      confirmed) — reference carrier load switch defective (our carrier issue).
+    - vcca_1v8: 1.8 V panel IO — regulator enabled in software.
+    - Backlight: external ~9 V to LED string (bench); glow visible, not SoC-only.
+
+  RESET / XRES (corrected 2026-06):
+    - FPC pin 5 (RESET) -> CON1 pin 11 (TOUCH_RST net) -> SoC GPIO0_C6.
+    - Device tree: reset-gpios = <&gpio0 RK_PC6 GPIO_ACTIVE_LOW>.
+    - Linux: gpio-22, label "reset", idle out hi (released).
+    - spi0 disabled on board so SPI0_CS0 does not drive PC6.
+    - gt1x touch disabled (no GPIO conflict).
+
+  MIPI: D0-D3 + CLK per CON1 pins 29-30, 33-40 (4-lane DSI0).
+
+  NOT used: CON1 pin 13 (LCD_PWREN_H / GPIO0_C7) for XRES — that was a prior
+  wiring mistake; pin 13 is power-enable only.
+
+
+--------------------------------------------------------------------------------
+3. FIRMWARE / DEVICE TREE (current product image)
+--------------------------------------------------------------------------------
+
+  Machine: elevator-hmi-em3566
+  DTB:     elevator-hmi-boardcon-em3566-v3.dtb
+  Kernel:  linux-rockchip 6.1.x + meta-hmi-platform patches (jadard LMT101)
+
+  Panel node (summary):
+    compatible: elevator-hmi,lmt101sx006c + jadard,jd9365da-h3
+    dsi-lanes = <4>
+    vdd-supply = <&vcc3v3_lcd0_n>   (GPIO0_B7 / gpio-15 on this carrier)
+    vccio-supply = <&vcca_1v8>
+    reset-gpios = <&gpio0 RK_PC6 GPIO_ACTIVE_LOW>
+    backlight = <&backlight>        (PWM; bench uses external 9 V anyway)
+
+  Driver bring-up patches (high level):
+    - 0003: full vendor init table
+    - 0005/0006: descriptor timing + generic_write init burst
+    - 0008: XRES sequence per vendor Q1 (10 ms, 20 ms low, 120 ms high before MIPI)
+    - 0009/0010: boot trace (XRES, SLPOUT, DISON, mode_flags, DCS 0x0A read)
+
+
+--------------------------------------------------------------------------------
+4. ON-TARGET RESULTS (2026-06-02 — representative)
+--------------------------------------------------------------------------------
+
+4.1 Boot — jadard / DSI (dmesg, timestamps ~3.5 s)
+  jadard: reset gpio = gpio-22
+  jadard: XRES assert
+  jadard: XRES release
+  jadard: dsi mode_flags=0x00000203 lanes=4 format=0 video=1 burst=1
+  jadard: SLPOUT sent
+  jadard: DISON sent
+  jadard: GET_POWER_MODE(0x0A)=0x18
+  jadard: init table: 196 cmds, rc=0
+  dw-mipi-dsi: final DSI-Link bandwidth: 468 x 4 Mbps
+
+4.2 GPIO / regulators (at login)
+  gpio-15  vcc3v3-lcd0-n       out hi
+  gpio-22  reset                out hi ACTIVE LOW
+  vcc3v3_lcd0_n/enable = 1
+  vcca_1v8/enable = 1
+
+4.3 DRM / scanout (debugfs + modetest)
+  card0-DSI-1/status: connected
+  Connector 191 (DSI-1), encoder 190, CRTC 112
+  Mode: 800x1280 @ 60.08 Hz, 70000 kHz pixel clock
+
+  Plane state (/sys/kernel/debug/dri/0/state):
+    plane[96]: Smart1-win0
+      crtc=video_port1
+      fb=192, format=XR24, size=800x1280, pitch=3200
+      allocated by = [fbcon]
+      crtc-pos=800x1280+0+0
+
+4.4 Forced test pattern (modetest — sustained refresh)
+  modetest -M rockchip -s 191@112:#0 -P 96@112:800x1280+0+0 -F tiles -v
+    -> setting mode 800x1280-60.08Hz on connectors 191, crtc 112
+    -> testing 800x1280@XR24 overlay plane 96
+    -> freq: 60.08Hz (repeating — page-flip loop active)
+  Panel: still backlit only; no visible pattern.
+
+4.5 Framebuffer fill
+  tr '\000' '\377' </dev/zero | dd of=/dev/fb0 bs=4096 count=1000
+  Panel: no visible change (while plane 96 / fb 192 active per debugfs).
+
+4.6 Note on modetest -P plane id
+  DSI primary plane is 96 (Smart1-win0), NOT 56. Plane 57 was wrong id.
+  "no unused plane for CRTC 112" occurs if kernel already owns plane 96 — expected.
+
+4.7 FAE Test 2 — BIST build (2026-06-06, isolated sequence)
+  Image: core-image-minimal … rootfs-20260606151107.wic (BUILD A, patch 0012).
+  Sequence: 196 generic writes (rc=0) -> SLPOUT -> 120 ms -> DISON -> 5 ms ->
+            F0,55 F1,AA E0,01 E3,01 (no DCS read after unlock).
+
+  jadard dmesg (excerpt, monotonic timestamps):
+    [    3.827934] jadard: SLPOUT sent
+    [    3.827934] jadard: DISON sent
+    [    3.827934] jadard: BIST armed
+    [    3.828027] dw-mipi-dsi-rockchip fe060000.dsi: final DSI-Link bandwidth: 468 x 4 Mbps
+
+  mode_flags at probe: 0x203 (VIDEO | VIDEO_BURST | LPM disabled).
+  Visual: backlit black — no checkerboard / color bars from panel self-test.
+  Rails: vcc3v3_lcd0_n enable=1; CON1 logic ~3.3 V (Plan B bypass on dev kit).
+
+  Follow-up on our side: BUILD A v2 firmware adds 500 ms after E3,01 and clears
+  VIDEO_BURST on BIST-only probe — to test whether HS burst masks internal BIST.
+
+
+--------------------------------------------------------------------------------
+5. SYMPTOMS & SPECIFIC FAE QUESTIONS
+--------------------------------------------------------------------------------
+
+5.1 Symptom
+  With ~3.3 V on logic rails, correct XRES GPIO, full init, active DRM scanout at
+  60 Hz with test pattern, we see backlight glow but ZERO discernible image.
+
+5.2 Questions
+
+  (1) DCS 0x0A = 0x18 after DISON — what power state does this indicate? We
+      expected a "display on, out of sleep" pattern (e.g. 0x9C class). Is 0x18
+      consistent with a working panel that should show video?
+
+  (2) MIPI mode: We use VIDEO | VIDEO_BURST | NO_EOT (mode_flags 0x203), 4 lanes,
+      RGB888. Does LMT101/JD9365 require non-burst, command mode, or different
+      lane polarity / swap for this glass?
+
+  (3) After your register table + 0x11 + 0x29, are additional page-select /
+      gamma / source-on registers required before HS video?
+
+  (4) RESET: We pulse XRES per your Q1 on GPIO0_C6 (CON1 pin 11). Is FPC pin 5
+      mandatory in all cases? Active-low confirm?
+
+  (5) Backlight: We use external 9 V on LEDA/LEDK for bench. Can a fully working
+      panel show MIPI picture even if LCD_BL_PWM is unused, or does LED driver
+      EN sequence gate the LCD source?
+
+  (6) Scope: If DSI reports 468 Mbps x 4 and plane scanout runs at 60 Hz, what
+      should we measure on CLK and D0 during active video? What failure mode
+      matches "backlit black" with healthy link reported?
+
+  (7) BIST after 0x11/0x29: We send F0/F1/E0/E3; panel ACKs init but shows NO
+      internal pattern. VDDIN 3.3 V confirmed. Must SoC stop HS MIPI video
+      after E3,01? Any delay or extra registers after E3,01 for LMT101SX006C?
+
+  (8) BIST vs clock tests: Confirm Tests 1 and 2 must NEVER be in one firmware
+      image (we run separate builds).
+
+--------------------------------------------------------------------------------
+
+We can provide under NDA:
+  - Full dmesg boot excerpt (jadard / DSI / DRM)
+  - debugfs dri/0/state dump
+  - Kernel patch list and device tree excerpts
+  - Photos of CON1 / FPC wiring
+
+Thank you for FAE review.
+
+Best regards,
+
+Ferhat Sener
+[Company]
+[Phone]
+Project: Elevator HMI — LMT101SX006C on Compulab CM3566 / Boardcon EM3566 v3
+
+================================================================================
+End of email body
+================================================================================

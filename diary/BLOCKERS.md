@@ -7,55 +7,81 @@
 
 ## Open Blockers
 
-### BLK-006 — JD9365 / LMT101 panel reset (XRES) — wrong GPIO; GPIO contention on RK_PC7
-**Opened:** 2026-04-15 — **Reopened:** 2026-06-02 (TASK-134 audit)  
-**Severity:** **HIGH** — panel reset cannot work; GPIO double-claim blocks display init  
-**Owner:** A1  
+### BLK-014 — LMT101 backlit black with full DRM scanout (software lab closed)
+**Opened:** 2026-06-02  
+**Severity:** **HIGH** — blocks Phase 1 display gate; no further userspace tests change diagnosis  
+**Owner:** A1 / vendor FAE  
 
-#### Root-Cause Analysis (TASK-134 — 2026-06-02)
+**Symptom:** External **~9 V** backlight illuminates the panel; **no visible pixels** (no pattern from `modetest` tiles @ **60 Hz** page-flip, no change from full **`/dev/fb0`** white fill).
 
-**Two distinct faults** identified by cross-referencing the EM3566 v3 carrier schematic, SoM connector pinout, BSP DTS, and the deployed DTB:
+**Software evidence (2026-06-02 bench, TASK-133-class image + jadard patches through **0010**):**
 
-**Fault 1 — `reset-gpios` is on the wrong pad (RK_PC7 ≠ TOUCH_RST):**
-The panel DTSI (`elevator-hmi-lmt101sx006c-panel.dtsi`) previously mapped `reset-gpios = <&gpio0 RK_PC7 GPIO_ACTIVE_LOW>` (GPIO0_C7). However, per the hardware manual and schematic PDF (owner-locked):
+| Layer | Result |
+|--------|--------|
+| Rails | `vcc3v3_lcd0_n` enable **1**; **gpio-15** hi; **Plan B** ~3.3 V on CON1 **5/6** |
+| Reset | **`reset-gpios`** **GPIO0_C6** (**gpio-22**); **`jadard`:** XRES assert/release @ ~3.5 s boot |
+| Panel init | **196** cmds **`rc=0`**; SLPOUT/DISON; **`GET_POWER_MODE(0x0A)=0x18`** |
+| DSI | **468x4 Mbps**; **`mode_flags=0x203`** (video+burst, 4 lane, RGB888) |
+| DRM | **CRTC 112** **800x1280@60**; **plane 96** (**Smart1-win0**) **`fb=192`** **XR24** on **video_port1** |
+| Userspace | **`modetest -s 191@112:#0 -P 96@112:800x1280+0+0 -F tiles -v`** -> sustained **`freq: 60.08Hz`**; still no image |
 
-| CON1 pin | Signal name    | SoM pin | SoC GPIO    | Mux function     |
-|----------|---------------|---------|-------------|------------------|
-| **11**   | **TOUCH_RST** | 131     | **GPIO0_C6** | SPI0_CS0_M0      |
-| **12**   | **TOUCH_INT** | 132     | **GPIO0_C5** | SPI0_MISO_M0     |
-| **13**   | **LCD_PWREN_H** | 139   | **GPIO0_C7** | *(GPIO-only)*    |
+**Conclusion:** Linux/DRM path is **active and scanning**; failure is **downstream of framebuffer** — **MIPI HS video to JD9365 / panel source**, **lane wiring**, or **vendor init vs video mode**. **Not** missing `modetest`, wrong connector id (**191**), or absent plane (**96** is correct; **57** was wrong).
 
-`RK_PC7` (**CON1 pin 13**) is **`LCD_PWREN_H`** — the LCD power-enable signal, **not** the touch/panel reset. The **physical XRES trace** runs to **CON1 pin 11** = **`GPIO0_C6`**. The `jadard` driver was toggling the wrong pin.
+#### Booster-Bit Diagnosis (adopted 2026-06-10)
 
-**Fault 2 — GPIO0_C7 double-claim (vcc3v3_lcd0_n vs reset-gpios):**
-Both nodes claimed `GPIO0_C7`. Restoring the reset GPIO to `GPIO0_C6` eliminates this contention.
+**Decisive evidence:** `GET_POWER_MODE(0x0A) = 0x18` means bit 7 (booster / internal charge pump) is **CLEAR**. A healthy JD9365D after init reads **0x9C** (booster 0x80 + sleep-out 0x10 + normal 0x08 + display-on 0x04). Our panel latches sleep-out (0x10) + normal (0x08) but the internal DC/DC (BOOSTM=10, JD5001 charge pump, generating AVDD/AVEE/VGH~+15V/VGL~-11V from the single 3.3V VDDIN) **never starts**. Booster off => TFT array cannot switch => black glass for BOTH SoC video AND internal BIST. One failure explains every symptom, including BIST-black.
 
-#### Summary — 3-Column Net Map (deployed DTB vs hardware)
+**Note on 0x0A = 0x18:** Bit 2 (display-on = 0x04) is also clear despite DISON being sent with rc=0. This is consistent with the booster not starting — the JD9365D may not latch display-on if its internal power state machine has not completed.
 
-| Signal / CON1 pin | Schematic GPIO (ground truth) | DTB GPIO (actual) | Status |
-|---|---|---|---|
-| **TOUCH_RST** (pin 11) | **GPIO0_C6** (SPI0_CS0_M0) | `reset-gpios` in panel@0 | ✅ Correctly assigned (RK_PC6 / gpio-22) |
-| **TOUCH_INT** (pin 12) | **GPIO0_C5** (SPI0_MISO_M0) | *Not assigned* | — (unused; sits on C5 / gpio-21) |
-| **LCD_PWREN_H** (pin 13) | **GPIO0_C7** | *Not assigned* | — (unclaimed) |
-| **LCD_BL_PWM** (pin 14) | **GPIO0_B7** (PWM0_M0) | `vcc3v3_lcd0_n` gpio | ⚠️ Overridden from BSP |
-| **VCC3V3_LCD** (pins 5-6) | via load switch + `GPIO0_C7` | `vcc3v3_lcd0_n` → RK_PB7 | ⚠️ BSP default ≠ board override |
-| **gt1x rst** (BSP I2C2) | **GPIO0_B6** (SPI0_MOSI_M0) | `goodix,rst-gpio` (disabled) | ✅ Disabled, no conflict |
+**468 vs 420 Mbps explained:** `dw-mipi-dsi-rockchip` applies a deliberate 10/9 bandwidth margin over pixel-derived rate (70MHz x 24/4 x 10/9 ~ 466.7 -> 468 with PLL granularity). It is the host's intentional burst-mode margin, not a timing bug. Mainline precedent (Ondrej Jirman, 2024): non-burst modes should run hsclock = pclk x bpp/lanes exactly — i.e., dropping VIDEO_BURST is the clean path to exactly 420 Mbps if needed later.
 
-#### IO-Domain Voltage
+**Spec facts verified (LMT101SX006C spec PDF pages 6/7/10/11/13/14):**
 
-GPIO0 bank operates at **3.3 V** (PMU IO domains confirmed in deployed DTB). No voltage mismatch.
+- FPC: pin 5 = RESET; pins 2/3 = VDDIN 3.3V; MIPI D0(8/9), D1(11/12), CLK(14/15), D2(17/18), D3(20/21). Project wiring docs match.
+- Backlight: VF typ 9.0V, IF 180mA, 27 LEDs — the external 9V bench supply is CORRECT. Closed permanently.
+- Reset timing: spec minimums tRESETL 10us / tRESETH 5ms / tSLPOUT 120ms — our 20ms/120ms over-satisfies. Closed.
+- Expected JD9365 ID bytes for read-back: **93 65 04** (DCS 0x04).
 
-#### Required Fix (Completed)
+#### Ranked Hypotheses
 
-1. **Change `reset-gpios`** in `elevator-hmi-lmt101sx006c-panel.dtsi` from `<&gpio0 RK_PC7 …>` back to `<&gpio0 RK_PC6 GPIO_ACTIVE_LOW>`.
-2. **Disable `spi0`** in board DTS to avoid SPI0_CS0_M0 drive conflict on `GPIO0_C6`.
-3. **Verify** no other node claims `GPIO0_C6` in the active tree.
+| # | Hypothesis | Kill test |
+|---|-----------|-----------|
+| H1 | VDDIN sags/marginal under booster load (Plan B jumper, contact, parasitic powering via ESD diodes) | DMM/scope on FPC 2/3 through boot 3.4-4.0s; best: bench-supply VDDIN with ammeter — current step at SLPOUT? |
+| H2 | MIPI rate mismatch blocks panel power-up (FAE Test 1) | Flash BUILD B (already built), read `pre-TE 0x0A` — does 0x80/0x04 set? |
+| H3 | HS video masks BIST | Flash BIST v2 (already built), watch glass in 500ms no-traffic window |
+| H4 | Init table silently not landing (JD9365D never NAKs) | Diag patch 0015 (gated): read back 0x04 (expect 93 65 04), 0x0F, and 0x0A after SLPOUT+120ms before DISON |
+| H5 | Lanes 1-3 / pair polarity miswired on CON1-FPC adapter | Continuity vs spec map — only relevant AFTER booster turns on |
+| H6 | Defective panel sample (history: 0V rail, 0.8V rail, reset held during init) | Owner orders 2-3 spare LMT101 units in parallel (TASK-137) |
 
-**Resolution criteria:** `reset-gpios` on verified **GPIO0_C6** (`TOUCH_RST`, CON1 pin 11), `spi0` disabled, bench validation of timed reset pulse on oscilloscope.
+**Key interpretation rule:** bench-supply ammeter on VDDIN — **no current step at SLPOUT = panel never attempted booster start (software/rate/init domain); spike-then-collapse = supply domain.** This single observation separates the fault domains.
+
+#### Decision Matrix (bench Steps B1-B3)
+
+| B1 power | B2 `pre-TE 0x0A` | B3 BIST v2 glass | Verdict / next |
+|----------|-------------------|-------------------|----------------|
+| 3.3V solid, current steps up | 0x9C-class | (any) | Booster OK -> video path: modetest; if black -> H5 lane continuity, then non-burst exact-420 descriptor (new spec) |
+| 3.3V solid, NO current step | 0x18 | black | Panel never attempts booster despite good power+clock fix -> vendor (B5) + swap panel sample (H6) |
+| Sag/collapse or low at FPC | (any) | (any) | Fix supply first: jumper gauge/contact, or bench-supply VDDIN permanently for bring-up; re-run B2 |
+| 3.3V solid | 0x18 | pattern flashes then dies | HS interference real + booster partially up -> non-burst descriptor task next |
+
+**A2 "skip BUILD B" recommendation:** **SUPERSEDED** (2026-06-10). Premature conclusion — if rate mismatch blocks panel power-up state machine (FAE's stated mechanism), BUILD B can still fix it. Booster-bit analysis shows the failure is upstream of BIST.
+
+**Board currently runs:** BIST v1 WIC (`...rootfs-20260606151107.wic`, SHA-256 `d2ce5af7...`). This was the source of the last bench result. **BUILD B and BIST v2 were never flashed.** The `d2ce5af7` and `28e80377` WIC artifacts are gone from disk and retired as flash targets; rebuild required.
+
+**References:** `docs/VENDOR-SUPPORT-LMT101-BRINGUP.md`, `diary/PROGRESS.md` **2026-06-02**, `docs/FAE-BIST-CLOCK-BUILD.md`, `docs/LMT101-CLOCK-RATE-AUDIT.md`.
 
 ---
 
+
 ## Closed Blockers
+
+### BLK-006 — JD9365 / LMT101 panel reset (XRES) GPIO mapping
+**Opened:** 2026-04-15 — **Closed:** 2026-06-02  
+**Severity was:** HIGH  
+**Resolution:**  
+**Wrong GPIO corrected:** `reset-gpios` was briefly on **GPIO0_C7** (**CON1 pin 13** / `LCD_PWREN_H`) — not the XRES net. **Product DTS** now uses **`GPIO0_C6`** (**CON1 pin 11** / `TOUCH_RST`), **`GPIO_ACTIVE_LOW`**, with **`&spi0` disabled** and **`&gt1x` disabled**. **2026-06-02 bench:** `dmesg` shows **`jadard: reset gpio = gpio-22`**, **XRES assert/release** at boot; **gpio-22** idle **`out hi`**. Software reset path **validated**. **Residual:** glass still **backlit black** with full DRM scanout — tracked under **BLK-014** (not XRES mapping). Owner should still confirm **FPC pin 5 ↔ CON1 pin 11** with scope at **~3.5 s** on cold boot.
+
+---
 
 ### BLK-013 — VCC3V3_LCD on EM3566 v3 (`vcc3v3_lcd0_n` / load switch)
 **Opened:** 2026-05-18 — **Closed:** 2026-05-21  

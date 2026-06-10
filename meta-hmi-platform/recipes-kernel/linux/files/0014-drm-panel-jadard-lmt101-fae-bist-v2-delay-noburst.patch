@@ -1,0 +1,33 @@
+From: Elevator HMI meta-hmi-platform
+Subject: [PATCH] drm: panel: jadard — LMT101 FAE BIST v2 (500ms + no burst)
+
+BIST-only: drop VIDEO_BURST in probe; hold 500ms after E3,01 unlock before
+returning (lets internal pattern settle before HS video). No effect on FAE_CLOCK.
+
+---
+--- a/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
++++ b/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
+@@ -214,7 +214,8 @@
+ 					goto enable_done;
+ 				}
+ 			}
+-			dev_info(dev, "jadard: BIST armed\n");
++			msleep(500);
++			dev_info(dev, "jadard: BIST armed (500ms post-unlock)\n");
+ 			rc = 0;
+ 			goto enable_done;
+ 		}
+@@ -831,8 +832,11 @@
+ 		return -ENOMEM;
+ 
+ 	desc = of_device_get_match_data(dev);
+-	dsi->mode_flags = MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_VIDEO_BURST |
+-			  MIPI_DSI_MODE_NO_EOT_PACKET;
++	dsi->mode_flags = MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_NO_EOT_PACKET;
++	if (desc->enable_seq == JADARD_ENABLE_SEQ_LMT101_FAE_BIST)
++		dev_info(dev, "jadard: FAE BIST path — VIDEO without BURST\n");
++	else
++		dsi->mode_flags |= MIPI_DSI_MODE_VIDEO_BURST;
+ 	dsi->format = desc->format;
+ 	dsi->lanes = desc->lanes;
+ 

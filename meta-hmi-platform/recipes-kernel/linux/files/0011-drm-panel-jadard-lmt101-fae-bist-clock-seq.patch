@@ -1,0 +1,149 @@
+From: Elevator HMI meta-hmi-platform
+Subject: [PATCH] drm: panel: jadard — LMT101 FAE BIST + page-4 clock enable paths
+
+LCD Mall FAE 2026-06:
+- BUILD A (BIST): after DISON + display_on_delay, send F0/F1/E0/E3 unlock only;
+  log "BIST armed" and return — no DCS read after unlock.
+- BUILD B (clock): page-4 fix before SLPOUT; read GET_POWER_MODE(0x0A) ~50 ms
+  after DISON before TE (0x35,0x00).
+
+---
+--- a/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
++++ b/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
+@@ -28,6 +28,8 @@
+  */
+ #define JADARD_ENABLE_SEQ_DEFAULT	0
+ #define JADARD_ENABLE_SEQ_LMT101	1
++#define JADARD_ENABLE_SEQ_LMT101_FAE_BIST	2
++#define JADARD_ENABLE_SEQ_LMT101_FAE_CLOCK	3
+ 
+ struct jadard_init_cmd {
+ 	u8 data[JD9365DA_INIT_CMD_LEN];
+@@ -78,6 +80,28 @@
+ 	}
+ }
+ 
++static bool jadard_is_lmt101_enable_seq(unsigned int seq)
++{
++	return seq == JADARD_ENABLE_SEQ_LMT101 ||
++	       seq == JADARD_ENABLE_SEQ_LMT101_FAE_BIST ||
++	       seq == JADARD_ENABLE_SEQ_LMT101_FAE_CLOCK;
++}
++
++static int jadard_generic_reg_val(struct mipi_dsi_device *dsi,
++				  struct device *dev, u8 reg, u8 val)
++{
++	u8 buf[JD9365DA_INIT_CMD_LEN] = { reg, val };
++	ssize_t ret = mipi_dsi_generic_write(dsi, buf, sizeof(buf));
++
++	if (ret < 0) {
++		dev_err(dev, "generic write 0x%02x=0x%02x failed: %zd\n",
++			reg, val, ret);
++		return (int)ret;
++	}
++	return 0;
++}
++
++
+ static int jadard_enable(struct drm_panel *panel)
+ {
+ 	struct device *dev = panel->dev;
+@@ -92,7 +116,7 @@
+ 		 !!(dsi->mode_flags & MIPI_DSI_MODE_VIDEO),
+ 		 !!(dsi->mode_flags & MIPI_DSI_MODE_VIDEO_BURST));
+ 
+-	if (desc->enable_seq != JADARD_ENABLE_SEQ_LMT101) {
++	if (!jadard_is_lmt101_enable_seq(desc->enable_seq)) {
+ 		msleep(desc->sleep_mode_delay ? desc->sleep_mode_delay : 10);
+ 	} else if (desc->sleep_mode_delay) {
+ 		msleep(desc->sleep_mode_delay);
+@@ -100,9 +124,33 @@
+ 
+ 	jadard_init_sequence(jadard);
+ 
+-	if (desc->enable_seq == JADARD_ENABLE_SEQ_LMT101) {
++	if (jadard_is_lmt101_enable_seq(desc->enable_seq)) {
+ 		u8 e0_page0[JD9365DA_INIT_CMD_LEN] = { 0xE0, 0x00 };
+ 
++		if (desc->enable_seq == JADARD_ENABLE_SEQ_LMT101_FAE_CLOCK) {
++			static const u8 fae_clock[][JD9365DA_INIT_CMD_LEN] = {
++				{ 0xE0, 0x04 },
++				{ 0x37, 0x58 },
++				{ 0x35, 0x08 },
++				{ 0x36, 0x49 },
++				{ 0x2C, 0x06 },
++				{ 0xE0, 0x00 },
++			};
++			unsigned int j;
++
++			dev_info(dev, "jadard: FAE page-4 clock fix (pre-SLPOUT)\n");
++			for (j = 0; j < ARRAY_SIZE(fae_clock); j++) {
++				err = jadard_generic_reg_val(dsi, dev,
++							     fae_clock[j][0],
++							     fae_clock[j][1]);
++				if (err < 0) {
++					rc = err;
++					goto enable_done;
++				}
++			}
++		}
++
++
+ 		err = mipi_dsi_dcs_exit_sleep_mode(dsi);
+ 		if (err < 0)
+ 			DRM_DEV_ERROR(dev, "failed to exit sleep mode ret = %d\n", err);
+@@ -123,8 +171,54 @@
+ 		else
+ 			dev_info(dev, "jadard: DISON sent\n");
+ 
++		if (desc->enable_seq == JADARD_ENABLE_SEQ_LMT101_FAE_CLOCK) {
++			u8 pwr_mode;
++			ssize_t rd;
++
++			/* Clean 0x0A read: ~50 ms after DISON, before TE / page churn */
++			msleep(50);
++			rd = mipi_dsi_dcs_read(dsi, 0x0a, &pwr_mode, 1);
++			if (rd < 0)
++				dev_info(dev, "jadard: GET_POWER_MODE pre-TE read failed: %zd\n", rd);
++			else
++				dev_info(dev, "jadard: GET_POWER_MODE(0x0A) pre-TE=0x%02x\n", pwr_mode);
++		}
++
+ 		if (desc->display_on_delay)
+ 			msleep(desc->display_on_delay);
++
++		if (desc->enable_seq == JADARD_ENABLE_SEQ_LMT101_FAE_CLOCK) {
++			err = jadard_generic_reg_val(dsi, dev, 0x35, 0x00);
++			if (err < 0) {
++				rc = err;
++				goto enable_done;
++			}
++			dev_info(dev, "jadard: FAE TE on (0x35,0x00)\n");
++		}
++
++		if (desc->enable_seq == JADARD_ENABLE_SEQ_LMT101_FAE_BIST) {
++			static const u8 fae_bist[][JD9365DA_INIT_CMD_LEN] = {
++				{ 0xF0, 0x55 },
++				{ 0xF1, 0xAA },
++				{ 0xE0, 0x01 },
++				{ 0xE3, 0x01 },
++			};
++			unsigned int j;
++
++			for (j = 0; j < ARRAY_SIZE(fae_bist); j++) {
++				err = jadard_generic_reg_val(dsi, dev,
++							     fae_bist[j][0],
++							     fae_bist[j][1]);
++				if (err < 0) {
++					rc = err;
++					goto enable_done;
++				}
++			}
++			dev_info(dev, "jadard: BIST armed\n");
++			rc = 0;
++			goto enable_done;
++		}
++
+ 		rc = err < 0 ? err : 0;
+ 		goto enable_done;
+ 	}

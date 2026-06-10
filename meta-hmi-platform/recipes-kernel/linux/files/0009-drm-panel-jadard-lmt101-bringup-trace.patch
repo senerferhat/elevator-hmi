@@ -1,13 +1,14 @@
 From: Elevator HMI meta-hmi-platform
 Subject: [PATCH] drm: panel: jadard — bring-up trace (probe/prepare/enable)
 
-Diagnostic-only dev_info: reset GPIO number at probe, XRES assert/release at
-prepare, init table size and return code at enable. Remove before production.
+Diagnostic-only dev_info: reset GPIO at probe, XRES assert/release at prepare,
+init table count at enable, SLPOUT (0x11) and DISON (0x29) after vendor table.
+Remove before production.
 
 ---
 diff --git a/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c b/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
---- a/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c	2026-06-02 22:28:47.494994023 +0300
-+++ b/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c	2026-06-02 22:30:53.886519339 +0300
+--- a/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
++++ b/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
 @@ -85,6 +85,7 @@
  	const struct jadard_panel_desc *desc = jadard->desc;
  	struct mipi_dsi_device *dsi = jadard->dsi;
@@ -16,7 +17,13 @@ diff --git a/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c b/drivers/gpu/drm/
  
  	if (desc->enable_seq != JADARD_ENABLE_SEQ_LMT101) {
  		msleep(desc->sleep_mode_delay ? desc->sleep_mode_delay : 10);
-@@ -104,8 +105,10 @@
+@@ -100,20 +101,27 @@
+ 		err = mipi_dsi_dcs_exit_sleep_mode(dsi);
+ 		if (err < 0)
+ 			DRM_DEV_ERROR(dev, "failed to exit sleep mode ret = %d\n", err);
++		else
++			dev_info(dev, "jadard: SLPOUT sent\n");
+ 
  		msleep(desc->display_init_delay ? desc->display_init_delay : 120);
  
  		err = mipi_dsi_dcs_write_buffer(dsi, e0_page0, JD9365DA_INIT_CMD_LEN);
@@ -29,7 +36,9 @@ diff --git a/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c b/drivers/gpu/drm/
  
  		err = mipi_dsi_dcs_set_display_on(dsi);
  		if (err < 0)
-@@ -113,7 +116,8 @@
+ 			DRM_DEV_ERROR(dev, "failed to set display on ret = %d\n", err);
++		else
++			dev_info(dev, "jadard: DISON sent\n");
  
  		if (desc->display_on_delay)
  			msleep(desc->display_on_delay);
@@ -39,7 +48,7 @@ diff --git a/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c b/drivers/gpu/drm/
  	}
  
  	msleep(120);
-@@ -126,7 +130,11 @@
+@@ -126,7 +134,11 @@
  	if (err < 0)
  		DRM_DEV_ERROR(dev, "failed to set display on ret = %d\n", err);
  
@@ -52,7 +61,7 @@ diff --git a/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c b/drivers/gpu/drm/
  }
  
  static int jadard_disable(struct drm_panel *panel)
-@@ -166,9 +174,11 @@
+@@ -166,9 +178,11 @@
  	msleep(10);
  
  	if (jadard->reset) {
@@ -64,7 +73,7 @@ diff --git a/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c b/drivers/gpu/drm/
  		gpiod_set_value(jadard->reset, 0);
  		msleep(jadard->desc->post_reset_delay ?
  		       jadard->desc->post_reset_delay : 5);
-@@ -708,6 +718,11 @@
+@@ -708,6 +722,11 @@
  	jadard->reset = devm_gpiod_get_optional(dev, "reset", GPIOD_OUT_LOW);
  	if (IS_ERR(jadard->reset))
  		return PTR_ERR(jadard->reset);

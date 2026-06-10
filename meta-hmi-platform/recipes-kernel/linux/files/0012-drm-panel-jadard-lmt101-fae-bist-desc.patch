@@ -1,0 +1,15 @@
+From: Elevator HMI meta-hmi-platform
+Subject: [PATCH] drm: panel: jadard — LMT101 descriptor: FAE BIST build (BUILD A)
+
+---
+--- a/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
++++ b/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
+@@ -816,7 +816,7 @@ static const struct jadard_panel_desc lmt101sx006c_desc = {
+ 	.sleep_mode_delay = 0,
+ 	.display_init_delay = 120,
+ 	.display_on_delay = 5,
+-	.enable_seq = JADARD_ENABLE_SEQ_LMT101,
++	.enable_seq = JADARD_ENABLE_SEQ_LMT101_FAE_BIST,
+ };
+ 
+ static int jadard_dsi_probe(struct mipi_dsi_device *dsi)

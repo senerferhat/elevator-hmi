@@ -2,6 +2,186 @@
 
 **Format:** One entry per session. Most recent entry first.
 
+## 2026-06-10 — A1: BLK-014 recovery — workspace audit + booster-bit diagnosis + BUILD B rebuild
+
+**Agent:** A1 (Claude Code — lead)
+
+### Phase A — Chain-of-custody audit (PASS with findings)
+
+**git state:** HEAD `49f1f28` on `task/TASK-132-vcc3v3-lcd0-active-low-pfet`. All FAE patches (0010–0014) were **untracked** (never committed by A2). bbappend + doc updates were uncommitted modified files. **No** duplicate or conflicting patch versions. Committed this session.
+
+**Patch integrity (0011–0014):** All non-empty with real code hunks. 0011 = 149 lines / 103 hunk lines (BIST+CLOCK paths). 0012 = 15 lines (BIST desc). 0013 = 17 lines (CLOCK desc). 0014 = 33 lines (BIST v2 delay+noburst). All target `panel-jadard-jd9365da-h3.c`. The empty-0011 incident is resolved.
+
+**bbappend:** BUILD B default — 0011+0014+0013 active, 0012 commented. Matches `docs/FAE-BIST-CLOCK-BUILD.md`.
+
+**WIC reconciliation:**
+
+| Artifact | Status |
+|----------|--------|
+| BIST v1 `…20260606151107` / `d2ce5af7` | **MISSING** from disk — **retired**. Board currently runs this image. |
+| BUILD B `…20260610164058` / `0df2fb49` | **Present** (rebuilt this session), SHA-256: `0df2fb49d9d8816200d84dc2fc43691fe189f66cbc1e702658a96c3e508fc42e`. |
+| BIST v2 `…20260606161609` / `889d071d` | **Present**, SHA-256 verified MATCH. Never flashed. |
+
+**Deployed kernel strings:** `FAE page-4 clock fix (pre-SLPOUT)` + `BIST armed (500ms post-unlock)` + `VIDEO without BURST` — all three signatures in the same binary (0011 includes both paths; descriptor selects at runtime). Image on disk = FAE Clock Fix build (BUILD B).
+
+**Stash audit:**
+
+| Stash | Files | Content | Disposition |
+|-------|-------|---------|-------------|
+| `stash@{0}` (on develop) | `elevator-hmi-boardcon-em3566-v3.dts` (+32 lines) | WIP board DTS additions | Historical — superseded by TASK-132/133 DTS. Keep for reference. |
+| `stash@{1}` (on develop) | `library/EM3566/README.md` (+1), `library/EM3566/Schematic/em3566_v3sch.md` (+1190/-1164) | Schematic markdown re-extraction | Historical — library file reformatting. Keep for reference. |
+
+Both stashes are historical and do not conflict with the current working tree. No action needed.
+
+**Artifact-Triple Rule:** Instated in `AGENTS.md` Coordination Protocol (A5). All future bench results require: (1) WIC SHA-256, (2) dmesg build-signature line on target, (3) `git rev-parse HEAD`.
+
+---
+
+### Phase B — Booster-bit diagnosis adopted
+
+**BLK-014 updated** with the decisive finding: `GET_POWER_MODE(0x0A) = 0x18` — booster bit D7 is CLEAR. Healthy JD9365D reads `0x9C` after init. The internal DC/DC (JD5001 charge pump generating AVDD/AVEE/VGH/VGL from 3.3V VDDIN) **never starts**. This single failure explains ALL symptoms including BIST-black.
+
+**TASK-134:** `[DONE]` — BIST v1 black explained by booster-off.  
+**TASK-135:** `[TESTING]` — BUILD B rebuild in progress.  
+**TASK-136:** `[BLOCKED]` — diag patch 0015, gated on B1–B3 results.  
+**TASK-137:** `[READY]` — owner orders 2–3 spare LMT101SX006C units.  
+**CLAUDE.md §6:** R-06 added — LMT101 abs-max operating −20°C to 60°C vs project −20°C target.
+
+---
+
+### B1 — Owner Lab Card: VDDIN Power Measurement
+
+**Do this NOW on the currently flashed image (BIST v1). No reflash needed.**
+
+**Equipment:** DMM (minimum). Preferred: bench power supply with ammeter, 3.3V / 1A limit.
+
+**Measurement A — DMM on Plan B jumper (quick):**
+
+1. Cold boot the board (power cycle).
+2. At login prompt, measure **FPC pin 2 or 3 vs GND (pin 4 or 7)** with DMM. Record voltage.
+3. Also measure **CON1 pins 5/6 vs GND** — this catches jumper/contact drop vs FPC.
+
+**Measurement B — Ammeter through boot (preferred, decisive):**
+
+1. Disconnect Plan B jumper wire from CON1 5/6 to FPC.
+2. Connect bench supply: **3.3V, current limit 1A** → FPC pins 2 and 3 (VDDIN). GND → FPC pin 4 or 7.
+3. Power on the board. Watch the ammeter through the **3.4–4.0 second** window (when SLPOUT fires).
+4. Record: (a) idle current before boot, (b) whether current **STEPS UP** at ~3.7s (SLPOUT), (c) steady-state current after init.
+
+**Interpretation:**
+- **No current step at SLPOUT** = panel never attempted booster start → software/rate/init domain
+- **Spike then collapse** = supply domain (sag, insufficient current)
+- **Current steps up and holds** = booster working, problem is downstream
+
+Paste numbers in this diary with the artifact triple: WIC = `d2ce5af7...`, dmesg signature = `BIST armed`, commit = `e376021`.
+
+---
+
+### BUILD B rebuild — [DONE]
+
+BUILD B rebuild succeeded with exit code 0.
+- **WIC file**: `core-image-minimal-elevator-hmi-em3566.rootfs-20260610164058.wic`
+- **WIC SHA-256**: `0df2fb49d9d8816200d84dc2fc43691fe189f66cbc1e702658a96c3e508fc42e`
+- **Git HEAD commit**: `e37602165c7161b4028828b6d80ef7de4ee0c058`
+- **Log do_patch proof**: No failed patches. All patches (0009–0014) applied cleanly via Reduced Context applying fallback in `log.do_patch`.
+
+**B2 gate (on-target signature check):** Flash the newly generated BUILD B image. `dmesg | grep -i jadard` must show `FAE page-4 clock fix` and must NOT show `BIST armed`.
+
+---
+
+## 2026-06-06 — BUILD A (FAE BIST) image built and ready to flash
+
+**Host:** TASK-002-class, `kas shell` — **exit 0**
+
+| Artifact | Path |
+|----------|------|
+| **WIC (flash this)** | `build/tmp/deploy/images/elevator-hmi-em3566/core-image-minimal-elevator-hmi-em3566.rootfs-fae-bist.wic` |
+| Timestamped | `…rootfs-20260606144313.wic` |
+| **SHA-256** | `1a2e4bec2d27af2d46670b91d39aaf0005797c5ef6baae40fc8dba5dd42c6c8a` |
+| Kernel | patches **0011+0012** (BIST `enable_seq`); strings confirm **`FAE BIST enable sequence`** |
+
+**Flash:** `sudo rkdeveloptool wl 0 build/tmp/deploy/images/elevator-hmi-em3566/core-image-minimal-elevator-hmi-em3566.rootfs-fae-bist.wic` (see `docs/FLASH-PROCEDURE.md`).
+
+**After boot:** `dmesg | grep -i jadard` → report **glass pattern yes/no** (BIST diagnostic).
+
+---
+
+## 2026-06-02 — FAE reply: BIST + page-4 clock fix patches (BUILD A / BUILD B)
+
+**Agent:** A2 (Cursor)
+
+### Vendor response (LCD Mall FAE)
+
+Two tests — **run BIST first**, then clock fix (never combined):
+
+1. **Page-4 clock** before `0x11`: `E0,04` / `37,58` / `35,08` / `36,49` / `2C,06` / `E0,00` → existing `0x11`/120ms/`0x29`/5ms → **`35,00`** (TE).
+2. **BIST** after `0x11`/`0x29`: `F0,55` / `F1,AA` / `E0,01` / `E3,01`.
+
+FAE: MIPI rate mismatch can cause “failure to light up” — aligns with **468 vs 420 Mbps** gap (`docs/LMT101-CLOCK-RATE-AUDIT.md`). **`0x0A=0x18`** = sleep-out without display-on bit.
+
+### Implemented (in-tree)
+
+| Patch | Role |
+|-------|------|
+| **0011** | Driver: `FAE_BIST` + `FAE_CLOCK` enable_seq paths |
+| **0012** | Descriptor → **BUILD A** (active in `bbappend`) |
+| **0013** | Descriptor → **BUILD B** (swap in `bbappend` after BIST) |
+
+**Docs:** `docs/FAE-BIST-CLOCK-BUILD.md`, `docs/LMT101-CLOCK-RATE-AUDIT.md`
+
+### Owner next steps
+
+1. Rebuild + flash **BUILD A** (BIST) — report glass pattern yes/no.
+2. Swap `bbappend` to **0013**, rebuild, flash **BUILD B** — re-read `0x0A`, modetest plane 96.
+
+---
+
+## 2026-06-02 — Session close: LMT101 software lab PASS, backlit black — vendor mail + BLK-014
+
+**Agent:** A2 (Cursor) + owner bench
+
+### Summary
+
+Completed end-to-end **Linux display stack** validation on **EM3566 v3 + LMT101SX006C**. All software gates **PASS**; panel shows **backlit black only** (external **~9 V** backlight). **Software lab closed** for this phase; next gate is **vendor FAE** + **MIPI scope**, not more userspace iteration.
+
+### Hardware (confirmed)
+
+- **Plan B:** `VCC3V3_SYS` → CON1 **5/6** (~3.3 V on VDDIN).
+- **XRES:** FPC pin **5** → CON1 pin **11** → **GPIO0_C6** (**gpio-22**, active-low).
+- **Backlight:** external **~9 V** on LED string (bench).
+- **MIPI:** 4-lane D0–D3 + CLK on CON1 per carrier.
+
+### Firmware / DTS (in-tree)
+
+- `reset-gpios = <&gpio0 RK_PC6 GPIO_ACTIVE_LOW>`; `&spi0` disabled; `&gt1x` disabled.
+- Image class: **TASK-133** WIC + jadard patches through **0010** (vendor Q1 reset, trace, DCS **0x0A** read).
+
+### Software evidence (PASS)
+
+| Layer | Result |
+|--------|--------|
+| Boot `jadard` | gpio-22; XRES assert/release ~3.5 s; **196 cmds rc=0**; SLPOUT/DISON; **GET_POWER_MODE(0x0A)=0x18**; **mode_flags=0x203** (video+burst, 4 lane) |
+| DSI | **468 × 4 Mbps** |
+| DRM | Connector **191**, CRTC **112**, **800×1280@60.08** |
+| Plane | **96** `Smart1-win0`, **fb=192** XR24, **fbcon** |
+| Test | `modetest -M rockchip -s 191@112:#0 -P 96@112:800x1280+0+0 -F tiles -v` → **freq: 60.08Hz** sustained; **no pixels on glass** |
+| fb0 | Full white fill — **no visible change** |
+
+### Blockers / tasks
+
+- **BLK-006** → **Closed** (reset on **PC6**, dmesg pulse OK).
+- **BLK-014** → **Opened** (backlit black with full scanout).
+- **TASK-106** → **`[TESTING]`** — software bench complete; display gate blocked on **BLK-014**.
+- **Vendor:** `docs/VENDOR-SUPPORT-LMT101-BRINGUP-EMAIL.txt` updated for **2026-06-02** — send to **sales06@alltouchdisplay.com**.
+
+### Next actions (owner / A1)
+
+1. Email vendor (attach `docs/VENDOR-SUPPORT-LMT101-BRINGUP.md` if useful).
+2. Scope **MIPI CLK + D0** @ boot **~3.5 s** and during **`modetest -v`** run.
+3. Optional future TASK: non-burst DSI, DCS **0x04** panel ID — **new spec only**.
+
+---
+
 ## 2026-05-21 — A1: patch 0008 — jadard reset sequence bug found and fixed (hardware unblocked)
 
 **Agent:** A1 (Lead — Claude Code)

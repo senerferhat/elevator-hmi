@@ -1,7 +1,7 @@
 # AGENTS.md — Multi-Agent Coordination Protocol
 
 **Owner:** Claude Code (lead agent)  
-**Last updated:** 2026-05-21 — **TASK‑132**/TASK‑133 session closure on **`task/TASK-132-vcc3v3-lcd0-active-low-pfet`** (**final DTS** **+ diary**); **`BLK-013`** closed (**defective carrier switch** /**Plan B**)  
+**Last updated:** 2026-06-02 — **TASK-106** software lab closed (**BLK-014**); vendor mail **`docs/VENDOR-SUPPORT-LMT101-BRINGUP-EMAIL.txt`**; **`BLK-006`** closed (XRES **GPIO0_C6**)  
 
 ---
 
@@ -30,6 +30,8 @@
 
 **Reminder (A2 — branching):** For every task, create and work only on a branch named `task/TASK-NNN-short-description` (example: `task/TASK-003-partition-wks`). Do not commit directly to `main` or `develop`. Merge only after A1 sets the task to `[DONE]`.
 
+**Artifact-Triple Rule (A5, instated 2026-06-10):** No bench result is interpretable or recordable unless logged with: (1) WIC SHA-256, (2) the unique dmesg build-signature line observed ON TARGET, (3) `git rev-parse HEAD` of the tree it was built from. Patches regenerate only from a named commit; A1 diffs every regenerated patch against its previous version before any rebuild.
+
 ---
 
 ## Task Queue
@@ -38,8 +40,74 @@ Tasks are sorted by dependency order. Do not reorder.
 
 **Phase 0 gate status:** All A2 tasks complete. **BLK-001–004 closed** 2026-04-15 (vendor temp note, MIPI/LVDS mux clarification, backlight IC deferred, protocol hardware deferred). **Reference hardware:** **Boardcon EM3566 v3** dev kit (**CM3566**) — **on hand** (owner 2026-04-15); **LMT101** → `**MIPI LCD`** connector (muxed bus; see `CLAUDE.md` / BLK-002). **Interim SoM link:** **UART console** (host ↔ board) for boot / image / RAUC diagnostics until fieldbus returns (see `CLAUDE.md` §8 PAL).  
 **[RESOLVED] 2026-05-09 — BLK-011:** LCD Mall vendor init (`**library/LMT101/LMT101SX006C initial codes.txt`**) ported via TASK-125 (`**jadard`** + `**CMD_DSI_INT0` / vendor `0x80=0x03` ⇒ 4 lanes**; see `**diary/BLOCKERS.md`**).**  
-**Open: BLK-006** (JD9365 **`reset-gpios`** / XRES — medium; **TASK-121** **`[DONE]`**). **Closed 2026-05-11:** **BLK-012** — BSP **`vcc3v3_lcd0_n`** **`enable-active-high`** vs EM3566 v3 P-FET; **TASK-129** fix (see **`diary/BLOCKERS.md`**). **Closed 2026-05-21:** **BLK-013** — **`VCC3V3_LCD`** / reference carrier load switch; **resolution = permanent Plan B bypass** (**`VCC3V3_SYS` → CON1 5/6**); rail **PM** deferred to production carrier (**A1 diary** — see **`diary/BLOCKERS.md`**). Closed 2026-05-06: BLK-010 (DSI/**`modetest`** OK). Closed 2026-05-06: BLK-008. Closed 2026-04-18: BLK-009 (**TASK-111**). **BLK-007** (Noble **`libegl1-mesa`** / TASK-002). **BLK-005** closed 2026-04-15. Phase 1: **TASK-106** **`[IN PROGRESS]`** — wait for Step 1 result before flashing TASK-131 WIC; **TASK-118** **`[DEFERRED]`**. Production carrier + −20°C unchanged.
-**A2 sprint queue (2026-05-20):** **TASK-115** `**[DONE]**` (recipe parse check). Next **`[READY]`**: **TASK-116**. **TASK-133** `**[REVIEW]**` — flash **`TASK-133`** WIC; **`BLK-013`** **`[CLOSED]`** **2026-05-21** via planned **Plan B** bypass (**`BLOCKERS.md`**): software bring-up continuity = CON1 volts + **`modetest`** → if **black with 3.3 V**, debug **DSI / `jadard` init** (**TASK-125**/TASK-106). **TASK-132** still **`[TESTING]`** for merge **`develop`** gate per lab evidence.
+**Closed 2026-06-02:** **BLK-006** (XRES on **GPIO0_C6** / gpio-22 — dmesg pulse OK). **Open: BLK-014** (backlit black, full DRM scanout — vendor + scope). **Closed 2026-05-11:** **BLK-012** — BSP **`vcc3v3_lcd0_n`** **`enable-active-high`** vs EM3566 v3 P-FET; **TASK-129** fix (see **`diary/BLOCKERS.md`**). **Closed 2026-05-21:** **BLK-013** — **`VCC3V3_LCD`** / reference carrier load switch; **resolution = permanent Plan B bypass** (**`VCC3V3_SYS` → CON1 5/6**); rail **PM** deferred to production carrier (**A1 diary** — see **`diary/BLOCKERS.md`**). Closed 2026-05-06: BLK-010 (DSI/**`modetest`** OK). Closed 2026-05-06: BLK-008. Closed 2026-04-18: BLK-009 (**TASK-111**). **BLK-007** (Noble **`libegl1-mesa`** / TASK-002). **BLK-005** closed 2026-04-15. Phase 1: **TASK-106** **`[TESTING]`** — software bench **PASS** (2026-06-02); display gate = **BLK-014** (vendor FAE + MIPI scope); **TASK-118** **`[DEFERRED]`**. Production carrier + −20°C unchanged.
+**A2 sprint queue (2026-06-10):** FAE patches **0011–0014** in-tree; **`bbappend`** defaults to **BUILD B** (clock fix). Board currently runs **BIST v1** (`…151107` / `d2ce5af7`); BUILD B and BIST v2 were never flashed. **TASK-134** **`[DONE]`** — BIST v1 black (booster off; see BLK-014 booster-bit diagnosis). **TASK-135** **`[TESTING]`** — BUILD B rebuild in progress, gated on bench Step B2. **TASK-136** **`[BLOCKED]`** (diag patch 0015, gated on B1–B3). **TASK-137** **`[READY]`** (spare panels). **TASK-116** still **`[READY]`**.
+
+---
+
+### TASK-134 — [Phase 1] FAE BUILD A — LMT101 BIST self-test image
+
+**Status:** `[DONE]`  
+**Phase:** 1  
+**Depends on:** patches **0011** + **0012** in `linux-rockchip_%.bbappend` (0013 commented out)  
+**Branch:** `task/TASK-132-vcc3v3-lcd0-active-low-pfet` (work done on TASK-132 branch; no dedicated A2 branch created)
+
+**Spec:** LCD Mall FAE BIST sequence after SLPOUT/DISON (`F0,55` / `F1,AA` / `E0,01` / `E3,01`). **No** page-4 clock regs. Rebuild kernel + WIC; label artifact **fae-bist**.
+
+**Output notes (A2 — 2026-06-02):**
+
+- **`0011-drm-panel-jadard-lmt101-fae-bist-clock-seq.patch`** — driver paths for BIST + CLOCK.
+- **`0012-drm-panel-jadard-lmt101-fae-bist-desc.patch`** — `enable_seq = FAE_BIST`.
+- **`docs/FAE-BIST-CLOCK-BUILD.md`**, **`docs/LMT101-CLOCK-RATE-AUDIT.md`**.
+- **`bbappend`:** 0011 + 0012 active; 0013 commented.
+
+**Bench result:** BIST v1 black — `GET_POWER_MODE(0x0A) = 0x18` (booster bit D7 clear). Internal BIST pattern not visible because JD5001 charge pump (AVDD/AVEE/VGH/VGL) never started. **Confounded** by HS video traffic in the same frame as BIST unlock — HS may have masked the pattern. A2's "skip BUILD B" conclusion **superseded** by booster-bit analysis (2026-06-10): if rate mismatch blocks the panel power-up state machine (FAE's stated mechanism), BUILD B can still fix it.
+
+**A1 review notes (`[DONE]` 2026-06-10):** BIST v1 black is explained by booster-off (`0x0A=0x18`). One failure (booster never starts) explains ALL symptoms including BIST-black. See BLK-014 booster-bit diagnosis and hypothesis table.
+
+---
+
+### TASK-135 — [Phase 1] FAE BUILD B — LMT101 page-4 MIPI clock fix image
+
+**Status:** `[TESTING]`  
+**Phase:** 1  
+**Depends on:** **TASK-134** `[DONE]`; BUILD B rebuild in progress  
+**Branch:** `task/TASK-132-vcc3v3-lcd0-active-low-pfet` (same branch as TASK-134)
+
+**Spec:** `bbappend` has **0013** active (comment **0012**). Page-4 block before `0x11`; `0x35,0x00` after `0x29`. **No** BIST in this build. Rebuild + WIC; label **fae-clock**.
+
+**Acceptance (owner — bench Step B2):** Flash BUILD B WIC. `dmesg | grep -i jadard` — must show **`FAE page-4 clock fix`** and **`FAE TE on`**; must NOT show **`BIST armed`**. **`GET_POWER_MODE(0x0A) pre-TE`** — check bit **0x80** (booster) and **0x04** (display-on). `modetest -s 191@112:#0 -P 96@112:800x1280+0+0 -F tiles -v`; photo. All results logged with artifact triple (WIC SHA-256 + dmesg signature + `git rev-parse HEAD`).
+
+**A1 review notes:** [pending — gated on bench Step B2]
+
+---
+
+### TASK-136 — [Phase 1] Diagnostic patch 0015 — DCS read-back after SLPOUT
+
+**Status:** `[BLOCKED]`  
+**Phase:** 1  
+**Depends on:** Bench Steps B1–B3 inconclusive; **owner ACK required** before A2 starts  
+**Branch:** (to be created by A2)
+
+**Spec:** Patch 0015 on the clock build (BUILD B base): after SLPOUT+120ms and BEFORE DISON, read and `dev_info`: DCS **0x04** (expect **93 65 04**), **0x0A**, **0x0F**. One patch, one signature string `jadard: DIAG15`, regenerated from a named commit, diffed by A1 before build. No other changes.
+
+**Acceptance:** `dmesg` shows `jadard: DIAG15` with three register values. Artifact triple logged.
+
+**A1 review notes:** [gated — do not start until B1–B3 results logged]
+
+---
+
+### TASK-137 — [Phase 1] Order spare LMT101SX006C panel units (H6 — parallel)
+
+**Status:** `[READY]`  
+**Phase:** 1  
+**Depends on:** none (owner action, not A2 code)  
+
+**Spec:** Owner orders **2–3 spare** LMT101SX006C units from LCD Mall. Hypothesis H6 (defective panel sample) — history: 0V rail, 0.8V rail, reset held during init. A fresh panel eliminates the sample as a variable.
+
+**Acceptance:** Order confirmation logged in `diary/PROGRESS.md` with tracking/ETA.
+
+**A1 review notes:** [owner action]
 
 ---
 
@@ -1145,30 +1213,28 @@ driver at 9V. The PWM signal from `LCD_BL_PWM` controls the driver.
 
 ---
 
-### TASK-106 — [Phase 1] Bench: EM3566 v3 + LMT101 MIPI LCD (DSI / BLK-006)
+### TASK-106 — [Phase 1] Bench: EM3566 v3 + LMT101 MIPI LCD (DSI / BLK-006 / BLK-014)
 
-**Status:** `[IN PROGRESS]`  
+**Status:** `[TESTING]` — **software lab complete 2026-06-02**; **display pixels** gate = **BLK-014** (vendor + scope)  
 **Phase:** 1  
-**Depends on:** TASK-104 ✓, **LMT101SX006C** panel received and cabled to `**MIPI LCD`**, dev kit on hand ✓  
+**Depends on:** TASK-104 ✓, **LMT101SX006C** on **MIPI LCD** ✓  
 
-**Spec (when unblocked):**  
+**Spec (when unblocked):** Power/sequence per LMT101 vendor doc; UART + `dmesg`; **BLK-006** reset GPIO; log in **`diary/PROGRESS.md`**.
 
-- Power/sequence per **LMT101** vendor doc (in repo when available).  
-- Capture **UART** boot + `**dmesg`** excerpts (DRM / panel / dsi).  
-- **BLK-006:** confirm display stable without `**reset-gpios`** or add `**reset-gpios`** with **cited** GPIO + update DTS + `**diary/BLOCKERS.md`**.  
-- Log results in `**diary/PROGRESS.md`**; no partition layout changes.
+**Output notes (2026-05-06 … 2026-05-09):** *(historical)* DSI **191** modeset OK; **TASK-125** vendor init merged; **BLK-011** closed.
 
-**Output notes (2026-05-06 lab):**  
+**Output notes (2026-06-02 — session close):**
 
-- `**modetest -M rockchip -s 191:#0`** → `**setting mode 800x1280-60.22Hz on connectors 191, crtc 112`** (**DSI-1**).  
-- `**/sys/class/backlight/backlight`** and `**backlight1`** present; `**brightness`** **200** (confirm `**max`** / write `**max`** per `**docs/BRINGUP-CHECKLIST.md`**).  
-- `**/sys/kernel/debug/regulator/vcc3v3_lcd0_n/enable**` → **1**.  
-- `**dmesg`:** early `**-517`** defer; `**pwm-backlight … dummy regulator`** — **DTS fix** in `**elevator-hmi-boardcon-em3566-v3.dts`** (`**power-supply = <&vcc3v3_lcd0_n>;`** on `**&backlight`** / `**&backlight1**`); **reflash** to validate.  
-- `**GPT`** touch errors on `**gt1x`** — ignore for LCD.  
-- **Update (2026-05-08):** `**cz101b4001_desc`** init ≠ **LMT101SX006C** — panel black with generic `**jadard`** path; `**BLK-011`** tracked vendor DCS until **TASK-125**.  
-- **Update (2026-05-08):** `**TASK-122`** `**simple-panel-dsi`** fallback — lab-only; product path restored with **TASK-125** `**jadard`** + vendor init.  
-- **Update (2026-05-09):** **TASK-125** ports LCD Mall init; `**BLK-011`** closed — **A1 correction**: `**{0x80,0x03}`** ⇒ **4** lanes (**CMD_DSI_INT0**), `**dsi-lanes = <4>`** + `**.lanes = 4`**; owner reflash pending.  
-- **Next:** Reflash WIC with **TASK-125** kernel/DTB; `**modetest`** / photo → `**diary/PROGRESS.md`**; `**TASK-118**` (PWM); `**BLK-006**` per XRES validation if needed.
+- **Hardware:** Plan B **3.3 V** CON1 **5/6**; XRES **GPIO0_C6** (**gpio-22**, CON1 **11**); external **~9 V** backlight.
+- **Boot:** `jadard` **196 cmds rc=0**; XRES assert/release; **GET_POWER_MODE(0x0A)=0x18**; **mode_flags=0x203**; DSI **468×4 Mbps**.
+- **DRM:** plane **96** active **XR24 800×1280**; `modetest -s 191@112:#0 -P 96@112:800x1280+0+0 -F tiles -v` → **60.08 Hz** sustained.
+- **Symptom:** **backlit black** — no visible pattern; full **`/dev/fb0`** fill unchanged.
+- **BLK-006:** **closed** — reset mapping + dmesg pulse validated.
+- **BLK-014:** **opened** — software PASS / pixels FAIL.
+- **Docs:** `docs/VENDOR-SUPPORT-LMT101-BRINGUP-EMAIL.txt`, `docs/VENDOR-SUPPORT-LMT101-BRINGUP.md`, `diary/PROGRESS.md` **2026-06-02**, `docs/LAB-LMT101-TEST-CHEATSHEET.md` Phase H.
+- **Next (owner):** send vendor email; scope **MIPI CLK/D0**; await FAE on **0x0A=0x18** and burst video mode.
+
+**A1 review notes:** [pending — accept software lab closure; **BLK-014** owner gate for `[DONE]`]
 
 ---
 

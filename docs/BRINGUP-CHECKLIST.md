@@ -116,7 +116,13 @@ If `**modetest**` reports **permission denied** on `**/dev/dri/card0`**, run as 
 If you see `**setting mode 800x1280-… on connectors 191, crtc 112**` but the LCD stays dark, distinguish two cases:
 
 1. **Pitch black (no glow)** — often **LED string / boost / enable** never turns on; Linux `**brightness`** only helps if `**LCD_BL_PWM`** / `**pwm-backlight**` (`**TASK-118**`) actually reaches your driver (**BLK-008**).
-2. **Backlit black (you see backlight glow)** — illumination works (often from **external LED supply** or always-on analogue path), but **no pixels**. Board `**brightness`** may **do nothing visible** if your bench wiring **bypasses** PWM dimming or `**LCD_BL_PWM`** is unused on your harness — **that is hardware routing**, not proof the kernel backlight device is useless. Priority shifts to **image path**: framebuffer paint, `**DISPLAY_ON`** / panel state, `**reset-gpios`** polarity (**BLK-006**).
+2. **Backlit black (you see backlight glow)** — illumination works (often from **external LED supply** or always-on analogue path), but **no pixels**. If **`dmesg`** shows **`jadard` init rc=0**, **`GET_POWER_MODE(0x0A)`**, and **`/sys/kernel/debug/dri/0/state`** shows **plane 96** with an active **fb**, the **Linux path is complete** — track **BLK-014** (vendor MIPI / panel source), not **BLK-006** reset mapping. Confirm scanout:
+
+```sh
+modetest -M rockchip -s 191@112:#0 -P 96@112:800x1280+0+0 -F tiles -v
+```
+
+(Use connector **191** and plane **96** from your `modetest -p` / `dri/0/state` — see **`docs/LAB-LMT101-TEST-CHEATSHEET.md`** Phase H.) Send **`docs/VENDOR-SUPPORT-LMT101-BRINGUP-EMAIL.txt`** to LCD Mall FAE.
 
 If you see `**setting mode 800x1280-…`** but the LCD stays fully dark **without** an external backlight source, DSI timing may still be fine; bring-up `**LCD_PWREN_H`**, `**LCD_BL_PWM`**, and **~9 V** logic per schematic.
 
