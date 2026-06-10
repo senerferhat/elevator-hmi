@@ -21,8 +21,8 @@ SRC_URI += "file://0014-drm-panel-jadard-lmt101-fae-bist-v2-delay-noburst.patch"
 SRC_URI += "file://0013-drm-panel-jadard-lmt101-fae-clock-desc.patch"
 # DIAG15: DCS read-back 0x04/0x0F/0x45 (post-DISON) — BUILD B extension; stack on 0011+0013
 SRC_URI += "file://0015-drm-panel-jadard-lmt101-diag15-dcs-readback.patch"
-# H4a test: F0,55/F1,AA/E0,01/E3,01/E0,00 booster enable after DISON (DIAG15 0x0A confirms result)
-SRC_URI += "file://0016-drm-panel-jadard-lmt101-h4a-e3-booster-enable.patch"
+# H4a test: ELIMINATED 2026-06-10 — E3,01 causes panel soft-reset (0x0A=0x08), not booster enable
+# SRC_URI += "file://0016-drm-panel-jadard-lmt101-h4a-e3-booster-enable.patch"
 # FAE BUILD A v2 (BIST + 500ms + no burst): comment 0013, enable 0012+0014
 # SRC_URI += "file://0012-drm-panel-jadard-lmt101-fae-bist-desc.patch"
 SRC_URI += "file://elevator-hmi-lmt101sx006c-panel.dtsi"
