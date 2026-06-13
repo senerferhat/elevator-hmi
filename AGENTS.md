@@ -41,7 +41,7 @@ Tasks are sorted by dependency order. Do not reorder.
 **Phase 0 gate status:** All A2 tasks complete. **BLK-001–004 closed** 2026-04-15 (vendor temp note, MIPI/LVDS mux clarification, backlight IC deferred, protocol hardware deferred). **Reference hardware:** **Boardcon EM3566 v3** dev kit (**CM3566**) — **on hand** (owner 2026-04-15); **LMT101** → `**MIPI LCD`** connector (muxed bus; see `CLAUDE.md` / BLK-002). **Interim SoM link:** **UART console** (host ↔ board) for boot / image / RAUC diagnostics until fieldbus returns (see `CLAUDE.md` §8 PAL).  
 **[RESOLVED] 2026-05-09 — BLK-011:** LCD Mall vendor init (`**library/LMT101/LMT101SX006C initial codes.txt`**) ported via TASK-125 (`**jadard`** + `**CMD_DSI_INT0` / vendor `0x80=0x03` ⇒ 4 lanes**; see `**diary/BLOCKERS.md`**).**  
 **Closed 2026-06-02:** **BLK-006** (XRES on **GPIO0_C6** / gpio-22 — dmesg pulse OK). **Open: BLK-014** (backlit black, full DRM scanout — vendor + scope). **Closed 2026-05-11:** **BLK-012** — BSP **`vcc3v3_lcd0_n`** **`enable-active-high`** vs EM3566 v3 P-FET; **TASK-129** fix (see **`diary/BLOCKERS.md`**). **Closed 2026-05-21:** **BLK-013** — **`VCC3V3_LCD`** / reference carrier load switch; **resolution = permanent Plan B bypass** (**`VCC3V3_SYS` → CON1 5/6**); rail **PM** deferred to production carrier (**A1 diary** — see **`diary/BLOCKERS.md`**). Closed 2026-05-06: BLK-010 (DSI/**`modetest`** OK). Closed 2026-05-06: BLK-008. Closed 2026-04-18: BLK-009 (**TASK-111**). **BLK-007** (Noble **`libegl1-mesa`** / TASK-002). **BLK-005** closed 2026-04-15. Phase 1: **TASK-106** **`[TESTING]`** — software bench **PASS** (2026-06-02); display gate = **BLK-014** (vendor FAE + MIPI scope); **TASK-118** **`[DEFERRED]`**. Production carrier + −20°C unchanged.
-**A2 sprint queue (2026-06-10 session 4 — SOFTWARE INVESTIGATION CLOSED):** All six patches 0011–0016 in-tree. **TASK-134** `[DONE]`. **TASK-135** `[TESTING]`. **TASK-136** `[REVIEW]` — H4a (`E3,01`) result: `0x0A=0x08` (panel soft-reset; H4a eliminated). Software hypothesis table: H1 only remaining. **TASK-137** `[READY]` (owner). **TASK-138** `[READY]` (vendor email update with `0x08` data + K1/K2 owner actions). **TASK-116** `[READY]`.
+**A2 sprint queue (2026-06-13 — STANDBY):** Tree frozen at BUILD B + DIAG15 (patches 0011+0013+0015; 0016 commented). Board confirmed at `0x0A=0x1c`, `0x0F=0xC0`, `0x45=0x00`. Active hypotheses: **H1** (VDDIN supply sag, K1+K2 owner hardware) and **H7** (clock-lane LP during wake window, HW-5 scope owner). **TASK-136** `[REVIEW]`. **TASK-137** `[READY]` (owner: order spares). **TASK-138** `[BLOCKED]` (patch 0017, H7 — gated on HW-5 scope + owner ACK). **TASK-116** `[READY]`. **No patches, no tree changes, no vendor email until A1 explicitly gates.**
 
 ---
 
@@ -123,33 +123,37 @@ Tasks are sorted by dependency order. Do not reorder.
 
 ---
 
-### TASK-138 — [Phase 1] Updated vendor email — three-build 0x0A data + H4a result
+### TASK-138 — [Phase 1] Patch 0017 — H7 delayed-rewake after HS video enable
 
-**Status:** `[READY]`  
+**Status:** `[BLOCKED]`  
 **Phase:** 1  
-**Depends on:** TASK-136 `[REVIEW]` — H4a result `0x0A=0x08` is the new data point  
-**Branch:** (owner action — draft and send email; no A2 code)
+**Depends on:** **HW-5** scope measurement (MIPI CLK lane idle during wake window) — **must be logged** + **owner ACK** before A2 starts  
+**Branch:** (to be created by A2 when unblocked)
 
-**Spec:** Owner sends updated second email to `sales06@alltouchdisplay.com` (or FAE contact from previous thread) containing:
+**Hypothesis (H7):** In burst video mode, the MIPI clock lane goes LP-idle between bursts. If the clock lane is LP during the window when SLPOUT/DISON are sent (~3.5 s boot), the panel's internal power-state machine (booster startup) may not complete — because the JD9365D requires a continuous HS clock during the wake sequence. A re-issue of 0x11→0x29 approximately 1 s after HS video has been running (clock continuously HS) would test whether the booster starts when the clock is guaranteed active.
 
-1. **Three-build `0x0A` progression:**
-   - BIST v1: `0x18` (booster off, DISON not latched)
-   - BUILD B: `0x1c` (clock fix working — DISON latched, booster still off)
-   - DIAG15: `0x1c`; `0x0F=0xC0` (IC logic healthy, all registers loaded); `0x45=0x00` (timing controller not running)
+**Gate — mandatory before A2 starts:**
+1. **HW-5:** Owner scopes MIPI CLK lane (FPC pin 14/15) during 0–5 s boot window and logs: (a) whether clock lane is LP during the ~3.5 s SLPOUT/DISON window, (b) approximate LP duration.
+2. **Owner ACK:** Explicit instruction from A1 to proceed after reviewing HW-5 result.
 
-2. **H4a test and result:**
-   - We sent `F0,55/F1,AA/E0,01/E3,01/E0,00` after DISON
-   - Result: `0x0A=0x08` — panel returned to power-on default (sleep-out and DISON bits cleared)
-   - Conclusion: `E3,01` after F0/F1 BIST unlock triggers an internal display-engine reset, not a production booster enable
-   - **Question for FAE:** Is `E3` (page 1) only for BIST mode, or does it have a separate function in production? What production register starts the JD5001 charge pump (AVDD/AVEE/VGH/VGL)?
+**Spec (when unblocked):**
+- Base: BUILD B + DIAG15 (patches 0011+0013+0015, current tree)
+- Add patch 0017 only: schedule a `delayed_work` item approximately **1 s after `drm_panel_prepare()` returns** (i.e., after HS video is already running from the DRM/VOP side)
+- Delayed work re-issues: `SLPOUT → msleep(120) → DISON → msleep(50) → read 0x0A → read 0x45`
+- Signature line (required for artifact triple): `jadard: REWAKE17`
+- No other changes — no init table edits, no lane count, no mode line, no descriptor changes
+- `cleansstate` before build; artifact triple on every WIC
 
-3. **Supply status:** VDDIN = 3.3V constant (DMM). Cannot rule out 10-50ms inrush transient (DMM blind window). Ammeter test pending.
+**Acceptance (on-target after HW-5 + owner ACK + flash):**
+```
+dmesg | grep "jadard:"
+jadard: REWAKE17        ← delayed work fired
+jadard: GET_POWER_MODE(0x0A) pre-TE=0x9c   ← H7 CONFIRMED (booster started)
+  OR
+jadard: GET_POWER_MODE(0x0A) pre-TE=0x1c   ← H7 NOT confirmed, escalate H1/vendor
+```
 
-4. **Explicit request:** Vendor to provide the correct production booster-enable register sequence, if different from the standard `LMT101SX006C initial codes.txt` init table already in use.
-
-**Acceptance:** Email sent; reply tracked in `diary/PROGRESS.md` with date + FAE response summary.
-
-**A1 review notes:** [owner action]
+**A1 review notes:** [BLOCKED — awaiting HW-5 scope + owner ACK. Do not start.]
 
 ---
 

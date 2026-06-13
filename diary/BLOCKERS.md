@@ -99,21 +99,22 @@ GET_POWER_MODE(0x0A) pre-TE = 0x08
 
 **H4a ELIMINATED as formulated.** Sending `E3,01` (page-1 BIST enable) in the middle of a production init sequence cannot start the production booster — it disrupts the panel state instead. If a missing register is the cause (H4b variant), it is a DIFFERENT register than `E3`, and the vendor FAE must identify it.
 
-#### Ranked Hypotheses (updated 2026-06-10 post-H4a test — FINAL SOFTWARE STATE)
+#### Ranked Hypotheses (updated 2026-06-13 — corrected board, H7 added)
 
-| # | Hypothesis | Status | Kill test |
-|---|-----------|--------|-----------|
-| **H1** | VDDIN sags under booster inrush (Plan B wire resistance/contact) | **LIVE — ONLY UNVERIFIED HW HYPOTHESIS** | Ammeter inline VDDIN at SLPOUT (~3.5s window) |
-| H2 | MIPI rate mismatch | **CLOSED (partial)** — clock fix allowed DISON to latch; booster still off | Vendor email |
-| H4a | Init table missing `E3` page-1 booster enable | **ELIMINATED** — `E3,01` causes soft-reset, not booster enable | N/A |
+| # | Hypothesis | Status | Kill test / gate |
+|---|-----------|--------|-----------------|
+| **H1** | VDDIN sags under booster inrush (Plan B wire resistance/contact) | **LIVE** — DMM blind to 10-50ms transients | K1: ohmmeter FPC pin 2/3 → VCC3V3_SYS tap (< 0.3Ω target). K2: ammeter inline VDDIN at SLPOUT window |
+| **H7** | MIPI clock lane goes LP-idle during SLPOUT/DISON wake window; panel state machine never completes booster start | **NEW — LIVE** | **HW-5:** scope MIPI CLK lane (FPC pin 14/15) during 0–5 s boot window. Confirm clock idle during wake. Then owner ACK before TASK-138 patch |
+| H2 | MIPI rate mismatch | **PARTIAL CLOSED** — clock fix allowed DISON to latch (0x18→0x1c); booster still off | Vendor email (hold per A1 directive) |
+| H4a | Init table missing `E3` page-1 booster enable | **ELIMINATED** — `E3,01` causes panel soft-reset, not booster enable | N/A |
 | H4b | Other init register missing | **ELIMINATED** — `0x0F = 0xC0` confirms all registers loaded | N/A |
-| H3 | HS video masks BIST | **LOW** — BIST and production both fail for same reason (booster off) | N/A |
-| H5 | Lane polarity miswired | **LOW** — panel responds to all DCS | After booster starts |
-| H6 | Defective panel sample | **ELIMINATED** — `0x0F = 0xC0`, ID `0x93` confirms working IC | N/A |
+| H3 | HS video masks BIST | **LOW** | N/A |
+| H5 | Lane polarity miswired | **LOW** — panel responds to all DCS | Only after booster starts |
+| H6 | Defective panel sample | **ELIMINATED** — `0x0F = 0xC0`, ID `0x93` | TASK-137: order 2-3 spares (owner) |
 
-**Software investigation: COMPLETELY CLOSED.** All software paths exhausted. H1 (supply) is the only remaining unverified hypothesis. All further action is hardware (ammeter test) or vendor FAE.
+**Software investigation: COMPLETELY CLOSED.** All init-table, lane-count, mode-line, and backlight parameters verified correct. Do not propose changes to any of these. Active hypotheses are H1 (supply) and H7 (clock-lane timing). Both require hardware measurements before any new patch.
 
-**Key interpretation rule:** ammeter inline VDDIN at boot — **no current step at SLPOUT → panel never attempted booster (vendor must identify missing register); spike-then-collapse → H1 confirmed (supply sag).** This single reading is the last diagnostic gate before the vendor call.
+**Gate rule:** No patch 0017 until HW-5 scope result is logged AND owner ACKs. No vendor email action until A1 authorises. No tree changes of any kind until explicitly directed.
 
 #### Decision Matrix (updated post-BUILD B)
 
