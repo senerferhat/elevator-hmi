@@ -164,19 +164,38 @@ from whatever the next baseline is, per charter rule 3 (one hypothesis in flight
 - Not sure exactly what's flashed on the bench right now beyond "the latest one tested" — needs
   confirming against the artifact triple before the next physical test.
 
+### `dclk_vop1` — CLOSED (2026-07-03, Tier 2, owner capture)
+
+Owner ran `dmesg | grep -i dclk_vop` on the board as currently flashed (login prompt visible
+in the same capture, i.e. a fresh boot, not a stale buffer):
+
+```
+[    3.386420] rockchip-vop2 fe040000.vop: [drm:vop2_crtc_atomic_enable] set dclk_vop1 to 70000000, get 70000000
+```
+
+**70,000,000 Hz = 70 MHz exactly, requested value == actual value.** Matches the static
+descriptor (`.clock = 70000` kHz) and the old 2026-05-10 capture. The charter §5/§7-item-4 "700
+MHz" claim does **not** reproduce on this hardware right now. Verdict: almost certainly a
+one-digit transcription slip during the original 2026-06-14 session, not a real driver/DT bug.
+**Do not spend further time on this axis.**
+
+Still open: which exact build this dmesg was captured against (see Next item 1 below) — matters
+for correctly attributing this reading, though the 70 MHz pixel clock is independent of the
+420-vs-468 lane-rate question (different clock domains: `dclk_vop1` is the RGB/pixel clock into
+the DSI encoder, not the DSI PHY bit rate itself).
+
 ### Next (in order, no scope required)
 
-1. **Owner to paste verbatim `dmesg | grep -i dclk_vop`** from whatever is currently flashed —
-   closes the 700 MHz question either way.
-2. **Owner to confirm exactly which WIC/git state is on the bench right now** against the known
-   artifact triples (`7dbf72d9…` clock-match-only vs a fresh rebuild of `6eb2f37`/`438091ef`-class
-   no-BIST image) — needed before any new result can be attributed correctly.
-3. Once (1)+(2) are answered: rebuild `6eb2f37` clean, capture the actual bandwidth line in dmesg,
-   and treat 420-vs-468 as a **separate, explicit, single-variable test** from the XRES
+1. **Owner to confirm exactly which WIC/git state produced the capture above** — need this to
+   know if `mode_flags`/lane-rate were 0019-clock-match-only (`7dbf72d9…`), the reverted/no-DT-
+   override state (would show ~468 Mbps), or something else. Ask for `dmesg | grep -iE
+   "jadard|bandwidth|mode_flags"` from the same boot to get this for free.
+2. Rebuild `6eb2f37` clean, capture the actual `final DSI-Link bandwidth: ... Mbps` line, and
+   treat 420-vs-468 as a **separate, explicit, single-variable test** from the XRES
    drive-strength fix — do not re-conflate them like the pre-existing uncommitted diff did.
-4. **H6 spare-panel swap** remains the cheapest, equipment-free, most decisive test available
-   (charter §7 item 3) and can run in parallel with (1)–(3) whenever convenient on the bench.
-5. Draft and send the vendor status update LCD Mall is waiting on (owed regardless of firmware
+3. **H6 spare-panel swap** remains the cheapest, equipment-free, most decisive test available
+   (charter §7 item 3) and can run in parallel with (1)–(2) whenever convenient on the bench.
+4. Draft and send the vendor status update LCD Mall is waiting on (owed regardless of firmware
    findings) — separate from this technical thread, flag when ready to draft.
 
 ---
