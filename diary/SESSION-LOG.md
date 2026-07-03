@@ -318,8 +318,41 @@ whatever the glass shows on *this specific* boot is still a directly meaningful 
 booster-health question — just not a clean answer to the 420-vs-468 rate question anymore. Need the
 owner's visual/photo report to know which question this result actually answers.
 
-**Not yet reported:** what the glass actually shows on this boot. This is the single open item
-blocking any conclusion from this flash — asked, not yet received.
+### Visual result (2026-07-03, Tier 1, owner report)
+
+**"Static backlight leakage" — i.e. flat black, only the external backlight glow visible, no
+pattern.** Owner's own words attribute the visible glow to the external backlight source, not the
+panel's own output — consistent with every "backlit black" result already logged in this campaign
+(the external ~9 V LED backlight is always on and always visible through the glass regardless of
+what the panel controller is doing internally).
+
+**This does NOT reproduce the green-noise/gray-flashing/vignetting result from the undocumented
+2026-06-14 session (charter §5).** Two of the four recovered 06-13/06-14 candidate builds have now
+been tested for real (`revert-step-a` twice, `lane420-reset` once) and both show plain backlit
+black, not noise. **The mystery of which exact build (or environmental condition) produced the
+noise/vignetting report remains open** — it may have been `reset-drive15.wic` (the one remaining
+untested candidate), the deleted `438091ef…` build, or a non-reproducible transient (e.g. a
+marginal connector seating during that specific session). Further archaeology on old WICs has
+started to show diminishing returns after two negative results.
+
+**What this result DOES add, despite the BIST confound:** patch 0020's TEST 2 BIST sequence armed
+and (per the dmesg) executed on this boot. That self-test pattern is specifically designed by the
+vendor to be visible *independent of correct external MIPI video timing* — it's an internal TCON
+test pattern, not a decode of the HS video stream. Nothing appeared. This is a **second, independent
+data point** (on top of the `0x0A` booster-bit-off finding from TASK-134/136 history) consistent
+with the analog boost path (JD5001 AVDD/AVEE/VGH/VGL) never actually starting, regardless of
+software rate/timing/BIST knobs. Caveat: since every DCS *read* on this same boot failed with
+`-110`, there is no register confirmation (`0x0A`/`0x0F`/`0x45`) for this specific attempt — the
+BIST *write* commands could have silently failed too, though DSI writes are generally more tolerant
+than bidirectional reads, so probably not. Not proof by itself, but another brick in the same wall.
+
+**Recommendation (this agent, not yet actioned):** given two consecutive backlit-black results and
+a confound on the second, the highest-value next step is very likely **H6 — swap in the spare
+LMT101SX006C panel** (equipment-free, on hand per this session's owner input above, decisive:
+lights up with a fresh panel → current sample is defective, closes the software investigation
+entirely; stays black on a fresh panel too → points at something shared, like the carrier rail or
+backlight path, not panel-specific). Deferred to owner decision below rather than unilaterally
+proceeding, since it requires physical panel handling, not just a reflash.
 
 ### Next (in order, no scope required)
 
