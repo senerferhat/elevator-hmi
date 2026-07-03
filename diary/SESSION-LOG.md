@@ -10,11 +10,12 @@ verbatim dmesg with artifact triple. Tier 3 = prior agent conclusion — re-deri
 label. Every entry below states its tier.
 
 **Current flash target (kept in sync here, not in `docs/FLASH-PROCEDURE.md` — see that file's
-"READ THIS FIRST" banner for why):** `core-image-minimal-elevator-hmi-em3566.rootfs-lane420-reset.wic`,
-SHA-256 `7b01a63cd96b5e580fe1eaed7e2ea1db8207bf1dc18c41112d8fd13dc5885723`. Untested single-variable
-kill test (420 Mbps + TASK-141 XRES fix together) — see 2026-07-03 entry below for full reasoning.
-**Update this line whenever the recommended target changes; it is the one thing every other doc in
-this repo should point back to instead of copying.**
+"READ THIS FIRST" banner for why):** `core-image-minimal-elevator-hmi-em3566.rootfs-lane420-reset.wic`
+is **flashed and booted (2026-07-03)** — dmesg confirms 420 Mbps + expected BTA `-110` regression,
+**but this build turned out to also have an active BIST-unlock sequence (not a clean single-variable
+test — see entry below)**. Glass/visual result not yet reported — **do not recommend a new flash
+target until that's in.** **Update this line whenever the recommended target changes; it is the one
+thing every other doc in this repo should point back to instead of copying.**
 
 ---
 
@@ -267,6 +268,58 @@ bench history. Once a bench result confirms/rules out `lane420-reset`, the losin
 (`reset-drive15`, `20260614094322`) can be deleted for ~5.8 GB back — flagging this as the
 recommended safe cleanup target instead of touching `sstate-cache` (which would slow future
 builds) or `downloads` (would need network to refetch).
+
+### `lane420-reset.wic` flashed and booted (2026-07-03, Tier 2, owner capture)
+
+```
+[    2.417547] jadard: VENDOR-CLOCK-MATCH — VIDEO non-burst (PLL_CLOCK=420)
+[    3.621257] jadard: dsi mode_flags=0x00000201 lanes=4 format=0 video=1 burst=0
+[    3.621293] jadard: DCS-INIT
+[    4.304192] jadard: FAE page-4 clock fix (pre-SLPOUT)
+[    4.337918] jadard: SLPOUT sent
+[    4.464545] jadard: DISON sent
+[    4.557513] jadard: GET_POWER_MODE pre-TE read failed: -110
+[    4.590858] jadard: DIAG15 0x04 read err=-110
+[    4.625076] jadard: DIAG15 0x0F read err=-110
+[    4.638113] jadard: FAE TE on (0x35,0x00)
+[    4.691478] jadard: DIAG15 0x45 read err=-110
+[    5.221356] jadard: BIST armed (FAE_CLOCK + vendor TEST 2)
+[    5.221418] jadard: init table: 196 cmds, rc=0
+[    5.221526] dw-mipi-dsi-rockchip: final DSI-Link bandwidth: 420 x 4 Mbps
+```
+
+**Confirmed as predicted:** 420 Mbps achieved (rate-override mechanism works), burst=0 (non-burst
+confirmed), and the known-risk BTA regression fired exactly as warned — **every** DCS register
+read (`0x0A`/`0x04`/`0x0F`/`0x45`) failed with `-110` (ETIMEDOUT). Zero register visibility on this
+build. This directly confirms the DTSI's original removal comment was accurate: 420 + non-burst
+really does break BTA reads on this hardware/timing.
+
+**Confound I did not anticipate before recommending this file — flagging my own error:**
+`jadard: BIST armed (FAE_CLOCK + vendor TEST 2)` fired. Patch 0020 (the diagnostic BIST-unlock
+sequence, `F0,55/F1,AA/E0,01/E3,01` appended to the tail of the FAE_CLOCK init path) is **compiled
+in and actively executing** on this build — something my recovery/comparison method (checking only
+the `rockchip,lane-rate` string count) did not catch, because the "BIST armed" string is present in
+the compiled kernel Image on **all four** recovered 06-13/06-14 builds equally (checked this
+earlier), but only actually *reached at runtime* depending on the DTB's `enable_seq`/compatible
+selection — a difference the string-count method can't distinguish. Confirmed by contrast: the
+live dmesg from `revert-step-a` (current default, captured earlier this session) shows **no** "BIST
+armed" line, so that build's DTB does not reach this code path, while `lane420-reset`'s does.
+
+**Consequence: this was not the clean single-variable test I intended.** `lane420-reset.wic`
+differs from `revert-step-a` by *two* things, not one — the lane-rate override **and** an active
+BIST-unlock sequence that soft-resets the video engine (`E3,01`, per patch 0020's own documented
+behavior) right at the end of `prepare()`, immediately before the DRM atomic commit that starts
+video. Any visual result from this flash cannot be cleanly attributed to the rate change alone.
+
+**Silver lining:** patch 0020's whole purpose was a vendor-suggested diagnostic — TEST 2 BIST is
+supposed to show a self-test pattern on the glass if the analog booster/source path is alive, and
+stay black if it's dead (see `docs/LMT101-VENDOR-FINAL-SUMMARY.md`, TASK-134/TASK-136 history). So
+whatever the glass shows on *this specific* boot is still a directly meaningful data point for the
+booster-health question — just not a clean answer to the 420-vs-468 rate question anymore. Need the
+owner's visual/photo report to know which question this result actually answers.
+
+**Not yet reported:** what the glass actually shows on this boot. This is the single open item
+blocking any conclusion from this flash — asked, not yet received.
 
 ### Next (in order, no scope required)
 
