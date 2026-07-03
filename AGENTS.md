@@ -1,7 +1,7 @@
 # AGENTS.md — Multi-Agent Coordination Protocol
 
 **Owner:** Claude Code (lead agent)  
-**Last updated:** 2026-06-10 — **TASK-136** software investigation CLOSED; H4a (`E3,01`) ELIMINATED (caused panel soft-reset → `0x08`); H1 (VDDIN supply) is only remaining hypothesis; **TASK-138** [READY] (vendor email update + K1/K2 owner actions). **BLK-014** software layer exhausted.  
+**Last updated:** 2026-06-13 — **TASK-140 VENDOR-CLOCK-MATCH built** (patch 0019: non-burst→420 + Q1 20ms). Vendor-truth image; `do_patch` OK; bench pending. FINAL VENDOR-MATCH RECORD locked (27 lines).  
 
 ---
 
@@ -41,7 +41,7 @@ Tasks are sorted by dependency order. Do not reorder.
 **Phase 0 gate status:** All A2 tasks complete. **BLK-001–004 closed** 2026-04-15 (vendor temp note, MIPI/LVDS mux clarification, backlight IC deferred, protocol hardware deferred). **Reference hardware:** **Boardcon EM3566 v3** dev kit (**CM3566**) — **on hand** (owner 2026-04-15); **LMT101** → `**MIPI LCD`** connector (muxed bus; see `CLAUDE.md` / BLK-002). **Interim SoM link:** **UART console** (host ↔ board) for boot / image / RAUC diagnostics until fieldbus returns (see `CLAUDE.md` §8 PAL).  
 **[RESOLVED] 2026-05-09 — BLK-011:** LCD Mall vendor init (`**library/LMT101/LMT101SX006C initial codes.txt`**) ported via TASK-125 (`**jadard`** + `**CMD_DSI_INT0` / vendor `0x80=0x03` ⇒ 4 lanes**; see `**diary/BLOCKERS.md`**).**  
 **Closed 2026-06-02:** **BLK-006** (XRES on **GPIO0_C6** / gpio-22 — dmesg pulse OK). **Open: BLK-014** (backlit black, full DRM scanout — vendor + scope). **Closed 2026-05-11:** **BLK-012** — BSP **`vcc3v3_lcd0_n`** **`enable-active-high`** vs EM3566 v3 P-FET; **TASK-129** fix (see **`diary/BLOCKERS.md`**). **Closed 2026-05-21:** **BLK-013** — **`VCC3V3_LCD`** / reference carrier load switch; **resolution = permanent Plan B bypass** (**`VCC3V3_SYS` → CON1 5/6**); rail **PM** deferred to production carrier (**A1 diary** — see **`diary/BLOCKERS.md`**). Closed 2026-05-06: BLK-010 (DSI/**`modetest`** OK). Closed 2026-05-06: BLK-008. Closed 2026-04-18: BLK-009 (**TASK-111**). **BLK-007** (Noble **`libegl1-mesa`** / TASK-002). **BLK-005** closed 2026-04-15. Phase 1: **TASK-106** **`[TESTING]`** — software bench **PASS** (2026-06-02); display gate = **BLK-014** (vendor FAE + MIPI scope); **TASK-118** **`[DEFERRED]`**. Production carrier + −20°C unchanged.
-**A2 sprint queue (2026-06-13 — STANDBY):** Tree frozen at BUILD B + DIAG15 (patches 0011+0013+0015; 0016 commented). Board confirmed at `0x0A=0x1c`, `0x0F=0xC0`, `0x45=0x00`. Active hypotheses: **H1** (VDDIN supply sag, K1+K2 owner hardware) and **H7** (clock-lane LP during wake window, HW-5 scope owner). **TASK-136** `[REVIEW]`. **TASK-137** `[READY]` (owner: order spares). **TASK-138** `[BLOCKED]` (patch 0017, H7 — gated on HW-5 scope + owner ACK). **TASK-116** `[READY]`. **No patches, no tree changes, no vendor email until A1 explicitly gates.**
+**A2 sprint queue (2026-06-13):** TASK-139 done (H-pkt dead). **TASK-140** `[REVIEW]` — VENDOR-CLOCK-MATCH **built** (0019 non-burst 420 + Q1 20 ms; DTB `rockchip,lane-rate=<420>`). **VENDOR-MATCH no-BIST image** built — disarmed 0020 (`E3,01` BIST was soft-resetting the video engine `0x0A=0x08`, sabotaging every prior "black" capture); WIC SHA `438091ef…` symlink `…rootfs-vendor-match.wic`, git `d9565d6`+uncommitted. Reset scope confirmed ~24 ms low→high (vendor Q1 20 ms). Software now 1:1 with vendor lit recipe. Bench: flash vendor-match, **9.6 V BL**, VDDIN inrush scope, fresh sample. See `diary/STATE-2026-06-13-vendor-reply.md`.
 
 ---
 
@@ -69,7 +69,7 @@ Tasks are sorted by dependency order. Do not reorder.
 
 ### TASK-135 — [Phase 1] FAE BUILD B — LMT101 page-4 MIPI clock fix image
 
-**Status:** `[TESTING]`  
+**Status:** `[DONE]`  
 **Phase:** 1  
 **Depends on:** **TASK-134** `[DONE]`; BUILD B rebuild in progress  
 **Branch:** `task/TASK-132-vcc3v3-lcd0-active-low-pfet` (same branch as TASK-134)
@@ -78,13 +78,13 @@ Tasks are sorted by dependency order. Do not reorder.
 
 **Acceptance (owner — bench Step B2):** Flash BUILD B WIC. `dmesg | grep -i jadard` — must show **`FAE page-4 clock fix`** and **`FAE TE on`**; must NOT show **`BIST armed`**. **`GET_POWER_MODE(0x0A) pre-TE`** — check bit **0x80** (booster) and **0x04** (display-on). `modetest -s 191@112:#0 -P 96@112:800x1280+0+0 -F tiles -v`; photo. All results logged with artifact triple (WIC SHA-256 + dmesg signature + `git rev-parse HEAD`).
 
-**A1 review notes:** [pending — gated on bench Step B2]
+**A1 review notes (`[DONE]` 2026-06-13):** BUILD B bench complete. `0x0A=0x1c` — clock fix worked (DISON latched), booster still off. Canonical WIC `dd5be78d…` / git `e19ae16` retired from disk but reproducible. Result superseded by DIAG15 + H4a tests (TASK-136). See `diary/STATE-2026-06-10.md` for full artifact ledger.
 
 ---
 
 ### TASK-136 — [Phase 1] Diagnostic patches 0015 + 0016 — DIAG15 + H4a test
 
-**Status:** `[REVIEW]`  
+**Status:** `[DONE]`  
 **Phase:** 1  
 **Depends on:** BUILD B `[TESTING]` (bench result `0x0A=0x1c`); implemented 2026-06-10  
 **Branch:** `task/TASK-132-vcc3v3-lcd0-active-low-pfet`
@@ -100,12 +100,13 @@ Tasks are sorted by dependency order. Do not reorder.
 
 **On-target results (all builds):**
 
-| Build | WIC SHA | git | `0x0A` result |
+| Build | WIC SHA | git (full) | `0x0A` result |
 |---|---|---|---|
-| BIST v1 | `…151107` | `d2ce5af7` | `0x18` (booster off, DISON not latched) |
-| BUILD B | `dd5be78d…` | `e19ae16` | `0x1c` (booster off, DISON latched) |
-| DIAG15 | `22a40d74…` | `2f4229d` | `0x1c`; `0x0F=0xC0`; `0x04=0x93`; `0x45=0x00` |
-| H4a | `0b486efe…` | `883b364` | **`0x08`** (panel soft-reset; sleep-out + DISON cleared) |
+| BIST v1 | `d2ce5af7…` (retired) | `e376021…` (pre-artifact-triple) | `0x18` (booster off, DISON not latched) |
+| BUILD B | `dd5be78d…` (retired) | `e19ae163b81db9c08b1b04813b313079787f0ff0` | `0x1c` (booster off, DISON latched) |
+| DIAG15 | `22a40d74…` (retired) | `2f4229d6fbb6bb465fc2f0a837eb05cef11a0da5` | `0x1c`; `0x0F=0xC0`; `0x04=0x93`; `0x45=0x00` |
+| H4a | `0b486efe…` (retired) | `d9efddac473621938da759a94c041a85ea35ad56` | **`0x08`** (panel soft-reset; sleep-out + DISON cleared) |
+| DIAG15 rev | `e215a94a…` (**on disk**) | `5e1812775f2e9c5e4d9cbef4ab88f954b4f3136f` | `0x1c` (confirmed on-target; H4a absent) |
 
 **DIAG15 conclusions:**
 - `0x0F = 0xC0`: IC logic healthy, all registers loaded → H4b and H6 **eliminated**
@@ -117,43 +118,108 @@ Tasks are sorted by dependency order. Do not reorder.
 - `E3` on page 1 = BIST preparation command, not production booster enable
 - **H4a ELIMINATED**; booster still off regardless
 
-**Software investigation: CLOSED. H1 (VDDIN supply sag) is the only remaining hypothesis.**
+**Software investigation: CLOSED** for init/register path. Bench priority: **H1b → H5 → H-HSclk (confirmatory)**. See `diary/STATE-2026-06-13-vendor-reply.md`.
 
-**A1 review notes:** TASK-136 produced definitive results. Patch 0016 (H4a) eliminated the last software hypothesis. `0x0F=0xC0` eliminated H4b and H6. All three non-supply hypotheses closed. Next action is owner hardware: K1 (wire resistance) + K2 (ammeter) + TASK-138 (vendor email update).
+**A1 review notes (`[DONE]` 2026-06-13):** Bench order: pin-3 DMM first, lanes scope second, CLK@SLPOUT confirmatory. H-HSclk downgraded scope-gated/LOW.
 
 ---
 
-### TASK-138 — [Phase 1] Patch 0017 — H7 delayed-rewake after HS video enable
+### TASK-140 — [Phase 1] Vendor clock-match — `jadard: VENDOR-CLOCK-MATCH`
+
+**Status:** `[TESTING]` — built + flashed 2026-06-13; software vendor-matched, glass still black → hardware gate  
+**Phase:** 1  
+**Depends on:** Vendor thread locked (`diary/STATE-2026-06-13-vendor-reply.md`)  
+**Branch:** `task/TASK-139-dcs-init` (carried; patch 0019 added)
+
+**Authority:** Vendor init file PLL_CLOCK=420 + 5 Jun “MIPI rate mismatch” + Q1 reset diagram (XRES low 20 ms).
+
+**Delivered (patch `0019-drm-panel-jadard-lmt101-vendor-clock-match.patch`):**
+1. **Lane rate 420, not 468** — `jadard_dsi_probe()`: drop `MIPI_DSI_MODE_VIDEO_BURST` for **all** LMT101 enable seqs (`jadard_is_lmt101_enable_seq`). Non-burst → host runs 70 MHz × 24 / 4 = **420 Mbps**. Legacy cz101 keeps burst.
+2. **Q1 reset 20 ms** — `jadard_prepare()`: XRES low pulse `msleep(10)` → `msleep(20)` (vendor Q1; matches the sequence the customer reported and the vendor confirmed lit).
+3. Sentinel `jadard: VENDOR-CLOCK-MATCH`. Init table, porches, FAE page-4 clock (0011/0013), tail, DIAG15 reads **unchanged**.
+
+**Scope note:** Vendor 13 Jun Q2 says LP-at-0x11 / late HS does **not** block lighting (integrated boost on RC osc). So patch 0019 matches the vendor's stated PLL_CLOCK=420 and Q1 reset; it does **not** force continuous-HS-before-init (vendor says not required). HS-before-init deferred unless bench scope shows otherwise.
+
+**`bbappend`:** `0019` active after `0018`. **Build:** `cleansstate` + `virtual/kernel` + WIC. **`do_patch: Succeeded`**.
+
+**Acceptance (owner bench):** flash WIC; `dmesg` shows `jadard: VENDOR-CLOCK-MATCH` + `final DSI-Link bandwidth: 420 x 4 Mbps`; XRES low ≈ 20 ms; `modetest` + DIAG15 (`0x0A`/`0x0F`/`0x45`) vs baseline; photo. Bench: backlight **9.6 V**, VDDIN 75 mA/scope, CLK+D1–D3 scope. Artifact triple below.
+
+**Artifact triple:**
+
+| Field | Value |
+|---|---|
+| WIC SHA-256 | `7dbf72d902a580c05db0d236665b18eaf227309395104257efa075c3ea1217a7` |
+| WIC file | `core-image-minimal-elevator-hmi-em3566.rootfs-20260613123616.wic` (symlink `…-vendor-clock-match.wic`, `…rootfs.wic`) |
+| git HEAD | `d9565d644d76f37120c138d7ea4f5e42b72294b8` (+ uncommitted 0019 + bbappend) |
+| dmesg signature | `jadard: VENDOR-CLOCK-MATCH` + `final DSI-Link bandwidth: 420 x 4 Mbps` (required on target) |
+
+Build: `BUILD_EXIT_CODE=0`; driver `.o` `strings` confirm sentinel + 20 ms reset compiled in.
+
+**On-target result (2026-06-13):** `mode_flags 0x203→0x201` (burst dropped, 420 live), reset 20 ms applied. Panel registers **byte-identical to baseline** — `0x0A=0x1c`, `0x0F=0xc0`, `0x45=0x00`, ID `93 00 00`. **Glass still black.** Rate/reset were not the cause. **Software path closed/exhausted + fully vendor-matched.** `0x45=0x00` (TCON not running) with a digitally-healthy IC ⇒ external JD5001 analog boost not producing AVDD/AVEE = electrical/panel fault.
+
+**A1 review notes (`[TESTING]` 2026-06-13):** Firmware complete and vendor-matched; mark software-done, gate is hardware bench. Remaining = vendor's 3 steps: **VDDIN inrush scope (PRIME)**, BL 9.6 V, MIPI lane scope; + **H6/TASK-137 spare-panel swap**.
+
+**BIST diagnostic image (patch 0020 — vendor TEST 2, 2026-06-13):** Arms `F0,55/F1,AA/E0,01/E3,01` at the end of the FAE_CLOCK path so BIST runs *with* the full init code (vendor requirement). DIAG15 reads captured before BIST arm. Diagnostic only — E3,01 soft-resets the video engine. WIC `vendor-clock-bist` SHA `11d740455c39403cabb4ed3cd010d4be1149f3ef8643db824f96fdbe8b35b8a4`, git `d9565d6`+0019+0020, dmesg `jadard: BIST armed (FAE_CLOCK + vendor TEST 2)`. Full summary: `docs/LMT101-VENDOR-FINAL-SUMMARY.md`. Bench: flash → does self-test pattern show? pattern=source alive (chase video); black=analog boost dead (hardware/sample).
+
+---
+
+### TASK-139 — [Phase 1] H-pkt — `jadard: DCS-INIT` (generic → DCS init burst)
+
+**Status:** `[DONE]`  
+**Phase:** 1  
+**Depends on:** Owner ACK 2026-06-13 ✓  
+**Branch:** `task/TASK-139-dcs-init`
+
+**Hypothesis (H-pkt):** 196-entry init uses `mipi_dsi_generic_write()` (patch `0006` / TASK-127). Mainline uses `mipi_dsi_dcs_write_buffer()`.
+
+**Output notes (A2 — 2026-06-13):**
+- **`0018-drm-panel-jadard-lmt101-dcs-init.patch`** — `jadard_init_sequence()`: `generic_write` → `dcs_write_buffer`; sentinel `jadard: DCS-INIT`
+- **`linux-rockchip_%.bbappend`** — 0018 after 0015
+- **Build:** `cleansstate` + `virtual/kernel` + `core-image-minimal` WIC → exit 0
+- **Kernel verify:** `strings Image | grep DCS-INIT` → `jadard: DCS-INIT`
+- **Artifact triple:**
+
+| Field | Value |
+|---|---|
+| **WIC SHA-256** | `171ba011be2c012437f261a27062a41563633ac54b8d9424196a49ad88a1fd24` |
+| **WIC file** | `core-image-minimal-elevator-hmi-em3566.rootfs-20260613113555.wic` |
+| **Symlink** | `core-image-minimal-elevator-hmi-em3566.rootfs-dcs-init.wic` |
+| **git HEAD** | `d9565d644d76f37120c138d7ea4f5e42b72294b8` (+ uncommitted 0018 at build) |
+| **dmesg signature** | `jadard: DCS-INIT` (required on target) |
+
+**Acceptance (owner bench):** ✓ **2026-06-13**
+
+```
+jadard: DCS-INIT present
+0x0A=0x1c  0x0F=0xC0  0x45=0x00  ID=0x93 — identical to generic baseline
+Glass: black
+```
+
+**Verdict: H-pkt RULED OUT.** Init/register/packet path exhausted.
+
+**A1 review notes (`[DONE]` 2026-06-13):** H-pkt dead by direct test. Vendor checklist locked — 3 mismatches (420/468, HS@0x11, BL 9.6V). **TASK-140** gated for clock-match only.
+
+---
+
+### TASK-138 — [Phase 1] H-HSclk — `jadard: HSCLK` *(scope-gated / LOW — not prime)*
 
 **Status:** `[BLOCKED]`  
 **Phase:** 1  
-**Depends on:** **HW-5** scope measurement (MIPI CLK lane idle during wake window) — **must be logged** + **owner ACK** before A2 starts  
+**Depends on:** H1b + H5 bench clean **first**; then CLK @ SLPOUT scope; owner ACK only if scope shows anomaly  
 **Branch:** (to be created by A2 when unblocked)
 
-**Hypothesis (H7):** In burst video mode, the MIPI clock lane goes LP-idle between bursts. If the clock lane is LP during the window when SLPOUT/DISON are sent (~3.5 s boot), the panel's internal power-state machine (booster startup) may not complete — because the JD9365D requires a continuous HS clock during the wake sequence. A re-issue of 0x11→0x29 approximately 1 s after HS video has been running (clock continuously HS) would test whether the booster starts when the clock is guaranteed active.
+**Precise observation (not CLOCK_NON_CONTINUOUS gating):** `mode_flags=0x203` — CLOCK_NON_CONTINUOUS **not** set. Clock lane is **LP during entire init/SLPOUT**; HS ~140 ms later at video. Vendor **Q2** says late HS should light panel (on-chip RC boost). Vendor **check 2** contradicts Q2. **Do not treat as confirmed software defect.**
 
-**Gate — mandatory before A2 starts:**
-1. **HW-5:** Owner scopes MIPI CLK lane (FPC pin 14/15) during 0–5 s boot window and logs: (a) whether clock lane is LP during the ~3.5 s SLPOUT/DISON window, (b) approximate LP duration.
-2. **Owner ACK:** Explicit instruction from A1 to proceed after reviewing HW-5 result.
+**Hypothesis tier:** **scope-gated / LOW** — below **H1b (HIGH)** and **H5 (PRIME)**.
 
-**Spec (when unblocked):**
-- Base: BUILD B + DIAG15 (patches 0011+0013+0015, current tree)
-- Add patch 0017 only: schedule a `delayed_work` item approximately **1 s after `drm_panel_prepare()` returns** (i.e., after HS video is already running from the DRM/VOP side)
-- Delayed work re-issues: `SLPOUT → msleep(120) → DISON → msleep(50) → read 0x0A → read 0x45`
-- Signature line (required for artifact triple): `jadard: REWAKE17`
-- No other changes — no init table edits, no lane count, no mode line, no descriptor changes
-- `cleansstate` before build; artifact triple on every WIC
+**Gate before A2 starts:**
+1. Owner: pin-3 DMM + D1–D3 scope during `modetest` (results logged)
+2. Owner: CLK @ SLPOUT (confirmatory, same session)
+3. Owner ACK **only if** CLK scope anomalous **and** H1b + H5 clean
 
-**Acceptance (on-target after HW-5 + owner ACK + flash):**
-```
-dmesg | grep "jadard:"
-jadard: REWAKE17        ← delayed work fired
-jadard: GET_POWER_MODE(0x0A) pre-TE=0x9c   ← H7 CONFIRMED (booster started)
-  OR
-jadard: GET_POWER_MODE(0x0A) pre-TE=0x1c   ← H7 NOT confirmed, escalate H1/vendor
-```
+**Spec (when unblocked):** Vendor baseline; single `jadard: HSCLK` patch. Contingent — not default next step.
 
-**A1 review notes:** [BLOCKED — awaiting HW-5 scope + owner ACK. Do not start.]
+**A1 review notes:** [BLOCKED — H-HSclk downgraded 2026-06-13; vendor Q2 vs check 2 unresolved by argument; scope decides]
 
 ---
 

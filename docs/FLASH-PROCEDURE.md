@@ -6,6 +6,92 @@ Run `**rkdeveloptool**` on the **host** (not inside a Docker/kas-only environmen
 
 ---
 
+## VENDOR-MATCH (no-BIST) — Current canonical image (2026-06-13)
+
+**This is the image to flash now.** Full vendor-match: 420 Mbps lane rate (`rockchip,lane-rate=420`), 20 ms XRES low pulse, max-drive pinctrl on GPIO0_C6, BIST disarmed, DCS init packets, FAE page-4 clock fix, DIAG15 reads.
+
+| Field | Value |
+|---|---|
+| **Symlink** | `core-image-minimal-elevator-hmi-em3566.rootfs-vendor-match.wic` |
+| **Timestamped file** | `core-image-minimal-elevator-hmi-em3566.rootfs-20260613143254.wic` |
+| **WIC SHA-256** | `438091efd2063076ac9f78e9c39b95dc0afcce3e8f1c95f4d4c340d69e2bd35b` |
+| **git HEAD at build** | `task/TASK-132-vcc3v3-lcd0-active-low-pfet` branch, post-0019+0020(disabled)+0021 |
+| **Required dmesg sentinel** | `jadard: VENDOR-CLOCK-MATCH` + `jadard: FAE page-4 clock fix` + `jadard: DCS-INIT` + `jadard: DIAG15` |
+
+### Flash commands (vendor-match image)
+
+```bash
+# ── 0. From repository root ──────────────────────────────────────────
+DEPLOY=build/tmp/deploy/images/elevator-hmi-em3566
+WIC=core-image-minimal-elevator-hmi-em3566.rootfs-vendor-match.wic
+
+# ── 1. Verify SHA before touching the board ──────────────────────────
+sha256sum "$DEPLOY/$WIC"
+# Expected: 438091efd2063076ac9f78e9c39b95dc0afcce3e8f1c95f4d4c340d69e2bd35b
+
+# ── 2. Enter Maskrom ─────────────────────────────────────────────────
+#    Power OFF → hold RECOVERY → plug USB OTG → release after 2 s
+lsusb | grep 2207
+# 2207:350a = Maskrom  →  run db first (below)
+# 2207:0006 = Loader   →  skip db, go straight to wl
+
+# ── 3a. Flash — Maskrom mode (2207:350a) ─────────────────────────────
+cd "$DEPLOY"
+sudo rkdeveloptool db loader.bin
+sudo rkdeveloptool wl 0    "$WIC"
+sudo rkdeveloptool wl 64   idblock.img
+sudo rkdeveloptool wl 0x4000 uboot.img
+sudo rkdeveloptool rd
+
+# ── 3b. Flash — Loader mode (2207:0006, skip db) ─────────────────────
+# cd "$DEPLOY"
+# sudo rkdeveloptool wl 0    "$WIC"
+# sudo rkdeveloptool wl 64   idblock.img
+# sudo rkdeveloptool wl 0x4000 uboot.img
+# sudo rkdeveloptool rd
+```
+
+### After reboot — open serial console
+
+```bash
+sudo minicom -D /dev/ttyACM0 -b 1500000
+# (8N1, no flow control; ttyUSB0 or 115200 baud on some setups — check BRINGUP-CHECKLIST §4)
+```
+
+### Post-flash validation (on board as `root`)
+
+```bash
+# ── MANDATORY: confirm correct image loaded ───────────────────────────
+dmesg | grep -i jadard
+# MUST see ALL of:
+#   jadard: DCS-INIT
+#   jadard: VENDOR-CLOCK-MATCH — VIDEO non-burst (PLL_CLOCK=420)
+#   jadard: FAE page-4 clock fix (pre-SLPOUT)
+#   jadard: XRES assert  / jadard: XRES release
+#   jadard: SLPOUT sent  / jadard: DISON sent
+#   jadard: GET_POWER_MODE(0x0A) pre-TE=0x??  ← record; expect 0x1c
+#   jadard: DIAG15 0x0F=0xC0 0x04=0x93 0x45=0x00
+# MUST NOT see: jadard: BIST armed
+
+# ── DSI link bandwidth ────────────────────────────────────────────────
+dmesg | grep -iE "dsi-link|bandwidth"
+# Expected: "final DSI-Link bandwidth: 420 x 4 Mbps = 1680 Mbps"
+
+# ── Modeset + scanout ─────────────────────────────────────────────────
+CONN=$(modetest -M rockchip 2>&1 | awk '/connected/ && /DSI/ {print $1; exit}')
+echo "Connector: $CONN"
+modetest -M rockchip -s ${CONN}@112:#0 -P 96@112:800x1280+0+0 -F tiles -v
+# Expect: 60 Hz sustained; glass lit or backlit-black
+
+# ── Scope targets if glass still black ───────────────────────────────
+# H1b:  CON1 pin 3 (VDDIN, FPC pin 2/3) — must be stable ≥3.0 V at SLPOUT+120 ms
+# H5:   Set BL supply to exactly 9.6 V (currently 9.0 V → vendor spec 9.6 V)
+# H6:   Swap panel sample (fresh LMT101SX006C from stock / TASK-137)
+# CLK:  Scope MIPI CLK+D0 at video start (confirmatory; LP→HS transition)
+```
+
+---
+
 ## BUILD B — FAE clock fix (2026-06-10 canonical artifact)
 
 **Flash this for bench Step B2 (TASK-135).** Do not use `ls -t *.wic | head -1` for this target — use the exact filename.

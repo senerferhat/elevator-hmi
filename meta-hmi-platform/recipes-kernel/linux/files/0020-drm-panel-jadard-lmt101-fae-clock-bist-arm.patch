@@ -1,0 +1,59 @@
+From: Elevator HMI meta-hmi-platform
+Subject: [PATCH] drm: panel: jadard — LMT101 arm BIST on top of FAE_CLOCK init
+
+Vendor LCD Mall TEST 2 (5 Jun, re-affirmed 13 Jun 2026): the BIST self-test
+snippet (F0,55 / F1,AA / E0,01 / E3,01) must be run *with* the full init code,
+never standalone. This arms BIST at the end of the FAE_CLOCK enable path so the
+self-test runs on top of the complete vendor-matched init: 196-pair table +
+page-4 MIPI clock fix + 420 Mbps non-burst (0019) + Q1 20 ms reset + DIAG15
+read-back. The DIAG15 register reads (0x0A/0x0F/0x45) are captured BEFORE the
+BIST arm, so the diagnostic verdict is preserved.
+
+DIAGNOSTIC BUILD ONLY: E3,01 soft-resets the display engine (observed
+0x0A -> 0x08), so the normal video path will not survive. Flash the non-BIST
+vendor-clock-match image for production scanout. Sentinel:
+"jadard: BIST armed (FAE_CLOCK + vendor TEST 2)".
+
+---
+diff --git a/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c b/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
+--- a/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
++++ b/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
+@@ -248,6 +248,38 @@ static int jadard_enable(struct drm_panel *panel)
+ 			dev_info(dev, "jadard: DIAG15\n");
+ 		}
+ 
++		if (desc->enable_seq == JADARD_ENABLE_SEQ_LMT101_FAE_CLOCK) {
++			/*
++			 * Vendor TEST 2 (LCD Mall 5 Jun / re-affirmed 13 Jun): arm
++			 * the BIST self-test ON TOP of the full init code + page-4
++			 * clock fix. F0,55 / F1,AA unlock; E0,01 select page 1;
++			 * E3,01 enable self-test. Vendor: never run the BIST snippet
++			 * without the init code. Diagnostic build only -- E3,01
++			 * soft-resets the display engine, so the normal video path
++			 * does not survive; flash the non-BIST vendor-clock-match
++			 * image for production scanout.
++			 */
++			static const u8 fae_bist[][JD9365DA_INIT_CMD_LEN] = {
++				{ 0xF0, 0x55 },
++				{ 0xF1, 0xAA },
++				{ 0xE0, 0x01 },
++				{ 0xE3, 0x01 },
++			};
++			unsigned int b;
++
++			for (b = 0; b < ARRAY_SIZE(fae_bist); b++) {
++				err = jadard_generic_reg_val(dsi, dev,
++							     fae_bist[b][0],
++							     fae_bist[b][1]);
++				if (err < 0) {
++					rc = err;
++					goto enable_done;
++				}
++			}
++			msleep(500);
++			dev_info(dev, "jadard: BIST armed (FAE_CLOCK + vendor TEST 2)\n");
++		}
++
+ 		if (desc->enable_seq == JADARD_ENABLE_SEQ_LMT101_FAE_BIST) {
+ 			static const u8 fae_bist[][JD9365DA_INIT_CMD_LEN] = {
+ 				{ 0xF0, 0x55 },

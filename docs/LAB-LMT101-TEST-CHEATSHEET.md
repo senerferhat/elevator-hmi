@@ -13,13 +13,15 @@ Print this page. Run phases in order. Record **PASS / FAIL** and measured voltag
 
 ## 1. Pin map (what the software actually drives)
 
-| CON1 pin | Net | SoM signal | Linux GPIO | Role | Idle PASS (DMM) |
-|----------|-----|------------|------------|------|-----------------|
-| **5, 6** | VCC3V3_LCD | (carrier Q17 output) | — | Panel **3.3 V logic** | **~3.3 V** |
-| **11** | TOUCH_RST | GPIO0_C6 / SPI0_CS0_M0 | **gpio-22** `reset` | Panel **XRES** (active-low) | **~3.3 V** (reset released) |
-| **13** | LCD_PWREN_H | GPIO0_C7 | gpio-23 | **Not** the main rail switch | don't use for rail pass/fail |
-| **14** | LCD_BL_PWM | PWM (backlight dim) | — | Backlight PWM | scope optional |
-| — | (carrier only) | **PWM0_M0** / GPIO0_B7 | **gpio-15** `vcc3v3-lcd0-n` | **Switches VCC3V3_LCD** (Q18→Q17) | debugfs **`out hi`** |
+
+| CON1 pin | Net            | SoM signal             | Linux GPIO                  | Role                              | Idle PASS (DMM)              |
+| -------- | -------------- | ---------------------- | --------------------------- | --------------------------------- | ---------------------------- |
+| **5, 6** | VCC3V3_LCD     | (carrier Q17 output)   | —                           | Panel **3.3 V logic**             | **~3.3 V**                   |
+| **11**   | TOUCH_RST      | GPIO0_C6 / SPI0_CS0_M0 | **gpio-22** `reset`         | Panel **XRES** (active-low)       | **~3.3 V** (reset released)  |
+| **13**   | LCD_PWREN_H    | GPIO0_C7               | gpio-23                     | **Not** the main rail switch      | don't use for rail pass/fail |
+| **14**   | LCD_BL_PWM     | PWM (backlight dim)    | —                           | Backlight PWM                     | scope optional               |
+| —        | (carrier only) | **PWM0_M0** / GPIO0_B7 | **gpio-15** `vcc3v3-lcd0-n` | **Switches VCC3V3_LCD** (Q18→Q17) | debugfs `**out hi`**         |
+
 
 **Wiring reminders**
 
@@ -39,13 +41,15 @@ BusyBox note: use `head -n 20`, not `head -20`.
 
 ### libgpiod (reset line diagnostics)
 
-Image includes **`libgpiod-tools`**: `gpiodetect`, `gpioinfo`, `gpioset`.
+Image includes `**libgpiod-tools**`: `gpiodetect`, `gpioinfo`, `gpioset`.
 
-| Item | Value |
-|------|--------|
-| Panel **XRES** / `reset-gpios` | **`gpiochip0` line `22`** (= **gpio-22**, CON1 **pin 11**) |
-| Idle | **out hi** in debugfs (~3.3 V at pin 11) |
-| `gpioset gpiochip0 22=…` while `jadard` loaded | **`Device or resource busy`** = **PASS** (driver owns the line) |
+
+| Item                                           | Value                                                           |
+| ---------------------------------------------- | --------------------------------------------------------------- |
+| Panel **XRES** / `reset-gpios`                 | `**gpiochip0` line `22`** (= **gpio-22**, CON1 **pin 11**)      |
+| Idle                                           | **out hi** in debugfs (~3.3 V at pin 11)                        |
+| `gpioset gpiochip0 22=…` while `jadard` loaded | `**Device or resource busy`** = **PASS** (driver owns the line) |
+
 
 ```bash
 gpiodetect
@@ -61,27 +65,31 @@ gpioset -m time -s 1 gpiochip0 22=0 2>&1   # expect EBUSY when driver bound
 
 ### Phase A — Boot and image sanity
 
-| Step | Command | PASS when |
-|------|---------|-----------|
-| A1 | Power on, watch UART | U-Boot → Linux → **`login:`** prompt |
-| A2 | `root` + Enter | Shell prompt `#` |
-| A3 | `uname -r` | Contains **`6.1`** |
-| A4 | `cat /proc/device-tree/compatible` | Includes **`boardcon,em3566`** or project board string |
-| A5 | `ls -la /boot/*.dtb /boot/Image` | **`elevator-hmi-boardcon-em3566-v3.dtb`** present |
-| A6 | `grep -i jadard /boot/config-* 2>/dev/null \|\| zcat /proc/config.gz 2>/dev/null \| grep JADARD` | **`CONFIG_DRM_PANEL_JADARD_JD9365DA_H3=y`** |
+
+| Step | Command                                                                                       | PASS when                                              |
+| ---- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| A1   | Power on, watch UART                                                                          | U-Boot → Linux → `**login:`** prompt                   |
+| A2   | `root` + Enter                                                                                | Shell prompt `#`                                       |
+| A3   | `uname -r`                                                                                    | Contains `**6.1**`                                     |
+| A4   | `cat /proc/device-tree/compatible`                                                            | Includes `**boardcon,em3566**` or project board string |
+| A5   | `ls -la /boot/*.dtb /boot/Image`                                                              | `**elevator-hmi-boardcon-em3566-v3.dtb**` present      |
+| A6   | `grep -i jadard /boot/config-* 2>/dev/null || zcat /proc/config.gz 2>/dev/null | grep JADARD` | `**CONFIG_DRM_PANEL_JADARD_JD9365DA_H3=y**`            |
+
 
 ---
 
 ### Phase B — GPIO and regulator (no panel modeset yet)
 
-| Step | Command | PASS when |
-|------|---------|-----------|
-| B1 | `cat /sys/kernel/debug/gpio \| grep -E 'gpio-1[45]|gpio-22\|lcd\|reset'` | **gpio-15** → `vcc3v3-lcd0-n` **`out hi`** · **gpio-22** → `reset` **`out hi`** · **no gpio-14** (I2C B6) |
-| B2 | `cat /sys/kernel/debug/regulator/vcc3v3_lcd0_n/enable` | **`1`** |
-| B3 | `cat /sys/kernel/debug/regulator/vcca_1v8/enable` | **`1`** |
-| B4 | `ls /sys/class/drm/card*-*` | At least one connector; **`...-DSI-1`** or similar exists |
 
-**FAIL hints:** gpio-15 **`out lo`** → LCD rail software off · gpio-22 **`out lo`** → panel held in reset.
+| Step | Command                                                | PASS when                                                 |
+| ---- | ------------------------------------------------------ | --------------------------------------------------------- |
+| B1   | `cat /sys/kernel/debug/gpio | grep -E 'gpio-1[45]      | gpio-22|lcd|reset'`                                       |
+| B2   | `cat /sys/kernel/debug/regulator/vcc3v3_lcd0_n/enable` | `**1**`                                                   |
+| B3   | `cat /sys/kernel/debug/regulator/vcca_1v8/enable`      | `**1**`                                                   |
+| B4   | `ls /sys/class/drm/card*-*`                            | At least one connector; `**...-DSI-1**` or similar exists |
+
+
+**FAIL hints:** gpio-15 `**out lo`** → LCD rail software off · gpio-22 `**out lo**` → panel held in reset.
 
 ---
 
@@ -89,13 +97,15 @@ gpioset -m time -s 1 gpiochip0 22=0 2>&1   # expect EBUSY when driver bound
 
 Measure **CON1 pin vs GND (pin 3 or 4)**. FPC connected unless doing no-load rail check.
 
-| Step | Measurement point | PASS when | FAIL means |
-|------|-------------------|-----------|------------|
-| C1 | **Pin 5 or 6** (VCC3V3_LCD) | **2.9–3.6 V** | Rail off or Plan B missing + gpio-15 wrong |
-| C2 | **Pin 11** (RESET / XRES) | **2.9–3.6 V** | Reset stuck active (check gpio-22, wiring) |
-| C3 | **Pin 9** (I2C SCL) | **~3.3 V** idle | OK if high (not used for reset) |
-| C4 | **Pin 10** (I2C SDA) | **~3.3 V** idle | OK if high (not used for reset) |
-| C5 | **Pin 13** (LCD_PWREN_H) | any | **Informational only** — not rail switch |
+
+| Step | Measurement point           | PASS when       | FAIL means                                 |
+| ---- | --------------------------- | --------------- | ------------------------------------------ |
+| C1   | **Pin 5 or 6** (VCC3V3_LCD) | **2.9–3.6 V**   | Rail off or Plan B missing + gpio-15 wrong |
+| C2   | **Pin 11** (RESET / XRES)   | **2.9–3.6 V**   | Reset stuck active (check gpio-22, wiring) |
+| C3   | **Pin 9** (I2C SCL)         | **~3.3 V** idle | OK if high (not used for reset)            |
+| C4   | **Pin 10** (I2C SDA)        | **~3.3 V** idle | OK if high (not used for reset)            |
+| C5   | **Pin 13** (LCD_PWREN_H)    | any             | **Informational only** — not rail switch   |
+
 
 Optional no-load rail check (FPC unplugged): repeat **C1** — still expect **~3.3 V** with `regulator-always-on`.
 
@@ -103,13 +113,15 @@ Optional no-load rail check (FPC unplugged): repeat **C1** — still expect **~3
 
 ### Phase D — DRM / DSI / panel driver (software)
 
-| Step | Command | PASS when |
-|------|---------|-----------|
-| D1 | `modetest -M rockchip 2>&1 \| head -n 80` | Line with **`DSI-1`** and **`connected`** |
-| D2 | `modetest -M rockchip 2>&1 \| awk '/connected/ && /DSI-1/ {print $1; exit}'` | Prints connector id (often **`191`**) |
-| D3 | `cat /sys/class/drm/card*-DSI-*/status` | **`connected`** |
-| D4 | `dmesg \| grep -iE 'jadard\|jd9365\|panel\|dsi' \| tail -n 30` | **`jadard`** probe OK · **no repeating `-517`** defer loop · **no** `init cmd` / `generic_write` errors |
-| D5 | `ls /sys/bus/platform/drivers/jadard-jd9365da/` | Directory exists (driver bound) |
+
+| Step | Command                                                                     | PASS when                                                                                               |
+| ---- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| D1   | `modetest -M rockchip 2>&1 | head -n 80`                                    | Line with `**DSI-1`** and `**connected**`                                                               |
+| D2   | `modetest -M rockchip 2>&1 | awk '/connected/ && /DSI-1/ {print $1; exit}'` | Prints connector id (often `**191**`)                                                                   |
+| D3   | `cat /sys/class/drm/card*-DSI-*/status`                                     | `**connected**`                                                                                         |
+| D4   | `dmesg | grep -iE 'jadard|jd9365|panel|dsi' | tail -n 30`                   | `**jadard**` probe OK · **no repeating `-517`** defer loop · **no** `init cmd` / `generic_write` errors |
+| D5   | `ls /sys/bus/platform/drivers/jadard-jd9365da/`                             | Directory exists (driver bound)                                                                         |
+
 
 ---
 
@@ -117,11 +129,13 @@ Optional no-load rail check (FPC unplugged): repeat **C1** — still expect **~3
 
 **Important:** `modetest -s` **blocks** until Ctrl+C. For a steady picture, leave it running.
 
-| Step | Command | PASS when |
-|------|---------|-----------|
-| E1 | `CONN=$(modetest -M rockchip 2>&1 \| awk '/connected/ && /DSI-1/ {print $1; exit}'); echo "CONN=$CONN"` | `CONN=191` (or similar, not empty) |
-| E2 | `modetest -M rockchip -s ${CONN}:#0` | First line like **`setting mode 800x1280`** · **no immediate error** · leave running for visual check |
-| E3 | (second terminal or after E2) `dmesg \| tail -n 40` | No new **jadard** errors after modeset |
+
+| Step | Command                                                                                                | PASS when                                                                                             |
+| ---- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| E1   | `CONN=$(modetest -M rockchip 2>&1 | awk '/connected/ && /DSI-1/ {print $1; exit}'); echo "CONN=$CONN"` | `CONN=191` (or similar, not empty)                                                                    |
+| E2   | `modetest -M rockchip -s ${CONN}:#0`                                                                   | First line like `**setting mode 800x1280`** · **no immediate error** · leave running for visual check |
+| E3   | (second terminal or after E2) `dmesg | tail -n 40`                                                     | No new **jadard** errors after modeset                                                                |
+
 
 **Quick non-blocking smoke (optional):**
 
@@ -132,31 +146,35 @@ sleep 3
 kill %1 2>/dev/null; head -n 5 /tmp/modetest.log
 ```
 
-PASS: log contains **`setting mode 800x1280`**.
+PASS: log contains `**setting mode 800x1280**`.
 
 ---
 
 ### Phase F — Backlight and bundled script
 
-| Step | Command | PASS when |
-|------|---------|-----------|
-| F1 | `ls /sys/class/backlight/` | At least one entry (e.g. **`backlight`**) |
-| F2 | `cat /sys/class/backlight/*/brightness` | Numeric (e.g. **200**) |
-| F3 | `cat /sys/class/backlight/*/max_brightness 2>/dev/null \|\| cat /sys/class/backlight/*/max` | **255** or similar |
-| F4 | `echo 255 > /sys/class/backlight/backlight/brightness` (adjust path if needed) | No error |
-| F5 | `test-display` | Script exits **0** · shows **DSI-1 connected** · **setting mode 800x1280** in log |
+
+| Step | Command                                                                                   | PASS when                                                                         |
+| ---- | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| F1   | `ls /sys/class/backlight/`                                                                | At least one entry (e.g. `**backlight**`)                                         |
+| F2   | `cat /sys/class/backlight/*/brightness`                                                   | Numeric (e.g. **200**)                                                            |
+| F3   | `cat /sys/class/backlight/*/max_brightness 2>/dev/null || cat /sys/class/backlight/*/max` | **255** or similar                                                                |
+| F4   | `echo 255 > /sys/class/backlight/backlight/brightness` (adjust path if needed)            | No error                                                                          |
+| F5   | `test-display`                                                                            | Script exits **0** · shows **DSI-1 connected** · **setting mode 800x1280** in log |
+
 
 ---
 
 ### Phase G — Visual acceptance
 
-| Step | Check | PASS when |
-|------|-------|-----------|
-| G1 | With **E2** still running (or rerun E2) | Panel shows **test pattern / color bars** (not black) |
-| G2 | After **F4** max brightness | Backlight visibly on (may need external LED supply per carrier) |
-| G3 | Power cycle, repeat E2 once | Image returns (no one-shot only failure) |
 
-**Backlit black with all software PASS (2026-06-02):** Linux is **scanning** — use **Phase H** below. Next: **vendor FAE** (`docs/VENDOR-SUPPORT-LMT101-BRINGUP-EMAIL.txt`) + **MIPI scope** on CLK/D0. Not more `modetest` without **`-P 96`**.
+| Step | Check                                   | PASS when                                                       |
+| ---- | --------------------------------------- | --------------------------------------------------------------- |
+| G1   | With **E2** still running (or rerun E2) | Panel shows **test pattern / color bars** (not black)           |
+| G2   | After **F4** max brightness             | Backlight visibly on (may need external LED supply per carrier) |
+| G3   | Power cycle, repeat E2 once             | Image returns (no one-shot only failure)                        |
+
+
+**Backlit black with all software PASS (2026-06-02):** Linux is **scanning** — use **Phase H** below. Next: **vendor FAE** (`docs/VENDOR-SUPPORT-LMT101-BRINGUP-EMAIL.txt`) + **MIPI scope** on CLK/D0. Not more `modetest` without `**-P 96`**.
 
 ---
 
@@ -164,12 +182,14 @@ PASS: log contains **`setting mode 800x1280`**.
 
 Run after **Phase E** modeset OK but **G1 FAIL** (backlit only).
 
-| Step | Command | PASS when |
-|------|---------|-----------|
-| H1 | `mount -t debugfs none /sys/kernel/debug` | No error |
-| H2 | `cat /sys/kernel/debug/dri/0/state \| sed -n '/plane\[96\]/,/plane\[/p' \| head -n 12` | **plane[96]** `Smart1-win0`, **fb=**, **XR24**, **800x1280** |
-| H3 | `modetest -M rockchip -s 191@112:#0 -P 96@112:800x1280+0+0 -F tiles -v` | **`setting mode 800x1280`** · **`testing … plane 96`** · **`freq: 60.08Hz`** repeating |
-| H4 | Visual | **FAIL expected today:** backlit black despite H3 PASS — log **BLK-014** / email vendor |
+
+| Step | Command                                                                              | PASS when                                                                               |
+| ---- | ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| H1   | `mount -t debugfs none /sys/kernel/debug`                                            | No error                                                                                |
+| H2   | `cat /sys/kernel/debug/dri/0/state | sed -n '/plane\[96\]/,/plane\[/p' | head -n 12` | **plane[96]** `Smart1-win0`, **fb=**, **XR24**, **800x1280**                            |
+| H3   | `modetest -M rockchip -s 191@112:#0 -P 96@112:800x1280+0+0 -F tiles -v`              | `**setting mode 800x1280`** · `**testing … plane 96**` · `**freq: 60.08Hz**` repeating  |
+| H4   | Visual                                                                               | **FAIL expected today:** backlit black despite H3 PASS — log **BLK-014** / email vendor |
+
 
 **Wrong plane id:** `modetest -P 57@112` → `no unused plane` — use **96**, not **57**.
 
@@ -226,22 +246,24 @@ echo "  modetest -M rockchip -s ${CONN}:#0"
 **WIC SHA (verify before flash):** `dd5be78dec198a984dce271a658219b3e44006df58d04709a3bed66fbb9728ad`  
 **Tester:** ______________ **Date:** __________ **git HEAD:** `e19ae163`
 
-| Phase | Step | Measured / observed | PASS / FAIL |
-|-------|------|---------------------|-------------|
-| J0 | WIC SHA verified | dd5be78d… | |
-| J1 | dmesg: `FAE page-4 clock fix` present | yes / no | |
-| J1 | dmesg: `BIST armed` absent | yes / no | |
-| **J2** | **`GET_POWER_MODE(0x0A) pre-TE`** | **0x______** | |
-| J2 | Booster bit (0x80) | SET / CLEAR | |
-| J3 | FPC pin 2/3 (VDDIN) idle voltage | ______ V | |
-| J3 | FPC pin 2/3 VDDIN at SLPOUT | ______ V | |
-| J3 | Ammeter: current step at SLPOUT | ______ → ______ mA | |
-| C1 | CON1 pin 5/6 (VCC3V3_LCD) | ______ V | |
-| C2 | CON1 pin 11 (XRES idle) | ______ V | |
-| B1 | gpio-22 state | ______ | |
-| D1 | DSI-1 connected | yes / no | |
-| J4 | modetest plane 96 / 60 Hz | yes / no | |
-| J4 | **Visible pattern on glass** | **yes / no** | |
+
+| Phase  | Step                                  | Measured / observed | PASS / FAIL |
+| ------ | ------------------------------------- | ------------------- | ----------- |
+| J0     | WIC SHA verified                      | dd5be78d…           |             |
+| J1     | dmesg: `FAE page-4 clock fix` present | yes / no            |             |
+| J1     | dmesg: `BIST armed` absent            | yes / no            |             |
+| **J2** | `**GET_POWER_MODE(0x0A) pre-TE`**     | **0x______**        |             |
+| J2     | Booster bit (0x80)                    | SET / CLEAR         |             |
+| J3     | FPC pin 2/3 (VDDIN) idle voltage      | ______ V            |             |
+| J3     | FPC pin 2/3 VDDIN at SLPOUT           | ______ V            |             |
+| J3     | Ammeter: current step at SLPOUT       | ______ → ______ mA  |             |
+| C1     | CON1 pin 5/6 (VCC3V3_LCD)             | ______ V            |             |
+| C2     | CON1 pin 11 (XRES idle)               | ______ V            |             |
+| B1     | gpio-22 state                         | ______              |             |
+| D1     | DSI-1 connected                       | yes / no            |             |
+| J4     | modetest plane 96 / 60 Hz             | yes / no            |             |
+| J4     | **Visible pattern on glass**          | **yes / no**        |             |
+
 
 **Verdict (circle one):** BOOSTER UP / BOOSTER OFF-POWER / BOOSTER OFF-SOFTWARE / PASS
 
@@ -249,25 +271,29 @@ echo "  modetest -M rockchip -s ${CONN}:#0"
 
 ## 6. Quick FAIL → action
 
-| Symptom | Likely cause | Next check |
-|---------|--------------|------------|
-| Pin **5/6 ~0 V**, gpio-15 **lo** | Rail enable wrong or Q17 path | Re-flash latest WIC · scope PWM0_M0 (SoM pin 140) |
-| Pin **5/6 ~3.3 V**, pin **11 ~0.9 V** | Reset stuck | gpio-22 must be **hi** at idle · FPC pin 5 → CON1 pin 11 |
-| modetest OK, **backlit black** | Software complete — **BLK-014** | Phase **H** (plane **96**, `-F tiles -v`) · vendor email · scope CLK/D0 |
-| modetest OK, **pitch black** (no glow) | Backlight path | LED supply · **F4** · external 9 V |
-| **`dmesg` `-517` loop** | Regulator defer storm | Wrong/old DTB — use **20260521225949** or newer PWM0_M0 fix |
-| **`jadard` init errors** | DSI / init table | Paste full `dmesg \| grep -i jadard` to project log |
+
+| Symptom                                | Likely cause                    | Next check                                                              |
+| -------------------------------------- | ------------------------------- | ----------------------------------------------------------------------- |
+| Pin **5/6 ~0 V**, gpio-15 **lo**       | Rail enable wrong or Q17 path   | Re-flash latest WIC · scope PWM0_M0 (SoM pin 140)                       |
+| Pin **5/6 ~3.3 V**, pin **11 ~0.9 V**  | Reset stuck                     | gpio-22 must be **hi** at idle · FPC pin 5 → CON1 pin 11                |
+| modetest OK, **backlit black**         | Software complete — **BLK-014** | Phase **H** (plane **96**, `-F tiles -v`) · vendor email · scope CLK/D0 |
+| modetest OK, **pitch black** (no glow) | Backlight path                  | LED supply · **F4** · external 9 V                                      |
+| `**dmesg` `-517` loop**                | Regulator defer storm           | Wrong/old DTB — use **20260521225949** or newer PWM0_M0 fix             |
+| `**jadard` init errors**               | DSI / init table                | Paste full `dmesg | grep -i jadard` to project log                      |
+
 
 ---
 
 ### Phase I — FAE BIST v1 (BUILD A — historical, already flashed, result = BIST black)
 
-| Step | Result |
-|------|--------|
-| WIC | `…20260606151107` / SHA `d2ce5af7…` — **retired**, file gone from disk |
-| Boot | `jadard: BIST armed (500ms post-unlock)` confirmed in dmesg |
-| Glass | **Black** — `GET_POWER_MODE(0x0A) = 0x18` → booster bit D7 CLEAR |
+
+| Step       | Result                                                                                                                |
+| ---------- | --------------------------------------------------------------------------------------------------------------------- |
+| WIC        | `…20260606151107` / SHA `d2ce5af7…` — **retired**, file gone from disk                                                |
+| Boot       | `jadard: BIST armed (500ms post-unlock)` confirmed in dmesg                                                           |
+| Glass      | **Black** — `GET_POWER_MODE(0x0A) = 0x18` → booster bit D7 CLEAR                                                      |
 | Conclusion | Booster (JD5001 charge pump → AVDD/AVEE/VGH/VGL) never started. BIST black and video black share the same root cause. |
+
 
 ---
 
@@ -310,17 +336,19 @@ Expected flash time: ~4 min for 3.1 GiB WIC. `rd` triggers reboot — open UART 
 dmesg | grep -i jadard
 ```
 
-| Line | Expected | FAIL means |
-|------|----------|------------|
-| `jadard: dsi mode_flags=0x…` | Present | Driver not loaded |
-| `jadard: FAE page-4 clock fix (pre-SLPOUT)` | **MUST be present** | Wrong image flashed (BIST or old build) |
-| `jadard: BIST armed` | **MUST NOT appear** | Wrong descriptor selected — check bbappend |
-| `jadard: XRES assert` | Present | Reset GPIO not wired |
-| `jadard: XRES release` | Present | — |
-| `jadard: init table: 196 cmds, rc=0` | **`rc=0`** | Init table comms failure |
-| `jadard: SLPOUT sent` | Present | — |
-| `jadard: GET_POWER_MODE(0x0A) pre-TE=0x??` | **Record the hex value — it is the verdict** | — |
-| `jadard: FAE TE on (0x35,0x00)` | Present after power-mode read | — |
+
+| Line                                        | Expected                                     | FAIL means                                 |
+| ------------------------------------------- | -------------------------------------------- | ------------------------------------------ |
+| `jadard: dsi mode_flags=0x…`                | Present                                      | Driver not loaded                          |
+| `jadard: FAE page-4 clock fix (pre-SLPOUT)` | **MUST be present**                          | Wrong image flashed (BIST or old build)    |
+| `jadard: BIST armed`                        | **MUST NOT appear**                          | Wrong descriptor selected — check bbappend |
+| `jadard: XRES assert`                       | Present                                      | Reset GPIO not wired                       |
+| `jadard: XRES release`                      | Present                                      | —                                          |
+| `jadard: init table: 196 cmds, rc=0`        | `**rc=0`**                                   | Init table comms failure                   |
+| `jadard: SLPOUT sent`                       | Present                                      | —                                          |
+| `jadard: GET_POWER_MODE(0x0A) pre-TE=0x??`  | **Record the hex value — it is the verdict** | —                                          |
+| `jadard: FAE TE on (0x35,0x00)`             | Present after power-mode read                | —                                          |
+
 
 **Record the full jadard dmesg block verbatim and paste into `diary/PROGRESS.md`.**
 
@@ -330,12 +358,14 @@ dmesg | grep -i jadard
 
 Read the `GET_POWER_MODE(0x0A) pre-TE=0x??` value from J1:
 
-| `0x0A` value | Bit 7 (0x80) | Meaning | Next action |
-|---|---|---|---|
-| **`0x9C`** | **SET** | Booster up, sleep-out+normal+display-on | Glass test (J4) then modetest (J5). If still black → H5 lane continuity |
-| **`0x1c`** ← **current** | **CLEAR** | **Booster off, but DISON acknowledged (clock fix worked)** | **Phase K** — ammeter test + page-1 `E3` investigation |
-| `0x18` | **CLEAR** | Booster off, DISON not acknowledged | BIST v1 result; clock fix needed |
-| `0x08` | CLEAR | Booster off + sleep-out dropped | Brown-out on VDDIN during charge-pump start attempt → H1 (power) |
+
+| `0x0A` value             | Bit 7 (0x80) | Meaning                                                    | Next action                                                             |
+| ------------------------ | ------------ | ---------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `**0x9C`**               | **SET**      | Booster up, sleep-out+normal+display-on                    | Glass test (J4) then modetest (J5). If still black → H5 lane continuity |
+| `**0x1c`** ← **current** | **CLEAR**    | **Booster off, but DISON acknowledged (clock fix worked)** | **Phase K** — ammeter test + page-1 `E3` investigation                  |
+| `0x18`                   | **CLEAR**    | Booster off, DISON not acknowledged                        | BIST v1 result; clock fix needed                                        |
+| `0x08`                   | CLEAR        | Booster off + sleep-out dropped                            | Brown-out on VDDIN during charge-pump start attempt → H1 (power)        |
+
 
 **DCS 0x0A bit map:**
 
@@ -355,22 +385,26 @@ Run this **while J1/J2 diagnostics are fresh in dmesg** — the board stays powe
 
 **Equipment:** DMM (minimum). Preferred: bench supply 3.3V / 1A with ammeter.
 
-| Measurement | Point | PASS | Failure mode |
-|-------------|-------|------|--------------|
-| **VDDIN idle** | FPC pin 2 or 3 vs pin 4 (GND) | **3.1–3.5 V** | Plan B jumper contact loss / sag |
-| **VDDIN at SLPOUT** (~3.4–4.0 s from boot) | FPC pin 2 or 3 vs GND | Same **3.1–3.5 V** | Sag → H1 supply domain |
-| **CON1 5/6 at idle** | CON1 pin 5 or 6 vs pin 3 (GND) | **3.0–3.5 V** | Plan B jumper not making contact |
+
+| Measurement                                | Point                          | PASS               | Failure mode                     |
+| ------------------------------------------ | ------------------------------ | ------------------ | -------------------------------- |
+| **VDDIN idle**                             | FPC pin 2 or 3 vs pin 4 (GND)  | **3.1–3.5 V**      | Plan B jumper contact loss / sag |
+| **VDDIN at SLPOUT** (~3.4–4.0 s from boot) | FPC pin 2 or 3 vs GND          | Same **3.1–3.5 V** | Sag → H1 supply domain           |
+| **CON1 5/6 at idle**                       | CON1 pin 5 or 6 vs pin 3 (GND) | **3.0–3.5 V**      | Plan B jumper not making contact |
+
 
 **Ammeter test (preferred — decisive for H1):**
+
 1. Remove Plan B jumper from CON1 5/6.
 2. Connect bench supply: **3.3V, 1A limit** → FPC pins 2 and 3. GND → FPC pin 4.
 3. Power on board. Watch ammeter from ~3s onward.
 4. Record:
-   - Idle current (before boot): _____ mA
-   - Current at SLPOUT (~3.7 s): does it **step up**? _____ mA → _____ mA
-   - Current after init: _____ mA steady
+  - Idle current (before boot): _____ mA
+  - Current at SLPOUT (~3.7 s): does it **step up**? _____ mA → _____ mA
+  - Current after init: _____ mA steady
 
 **Interpretation:**
+
 - No current step = panel never attempted booster → software/rate domain (consistent with H2/H4)
 - Current steps up then collapses = supply sag under load → H1 (fix jumper gauge/contact)
 - Current steps up and holds → booster started; if 0x0A still 0x18, panel is defective (H6)
@@ -387,12 +421,14 @@ echo "CONN=$CONN"   # expect 191
 modetest -M rockchip -s ${CONN}@112:#0 -P 96@112:800x1280+0+0 -F tiles -v
 ```
 
-| Output line | PASS when |
-|-------------|-----------|
-| `setting mode 800x1280-60` | First line of modetest output |
-| `testing plane 96…` | Plane id confirmed |
-| `freq: 60.08Hz` | Repeating — SoC scanout running |
-| **Glass** | **Color bars / tile pattern visible** |
+
+| Output line                | PASS when                             |
+| -------------------------- | ------------------------------------- |
+| `setting mode 800x1280-60` | First line of modetest output         |
+| `testing plane 96…`        | Plane id confirmed                    |
+| `freq: 60.08Hz`            | Repeating — SoC scanout running       |
+| **Glass**                  | **Color bars / tile pattern visible** |
+
 
 If `0x0A` showed `0x9C` (booster up) in J2 but glass is black here → proceed to H5 (FPC lane continuity check, `library/LMT101/` FPC pin map: D0(8/9), D1(11/12), CLK(14/15), D2(17/18), D3(20/21)).
 
@@ -484,13 +520,15 @@ echo "  git HEAD: e19ae163b81db9c08b1b04813b313079787f0ff0"
 
 #### J7 — Decision matrix (fill after J1–J3)
 
-| J3 VDDIN | J2 `0x0A` | J4 glass | Verdict | Next action |
-|---|---|---|---|---|
-| 3.1–3.5 V solid, current steps up at SLPOUT | **0x9C** (0x80 set) | **Color bars visible** | **FULL PASS — BLK-014 CLOSED** | Log, push, A1 review |
-| 3.1–3.5 V solid, current steps up | 0x9C set | Still black | Booster OK, video path fail | H5: lane continuity FPC 8–21 vs spec; then non-burst exact-420 descriptor |
-| **3.3 V DMM constant, no ammeter yet** | **0x1c ← current** | **Black** | **Clock fix worked; booster still off; supply transient unknown** | **Phase K: ammeter test + vendor email (booster/E3 question)** |
-| 3.1–3.5 V solid, **no current step** at SLPOUT | 0x1c or 0x18 | Black | Panel never attempts booster → software/init domain (H4: missing `E3`?) | Send vendor email + build TASK-136 (0x0A before DISON) |
-| Sag / collapse / low at FPC pin 2/3 | any | any | Supply domain (H1) | Fix Plan B jumper (gauge/contact); bench-supply VDDIN permanently; re-run J1–J4 |
+
+| J3 VDDIN                                       | J2 `0x0A`           | J4 glass               | Verdict                                                                 | Next action                                                                     |
+| ---------------------------------------------- | ------------------- | ---------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| 3.1–3.5 V solid, current steps up at SLPOUT    | **0x9C** (0x80 set) | **Color bars visible** | **FULL PASS — BLK-014 CLOSED**                                          | Log, push, A1 review                                                            |
+| 3.1–3.5 V solid, current steps up              | 0x9C set            | Still black            | Booster OK, video path fail                                             | H5: lane continuity FPC 8–21 vs spec; then non-burst exact-420 descriptor       |
+| **3.3 V DMM constant, no ammeter yet**         | **0x1c ← current**  | **Black**              | **Clock fix worked; booster still off; supply transient unknown**       | **Phase K: ammeter test + vendor email (booster/E3 question)**                  |
+| 3.1–3.5 V solid, **no current step** at SLPOUT | 0x1c or 0x18        | Black                  | Panel never attempts booster → software/init domain (H4: missing `E3`?) | Send vendor email + build TASK-136 (0x0A before DISON)                          |
+| Sag / collapse / low at FPC pin 2/3            | any                 | any                    | Supply domain (H1)                                                      | Fix Plan B jumper (gauge/contact); bench-supply VDDIN permanently; re-run J1–J4 |
+
 
 ---
 
@@ -564,9 +602,7 @@ Reading the vendor init table (`library/LMT101/LMT101SX006C initial codes.txt`):
 Priority order:
 
 1. **TASK-136 (diag patch 0015):** After SLPOUT+120ms, BEFORE DISON, read DCS `0x04` (expect `93 65 04`), `0x0A`, `0x0F`. If `0x0A` reads non-zero before DISON, the booster starts and then something kills it. If `0x0A = 0x00` before DISON, the panel never wakes from reset.
-
 2. **BIST v2 + clock fix combined (new patch):** Current BIST v2 (`0012+0014`) uses no clock fix. A new sequence `JADARD_ENABLE_SEQ_LMT101_FAE_BIST_CLOCK` would: (a) send page-4 clock fix, (b) SLPOUT+120ms+DISON, (c) then `E0,01` + `E3,01` (BIST), (d) no-burst mode. If BIST pattern appears, proves `E3,01` on page 1 enables something the standard init doesn't.
-
 3. **H4a fix (if vendor confirms `E3`):** Add `{E0,01}, {E3,X}, {E0,00}` after init table but before SLPOUT (or after DISON per vendor guidance). Single-register patch.
 
 ---
@@ -578,6 +614,7 @@ Priority order:
 **When to run:** next reflash after BUILD B result (0x1c) — this is the next firmware build.
 
 **Build command (host):**
+
 ```bash
 kas shell kas/elevator-hmi.yml -c "bitbake linux-rockchip -c cleansstate && \
   bitbake virtual/kernel -c compile -f && bitbake virtual/kernel -c deploy -f && \
@@ -587,11 +624,13 @@ kas shell kas/elevator-hmi.yml -c "bitbake linux-rockchip -c cleansstate && \
 **Flash:** same procedure as BUILD B — `rkdeveloptool db + wl + rd` then power cycle.
 
 **L1 — Acceptance check (on board after flash):**
+
 ```bash
 dmesg | grep -i jadard
 ```
 
 Must see ALL of the following lines:
+
 ```
 jadard: FAE page-4 clock fix (pre-SLPOUT)
 jadard: DISON sent
@@ -605,29 +644,36 @@ jadard: DIAG15
 
 **L2 — Interpret 0x0F self-diagnostic:**
 
-| `0x0F` value | Meaning | Next action |
-|---|---|---|
-| `0xC0` | Both bits set — registers loaded AND booster running | Pixel problem elsewhere (H3 backlight, H6 orientation) |
-| `0x80` | **Functionality fault** — registers loaded but booster failed | Confirms H1 (supply) or H4a (missing register). Check 0x0A: if still 0x1c, booster is off despite DISON. Do ammeter K2. |
-| `0x40` | Register loading fault — init table didn't land | H4b: init commands not reaching panel. Check DSI error injection. |
-| `0x00` | Both faults — total panel failure | H6: defective sample. Order spares (TASK-137). |
+
+| `0x0F` value | Meaning                                                       | Next action                                                                                                             |
+| ------------ | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `0xC0`       | Both bits set — registers loaded AND booster running          | Pixel problem elsewhere (H3 backlight, H6 orientation)                                                                  |
+| `0x80`       | **Functionality fault** — registers loaded but booster failed | Confirms H1 (supply) or H4a (missing register). Check 0x0A: if still 0x1c, booster is off despite DISON. Do ammeter K2. |
+| `0x40`       | Register loading fault — init table didn't land               | H4b: init commands not reaching panel. Check DSI error injection.                                                       |
+| `0x00`       | Both faults — total panel failure                             | H6: defective sample. Order spares (TASK-137).                                                                          |
+
 
 **L3 — Interpret 0x04 panel ID:**
 
-| `0x04` value | Meaning |
-|---|---|
-| `93 65 04` | JD9365 confirmed ✓ |
-| `00 00 00` | Panel not responding to reads — MIPI RX fault |
-| Any other | Wrong IC or firmware mismatch |
+
+| `0x04` value | Meaning                                       |
+| ------------ | --------------------------------------------- |
+| `93 65 04`   | JD9365 confirmed ✓                            |
+| `00 00 00`   | Panel not responding to reads — MIPI RX fault |
+| Any other    | Wrong IC or firmware mismatch                 |
+
 
 **L4 — Interpret 0x45 scanline:**
 
-| `0x45` value | Meaning |
-|---|---|
-| Non-zero (e.g. 0x05, 0x3A…) | Timing controller running; panel's internal refresh cycle is alive |
-| `0x00` | Timing controller not started — booster likely off; display engine dead |
+
+| `0x45` value                | Meaning                                                                 |
+| --------------------------- | ----------------------------------------------------------------------- |
+| Non-zero (e.g. 0x05, 0x3A…) | Timing controller running; panel's internal refresh cycle is alive      |
+| `0x00`                      | Timing controller not started — booster likely off; display engine dead |
+
 
 **L5 — Log results (artifact triple required):**
+
 ```bash
 sha256sum /path/to/fae-clock-diag15.wic
 dmesg | grep -i jadard
@@ -640,19 +686,21 @@ Paste all three into `diary/PROGRESS.md` under `2026-06-XX — Phase L DIAG15`.
 
 ## 7. Lab status (2026-06-10)
 
-| Item | Status |
-|------|--------|
-| GPIO / rails / reset (**PC6 / gpio-22**) | **PASS** (BLK-006 closed) |
-| `jadard` init + DSI link (**196 cmds, rc=0**) | **PASS** |
-| DRM scanout plane **96** @ **60.08 Hz** | **PASS** |
-| `GET_POWER_MODE(0x0A)` BUILD B | **0x1c** — DISON bit SET (clock fix worked); booster (0x80) still CLEAR |
-| Visible pixels on glass | **FAIL** — BLK-014 (booster never starts) |
-| Current image on eMMC | **BUILD B** (`dd5be78d…` `…20260610170030.wic`) |
-| VDDIN at bench | **3.3V constant on DMM** — transients unknown (ammeter test needed) |
-| FAE patches in-tree | **0011–0015** (0015 added 2026-06-10 session 2) |
-| bbappend | **BUILD B + DIAG15** (0011+0014+0013+0015 active, 0012 commented) |
-| BIST v2 WIC | **Broken symlink** — `20260606161609.wic` gone from disk; rebuild required |
-| Next gate | **Phase L** — rebuild + flash DIAG15 image; read 0x0F self-diagnostic |
+
+| Item                                          | Status                                                                     |
+| --------------------------------------------- | -------------------------------------------------------------------------- |
+| GPIO / rails / reset (**PC6 / gpio-22**)      | **PASS** (BLK-006 closed)                                                  |
+| `jadard` init + DSI link (**196 cmds, rc=0**) | **PASS**                                                                   |
+| DRM scanout plane **96** @ **60.08 Hz**       | **PASS**                                                                   |
+| `GET_POWER_MODE(0x0A)` BUILD B                | **0x1c** — DISON bit SET (clock fix worked); booster (0x80) still CLEAR    |
+| Visible pixels on glass                       | **FAIL** — BLK-014 (booster never starts)                                  |
+| Current image on eMMC                         | **BUILD B** (`dd5be78d…` `…20260610170030.wic`)                            |
+| VDDIN at bench                                | **3.3V constant on DMM** — transients unknown (ammeter test needed)        |
+| FAE patches in-tree                           | **0011–0015** (0015 added 2026-06-10 session 2)                            |
+| bbappend                                      | **BUILD B + DIAG15** (0011+0014+0013+0015 active, 0012 commented)          |
+| BIST v2 WIC                                   | **Broken symlink** — `20260606161609.wic` gone from disk; rebuild required |
+| Next gate                                     | **Phase L** — rebuild + flash DIAG15 image; read 0x0F self-diagnostic      |
+
 
 ## 8. Reference files (repo)
 
@@ -664,3 +712,4 @@ Paste all three into `diary/PROGRESS.md` under `2026-06-XX — Phase L DIAG15`.
 - Clock rate audit: `docs/LMT101-CLOCK-RATE-AUDIT.md`
 - Session log: `diary/PROGRESS.md`
 - Schematic: `library/EM3566/Schematic/em3566_v3sch.md` (sheet 11 — Q17/Q18/PWM0_M0)
+

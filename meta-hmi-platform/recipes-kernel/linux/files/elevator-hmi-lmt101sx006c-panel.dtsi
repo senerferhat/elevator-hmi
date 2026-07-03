@@ -26,6 +26,13 @@
 #include <dt-bindings/pinctrl/rockchip.h>
 
 &dsi0 {
+	/*
+	 * TASK-140: rockchip,lane-rate = <420> was here to force 420 Mbps per
+	 * vendor PLL_CLOCK=420. REMOVED for revert-step-a test: at 420 + non-burst
+	 * (patch 0019) all BTA reads failed with -110. Testing without lane-rate
+	 * override to isolate whether the PHY rate or the non-burst mode is the
+	 * cause of BTA failure. Driver will auto-calculate ≈468 Mbps.
+	 */
 	/delete-node/ panel@0;
 
 	ports {
@@ -48,6 +55,9 @@
 		vccio-supply = <&vcca_1v8>;
 		backlight = <&backlight>;
 		reset-gpios = <&gpio0 RK_PC6 GPIO_ACTIVE_LOW>;
+		/* TASK-141: max drive + pull-up on XRES (lcd_rst_pin in board DTS). */
+		pinctrl-names = "default";
+		pinctrl-0 = <&lcd_rst_pin>;
 
 		port {
 			panel_in_dsi: endpoint {

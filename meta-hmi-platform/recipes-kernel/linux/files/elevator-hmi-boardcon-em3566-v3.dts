@@ -192,6 +192,24 @@
 };
 
 /*
+ * TASK-141: XRES (gpio0 RK_PC6, CON1 pin 11) scope finding — the release edge
+ * could not pull the line back HIGH into the *connected* panel load, while it
+ * toggled cleanly with the panel disconnected. With spi0/gt1x disabled, PC6
+ * reverts to its reset-default pad config (weakest drive strength), which is
+ * too weak to win against the panel/harness reset net. Force GPIO function with
+ * MAX drive strength (level 15) + pull-up so the SoC actively drives XRES high.
+ * The jadard driver still owns the line via gpiod (reset-gpios in the panel
+ * dtsi); pinctrl only fixes the pad electrical config, not ownership.
+ */
+&pinctrl {
+	lcd {
+		lcd_rst_pin: lcd-rst-pin {
+			rockchip,pins = <0 RK_PC6 RK_FUNC_GPIO &pcfg_pull_up_drv_level_15>;
+		};
+	};
+};
+
+/*
  * Omit power-supply on pwm-backlight — linking to vcc3v3_lcd0_n caused panel/DSI
  * **-517** defer/rebind loops on EM3566 v3 (same class as TASK-131 vin-supply).
  * Dummy regulator warning in dmesg is acceptable for bring-up.

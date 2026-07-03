@@ -1,0 +1,51 @@
+From: Elevator HMI meta-hmi-platform
+Subject: [PATCH] drm: panel: jadard — LMT101 VENDOR-CLOCK-MATCH (420 + Q1 20ms)
+
+Sync the LMT101 path to LCD Mall vendor truth (email thread 11 May / 5 Jun /
+13 Jun 2026):
+
+1. PLL_CLOCK=420 (vendor init file) + 5 Jun "MIPI rate mismatch": drop
+   MIPI_DSI_MODE_VIDEO_BURST for all LMT101 enable sequences so the Rockchip
+   dw-mipi-dsi host runs the lane rate at the mode-derived 70 MHz x 24 / 4 =
+   420 Mbps instead of the 10/9 burst-margin 468 Mbps. Legacy cz101b4001
+   (non-LMT101) keeps burst.
+2. Vendor Q1 reset diagram: XRES low pulse width is 20 ms (not the init-file
+   10 ms). This matches the sequence the customer reported to the FAE
+   ("power on, 10 ms, XRES low 20 ms, XRES high, 120 ms") which the vendor
+   confirmed lights the panel on their fixture.
+
+Sentinel: jadard: VENDOR-CLOCK-MATCH
+
+---
+diff --git a/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c b/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
+--- a/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
++++ b/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
+@@ -342,7 +342,7 @@ static int jadard_prepare(struct drm_panel *panel)
+ 
+ 	if (jadard->reset) {
+ 		/*
+-		 * Vendor Q1 (GPIO_ACTIVE_LOW): XRES high 5 ms → low 10 ms → high 120 ms.
++		 * Vendor Q1 (GPIO_ACTIVE_LOW): XRES high 5 ms → low 20 ms → high 120 ms.
+ 		 * gpiod 0 = inactive = pad high; gpiod 1 = active = pad low.
+ 		 */
+ 		gpiod_set_value(jadard->reset, 0);
+@@ -350,7 +350,7 @@ static int jadard_prepare(struct drm_panel *panel)
+ 
+ 		dev_info(panel->dev, "jadard: XRES assert\n");
+ 		gpiod_set_value(jadard->reset, 1);
+-		msleep(10);
++		msleep(20); /* vendor Q1: 20 ms XRES low pulse width */
+ 
+ 		dev_info(panel->dev, "jadard: XRES release\n");
+ 		gpiod_set_value(jadard->reset, 0);
+@@ -885,8 +885,8 @@ static int jadard_dsi_probe(struct mipi_dsi_device *dsi)
+ 
+ 	desc = of_device_get_match_data(dev);
+ 	dsi->mode_flags = MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_NO_EOT_PACKET;
+-	if (desc->enable_seq == JADARD_ENABLE_SEQ_LMT101_FAE_BIST)
+-		dev_info(dev, "jadard: FAE BIST path — VIDEO without BURST\n");
++	if (jadard_is_lmt101_enable_seq(desc->enable_seq))
++		dev_info(dev, "jadard: VENDOR-CLOCK-MATCH — VIDEO non-burst (PLL_CLOCK=420)\n");
+ 	else
+ 		dsi->mode_flags |= MIPI_DSI_MODE_VIDEO_BURST;
+ 	dsi->format = desc->format;

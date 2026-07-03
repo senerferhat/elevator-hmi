@@ -1,0 +1,36 @@
+From: Elevator HMI meta-hmi-platform
+Subject: [PATCH] drm: panel: jadard — LMT101 DCS-INIT (TASK-139 / H-pkt)
+
+Revert TASK-127 init burst framing: mainline panel-jadard-jd9365da-h3.c uses
+mipi_dsi_dcs_write_buffer() for vendor register pairs. Single-variable test;
+tail sequence, FAE_CLOCK, and DIAG15 unchanged.
+
+Sentinel: jadard: DCS-INIT
+
+---
+diff --git a/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c b/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
+--- a/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
++++ b/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
+@@ -68,14 +68,16 @@ static void jadard_init_sequence(struct jadard *jadard)
+ 	const struct jadard_panel_desc *desc = jadard->desc;
+ 	struct mipi_dsi_device *dsi = jadard->dsi;
+ 	unsigned int i;
+-	ssize_t ret;
++	int err;
++
++	dev_info(&jadard->dsi->dev, "jadard: DCS-INIT\n");
+ 
+ 	for (i = 0; i < desc->num_init_cmds; i++) {
+ 		const struct jadard_init_cmd *cmd = &desc->init_cmds[i];
+ 
+-		ret = mipi_dsi_generic_write(dsi, cmd->data, ARRAY_SIZE(cmd->data));
+-		if (ret < 0)
+-			dev_err(&jadard->dsi->dev, "init cmd 0x%02x failed: %zd\n",
+-				cmd->data[0], ret);
++		err = mipi_dsi_dcs_write_buffer(dsi, cmd->data, JD9365DA_INIT_CMD_LEN);
++		if (err < 0)
++			dev_err(&jadard->dsi->dev, "init cmd 0x%02x failed: %d\n",
++				cmd->data[0], err);
+ 	}
+ }
+ 
