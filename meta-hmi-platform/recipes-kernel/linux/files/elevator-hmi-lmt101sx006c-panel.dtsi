@@ -27,12 +27,40 @@
 
 &dsi0 {
 	/*
-	 * TASK-140: rockchip,lane-rate = <420> was here to force 420 Mbps per
-	 * vendor PLL_CLOCK=420. REMOVED for revert-step-a test: at 420 + non-burst
-	 * (patch 0019) all BTA reads failed with -110. Testing without lane-rate
-	 * override to isolate whether the PHY rate or the non-burst mode is the
-	 * cause of BTA failure. Driver will auto-calculate ≈468 Mbps.
+	 * 2026-07-03 single-variable test (session-log entry, same date):
+	 *
+	 * Confirmed on-target and by reading dw_mipi_dsi_calculate_lane_mpbs()
+	 * in dw-mipi-dsi-rockchip.c directly: that function never inspects
+	 * mode_flags. Dropping MIPI_DSI_MODE_VIDEO_BURST (patch 0019) has ZERO
+	 * effect on the negotiated PHY rate by itself. Without this property,
+	 * the driver falls back to pixel_clock * (bpp/lanes) * 10/9 = ~468 Mbps
+	 * (verified: "final DSI-Link bandwidth: 468 x 4 Mbps" with burst=0 on
+	 * the current tree) -- NOT the vendor's stated PLL_CLOCK=420.
+	 *
+	 * Reinstating the explicit override to test a new hypothesis: running
+	 * non-burst mode at the burst-margin rate (468) rather than the exact
+	 * pixel-derived rate (420) may be the proximate cause of the green-
+	 * noise/vignetting symptom reported on the no-DT-override build, since
+	 * non-burst DSI has no LP-gap slack to absorb an 11%-fast HS rate the
+	 * way burst mode does.
+	 *
+	 * KNOWN RISK (documented before this change, not discovered by it):
+	 * this exact property was previously removed ("revert-step-a") because
+	 * lane-rate=420 + non-burst caused DCS BTA reads to fail with -110.
+	 * Re-adding it may reintroduce that -110 regression and cost DIAG15
+	 * register visibility (0x0A/0x0F/0x45) on this build. That is an
+	 * accepted tradeoff for this test -- the primary observable is the
+	 * glass (does the noise/vignetting change character or disappear at
+	 * the vendor-exact rate?), not the diagnostic reads.
+	 *
+	 * Kill test: flash this build. (a) Flat black + clean reads (matches
+	 * original 7dbf72d9 result) -> rate was not the noise's cause, revert
+	 * this and look at porches next. (b) Stable/different image -> rate
+	 * mismatch confirmed as (at least a) cause. (c) Noise persists at
+	 * correct rate -> rate ruled out entirely, look elsewhere.
 	 */
+	rockchip,lane-rate = <420>;
+
 	/delete-node/ panel@0;
 
 	ports {
