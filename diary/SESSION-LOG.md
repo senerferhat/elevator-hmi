@@ -354,6 +354,51 @@ entirely; stays black on a fresh panel too → points at something shared, like 
 backlight path, not panel-specific). Deferred to owner decision below rather than unilaterally
 proceeding, since it requires physical panel handling, not just a reflash.
 
+### Owner pushback (2026-07-03) — correct call, root-caused the -110 confusion
+
+Owner rejected the "no hw issue" framing (fair — bidirectional register reads succeeding at 468
+Mbps already prove the digital command path is alive; hardware conclusions were premature) and
+asked for a genuine code-level deep dive instead of another physical test, specifically: why does
+420 Mbps "corrupt" reads while 468 doesn't, and where does 468 actually come from?
+
+**Answer, sourced, not inferred:** it doesn't. Re-reading `diary/STATE-2026-06-13-vendor-reply.md`
+(already in-repo from the original campaign) turned up a diagnosis that predates and contradicts
+the DTSI comment I had trusted: the `-110` BTA read failures on the earlier 420 Mbps build were
+caused by **patch 0020's BIST-unlock sequence (`E3,01`) soft-resetting the video engine** (already
+proven by the team's own H4a test: `E3,01` in the normal path → `0x0A=0x08`), not by the 420 Mbps
+rate. With 0020 disarmed, that same team flashed 420 Mbps and got **clean reads** —
+`0x0A=0x1c`/`0x0F=0xC0`/`0x45=0x00`/ID `0x93`, byte-identical to the 468 Mbps baseline (WIC
+`7dbf72d9…`, 2026-06-13 12:36). That fix/finding never made it back into the DTSI comment, and
+whoever built `reset-drive15`/`lane420-reset` later apparently re-armed 0020 for that round,
+reproducing the exact same already-solved confusion — which this agent then repeated today by
+trusting the DT diff alone without checking the compiled driver for BIST code.
+
+**Verified today, not assumed:** read the actual 964-line `panel-jadard-jd9365da-h3.c` that would
+compile from the current tree. The `JADARD_ENABLE_SEQ_LMT101_FAE_BIST` branch (distinct sentinel:
+`"BIST armed (500ms post-unlock)"`) exists but is dead code — no `compatible` string in
+`jadard_of_match[]` selects that descriptor; `lmt101sx006c_desc.enable_seq = ..._FAE_CLOCK`, whose
+branch has zero BIST-arm code. Confirmed in the bbappend: patch 0020 is commented out, with the
+same root-cause note. This build is provably clean of the confound.
+
+**Action taken:** corrected the misleading DTSI comment in place (git `79a104f`, cleanup `0decb23`
+after an unrelated `git add -A` mistake swept in stray repo-root files — untracked again, no
+functional files affected), then rebuilt kernel + WIC from the current tree (420 Mbps + TASK-141
+XRES max-drive fix + BIST confirmed absent — first time this exact combination has been built).
+
+**New artifact triple (untested on target):**
+
+| Field | Value |
+|---|---|
+| WIC SHA-256 | `ba4214118c139543c453720d64d52a65fd9c06e1dfa1dbfbda0769af3db84b41` |
+| WIC file | `core-image-minimal-elevator-hmi-em3566.rootfs-20260703183225.wic` (symlink `…rootfs-420clean-xres.wic`, `…rootfs.wic`) |
+| git HEAD | `0decb2383b42bbd500d933e14a16e5af98dc1c41` |
+| Kernel `.o` string check | `jadard: VENDOR-CLOCK-MATCH` present; `BIST armed (FAE_CLOCK + vendor TEST 2)` **absent** (0020 not applied); `BIST armed (500ms post-unlock)` string present but unreachable (dead code, no descriptor selects that path) |
+| DTB string check | `rockchip,lane-rate` present; `lcd_rst_pin` present (TASK-141 XRES fix retained) |
+| Expected dmesg | `jadard: VENDOR-CLOCK-MATCH`, `mode_flags=0x00000201`, `final DSI-Link bandwidth: 420 x 4 Mbps`, then (per 7dbf72d9 precedent) clean `GET_POWER_MODE(0x0A)=0x1c`, `DIAG15 self-diag=0xc0`, `DIAG15 scanline=0x00` — **no `-110` errors expected this time** |
+| Expected glass result | Per precedent, most likely still backlit black (this test is about closing the rate question cleanly, not a new fix) — report actual dmesg + glass regardless of expectation |
+
+**Not yet flashed.** Awaiting owner to flash and report both dmesg and glass.
+
 ### Next (in order, no scope required)
 
 1. **Owner to confirm exactly which WIC/git state produced the capture above** — need this to

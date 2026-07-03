@@ -36,34 +36,41 @@ below, to avoid a second stale pointer existing alongside the current one.)*
 
 ---
 
-## CURRENT TEST TARGET (2026-07-03) — `lane420-reset.wic`, untested single-variable kill test
+## CURRENT TEST TARGET (2026-07-03, rebuilt) — clean 420 Mbps + XRES fix, BIST confirmed absent
 
-**Status: recommended for next flash, result unknown — this is a test, not a validated-good image.**
-Combines the TASK-141 XRES max-drive pinctrl fix with `rockchip,lane-rate=420` (DT override) to
-test whether running non-burst DSI mode at the vendor-exact 420 Mbps (vs. the current default's
-468 Mbps fallback) explains a previously-unreconciled green-noise/vignetting result. Full reasoning:
-`diary/SESSION-LOG.md` 2026-07-03, "Disk-space check turned up undocumented 2026-06-14 WIC
-artifacts."
+**Status: recommended for next flash, result unknown — this is a freshly rebuilt image, not a
+validated-good one.** Supersedes the same-day `lane420-reset.wic` entry (superseded version
+preserved in git history) — that build turned out to have patch 0020 (BIST-unlock) active, a
+confound this team had already root-caused and fixed once before on 2026-06-13
+(`diary/STATE-2026-06-13-vendor-reply.md`) but which slipped back in for that particular build.
+This new build was compiled from the current tree and its `.o`/DTB were checked directly (strings)
+to confirm 0020 is **not** present. Full reasoning: `diary/SESSION-LOG.md` 2026-07-03, "Owner
+pushback — correct call, root-caused the -110 confusion."
+
+Combines: TASK-141 XRES max-drive pinctrl fix (already default) + `rockchip,lane-rate=420` (DT
+override, vendor-exact PLL_CLOCK) + BIST confirmed unreachable. This is the first time this exact
+combination has been built.
 
 | Field | Value |
 |---|---|
-| **File** | `core-image-minimal-elevator-hmi-em3566.rootfs-lane420-reset.wic` (already built, on disk — **no rebuild needed**) |
-| **Built** | 2026-06-13 17:14:45 (pre-existing artifact from an undocumented session, recovered 2026-07-03) |
-| **WIC SHA-256** | `7b01a63cd96b5e580fe1eaed7e2ea1db8207bf1dc18c41112d8fd13dc5885723` |
-| **Known risk** | This exact combination (420 + XRES fix) previously correlated with DCS BTA `-110` read failures — DIAG15 register reads may fail. Accepted tradeoff; the glass output is the primary observable for this test, not the diagnostic reads. |
-| **Expected dmesg** | **Unknown — this is what we're testing.** Capture `jadard\|bandwidth\|mode_flags` in full and report verbatim; do not assume 420 vs 468 in advance. |
-| **What to report back** | (a) full `dmesg -iE "jadard\|bandwidth\|mode_flags"` output, (b) glass appearance (flat black / noise-vignetting / other) |
+| **File** | `core-image-minimal-elevator-hmi-em3566.rootfs-20260703183225.wic` (symlink `…rootfs-420clean-xres.wic`) |
+| **Built** | 2026-07-03 21:32 (fresh rebuild, this session) |
+| **WIC SHA-256** | `ba4214118c139543c453720d64d52a65fd9c06e1dfa1dbfbda0769af3db84b41` |
+| **git HEAD** | `0decb2383b42bbd500d933e14a16e5af98dc1c41` |
+| **Confound check** | `strings` on compiled `.o`: `BIST armed (FAE_CLOCK + vendor TEST 2)` absent (0020 not applied); `BIST armed (500ms post-unlock)` string present but dead code (unreachable — no descriptor selects that path) |
+| **Expected dmesg (per 2026-06-13 `7dbf72d9` precedent, not a hard requirement)** | `jadard: VENDOR-CLOCK-MATCH`, `mode_flags=0x00000201`, `bandwidth: 420 x 4 Mbps`, then **clean** reads — `GET_POWER_MODE(0x0A)=0x1c`, `DIAG15 self-diag=0xc0`, `DIAG15 scanline=0x00` — no `-110` expected this time |
+| **What to report back** | (a) full `dmesg -iE "jadard\|bandwidth\|mode_flags"` output — especially whether `-110` appears or not (that alone settles the rate-vs-BIST question), (b) glass appearance |
 
 ### Flash commands (current test target)
 
 ```bash
 # ── 0. From repository root ──────────────────────────────────────────
 DEPLOY=build/tmp/deploy/images/elevator-hmi-em3566
-WIC=core-image-minimal-elevator-hmi-em3566.rootfs-lane420-reset.wic
+WIC=core-image-minimal-elevator-hmi-em3566.rootfs-420clean-xres.wic
 
 # ── 1. Verify SHA before touching the board ──────────────────────────
 sha256sum "$DEPLOY/$WIC"
-# Expected: 7b01a63cd96b5e580fe1eaed7e2ea1db8207bf1dc18c41112d8fd13dc5885723
+# Expected: ba4214118c139543c453720d64d52a65fd9c06e1dfa1dbfbda0769af3db84b41
 
 # ── 2. Enter Maskrom ─────────────────────────────────────────────────
 #    Power OFF → hold RECOVERY → plug USB OTG → release after 2 s
