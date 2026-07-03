@@ -27,37 +27,37 @@
 
 &dsi0 {
 	/*
-	 * 2026-07-03 single-variable test (session-log entry, same date):
+	 * 2026-07-03: vendor-exact PLL rate, corrected history (session-log
+	 * entries this date).
 	 *
-	 * Confirmed on-target and by reading dw_mipi_dsi_calculate_lane_mpbs()
-	 * in dw-mipi-dsi-rockchip.c directly: that function never inspects
-	 * mode_flags. Dropping MIPI_DSI_MODE_VIDEO_BURST (patch 0019) has ZERO
-	 * effect on the negotiated PHY rate by itself. Without this property,
-	 * the driver falls back to pixel_clock * (bpp/lanes) * 10/9 = ~468 Mbps
-	 * (verified: "final DSI-Link bandwidth: 468 x 4 Mbps" with burst=0 on
-	 * the current tree) -- NOT the vendor's stated PLL_CLOCK=420.
+	 * Confirmed by reading dw_mipi_dsi_calculate_lane_mpbs() in
+	 * dw-mipi-dsi-rockchip.c directly: it never inspects mode_flags.
+	 * Without this DT property the driver falls back to
+	 * pixel_clock * (bpp/lanes) * 10/9 = ~468 Mbps (verified on-target:
+	 * "final DSI-Link bandwidth: 468 x 4 Mbps" with burst dropped) --
+	 * NOT the vendor's stated PLL_CLOCK=420 (library/LMT101/LMT101SX006C
+	 * initial codes.txt).
 	 *
-	 * Reinstating the explicit override to test a new hypothesis: running
-	 * non-burst mode at the burst-margin rate (468) rather than the exact
-	 * pixel-derived rate (420) may be the proximate cause of the green-
-	 * noise/vignetting symptom reported on the no-DT-override build, since
-	 * non-burst DSI has no LP-gap slack to absorb an 11%-fast HS rate the
-	 * way burst mode does.
+	 * CORRECTED ATTRIBUTION (do not re-blame the rate for BTA failures):
+	 * an earlier comment here claimed "420 + non-burst caused DCS BTA
+	 * reads to fail with -110" and this property was removed on that
+	 * basis ("revert-step-a"). diary/STATE-2026-06-13-vendor-reply.md
+	 * (already in-repo, predates that removal) shows this was a
+	 * misattribution: the -110 failures were traced to patch 0020
+	 * (BIST-unlock E3,01) soft-resetting the video engine on that same
+	 * build, not to the 420 Mbps rate. With 0020 disarmed, WIC
+	 * 7dbf72d9... ran 420 Mbps non-burst with clean DIAG15 reads
+	 * (0x0A=0x1c, 0x0F=0xC0, 0x45=0x00, ID=0x93 -- byte-identical to the
+	 * 468 Mbps baseline). Verified 2026-07-03 by reading the currently
+	 * compiled panel-jadard-jd9365da-h3.c: the LMT101 FAE_CLOCK enable
+	 * path has zero BIST-arm code reachable, and the bbappend has 0020
+	 * commented out. This build is confirmed clean of that confound.
 	 *
-	 * KNOWN RISK (documented before this change, not discovered by it):
-	 * this exact property was previously removed ("revert-step-a") because
-	 * lane-rate=420 + non-burst caused DCS BTA reads to fail with -110.
-	 * Re-adding it may reintroduce that -110 regression and cost DIAG15
-	 * register visibility (0x0A/0x0F/0x45) on this build. That is an
-	 * accepted tradeoff for this test -- the primary observable is the
-	 * glass (does the noise/vignetting change character or disappear at
-	 * the vendor-exact rate?), not the diagnostic reads.
-	 *
-	 * Kill test: flash this build. (a) Flat black + clean reads (matches
-	 * original 7dbf72d9 result) -> rate was not the noise's cause, revert
-	 * this and look at porches next. (b) Stable/different image -> rate
-	 * mismatch confirmed as (at least a) cause. (c) Noise persists at
-	 * correct rate -> rate ruled out entirely, look elsewhere.
+	 * Expected outcome (per 7dbf72d9 precedent): clean reads at 420 Mbps,
+	 * identical register values to the 468 Mbps baseline, glass still
+	 * black. This is still the first time 420 Mbps has been tested
+	 * together with the TASK-141 XRES max-drive fix with BIST confirmed
+	 * absent -- closes the rate question with both fixes present at once.
 	 */
 	rockchip,lane-rate = <420>;
 
