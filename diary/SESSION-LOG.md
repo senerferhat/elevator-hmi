@@ -184,6 +184,46 @@ for correctly attributing this reading, though the 70 MHz pixel clock is indepen
 420-vs-468 lane-rate question (different clock domains: `dclk_vop1` is the RGB/pixel clock into
 the DSI encoder, not the DSI PHY bit rate itself).
 
+### Bandwidth finding CONFIRMED on-target (2026-07-03, Tier 2, owner capture)
+
+```
+[    2.444532] jadard: VENDOR-CLOCK-MATCH — VIDEO non-burst (PLL_CLOCK=420)   <- static string, misleading now
+[    3.632123] jadard: dsi mode_flags=0x00000201 lanes=4 format=0 video=1 burst=0
+[    3.881933] jadard: GET_POWER_MODE(0x0A) pre-TE=0x1c
+[    3.898606] jadard: DIAG15 ID=0x93 0x00 0x00
+[    3.915130] jadard: DIAG15 self-diag=0xc0
+[    3.966037] jadard: DIAG15 scanline=0x00
+[    3.966086] jadard: init table: 196 cmds, rc=0
+[    3.966144] dw-mipi-dsi-rockchip: final DSI-Link bandwidth: 468 x 4 Mbps
+```
+
+Exactly as predicted from reading `dw_mipi_dsi_calculate_lane_mpbs()`: burst=0 confirmed, but
+bandwidth is **468 Mbps, not 420**. All DIAG15 registers byte-identical to every prior
+"digitally healthy, backlit black" build. This specific combination — **non-burst mode at the
+468 (burst-margin) rate** — has never been tested before in this campaign; every prior build was
+either burst+468 or non-burst+420(DT-forced). If this is the same build that produced the
+green-noise/vignetting result (still unconfirmed which exact build that was), this untested
+combination is a strong candidate cause, since non-burst DSI has no LP-gap slack to absorb an
+11%-fast rate the way burst mode does.
+
+### Kill test committed (2026-07-03) — `769e5a0`
+
+Reinstated `rockchip,lane-rate = <420>;` in `elevator-hmi-lmt101sx006c-panel.dtsi` as the single
+changed variable (nothing else touched). Full reasoning and risk (this combination previously
+caused BTA `-110` read failures — accepted tradeoff since the glass, not the diagnostic reads, is
+the primary observable for this test) is in the DTSI comment and the commit message.
+
+**Not yet built or flashed** — owner needs to make the call below first.
+
+### Blocked on: disk space before build
+
+This machine has **11 GB free / 246 GB disk (96% used)**. `build/` is already 63 GB. Prior
+kernel+WIC builds here produced ~2.9–3.1 GiB images plus deploy/temp overhead. Have not attempted
+a build — did not want to risk exhausting disk mid-build (can corrupt `sstate-cache`/`tmp`) without
+your say-so. Options: (a) I attempt the build now, accepting the risk; (b) free space first (old
+WICs, `build/tmp/`, `build/sstate-cache/` pruning — tell me what's safe to delete on this host);
+(c) you build/flash this on your usual bench host instead, I'll wait for the result.
+
 ### Next (in order, no scope required)
 
 1. **Owner to confirm exactly which WIC/git state produced the capture above** — need this to
