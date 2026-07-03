@@ -215,14 +215,51 @@ the primary observable for this test) is in the DTSI comment and the commit mess
 
 **Not yet built or flashed** — owner needs to make the call below first.
 
-### Blocked on: disk space before build
+### Disk-space check turned up undocumented 2026-06-14 WIC artifacts (owner delegated cleanup decision to me)
 
-This machine has **11 GB free / 246 GB disk (96% used)**. `build/` is already 63 GB. Prior
-kernel+WIC builds here produced ~2.9–3.1 GiB images plus deploy/temp overhead. Have not attempted
-a build — did not want to risk exhausting disk mid-build (can corrupt `sstate-cache`/`tmp`) without
-your say-so. Options: (a) I attempt the build now, accepting the risk; (b) free space first (old
-WICs, `build/tmp/`, `build/sstate-cache/` pruning — tell me what's safe to delete on this host);
-(c) you build/flash this on your usual bench host instead, I'll wait for the result.
+While sizing `build/` to plan safe cleanup (11 GB free / 246 GB, 96% used; `build/tmp`=49G,
+`sstate-cache`=4.3G, `downloads`=11G), found **5 real (non-symlink) WIC images still on disk**
+in `build/tmp/deploy/images/elevator-hmi-em3566/` that are **not referenced anywhere** in
+AGENTS.md / BLOCKERS.md / PROGRESS.md / the charter:
+
+| File | Built (mtime) | SHA-256 | `rockchip,lane-rate` string count |
+|---|---|---|---|
+| `...rootfs-reset-drive15.wic` | 2026-06-13 16:40:57 | `e204248b78f835d8bec2e103b1cc42bf3f73ce59f192fd9d0b18ff3f653e579a` | 1 |
+| `...rootfs-lane420-reset.wic` | 2026-06-13 17:14:45 | `7b01a63cd96b5e580fe1eaed7e2ea1db8207bf1dc18c41112d8fd13dc5885723` | **2** |
+| `...rootfs-20260614094322.wic` | 2026-06-14 09:43:22 | `92ada07dbe975c693e1f4ca9a67f1900f82b53559bb3e814c1002c6224a40aa5` | 1 |
+| `...rootfs-20260614094359.wic` = `...rootfs-revert-step-a.wic` = current `...rootfs.wic` | 2026-06-14 09:43:59 | `6589670d42e1524cf999aa0fe3b6c1dae0d15778d9b6693b78a9c2de5633dba3` | 1 |
+
+(The 4th and 5th are hardlinks of each other — identical hash, 2 links.) None of these hashes
+match `438091ef…`, the SHA the charter/AGENTS.md sprint note cites for "VENDOR-MATCH no-BIST" —
+that build is not on this disk anymore (likely deleted for space), meaning the 06-14 session went
+**further** than what was documented, and the extra steps were never written back.
+
+**Signal used to distinguish builds:** `rockchip,lane-rate` is a string literal the
+`dw-mipi-dsi-rockchip` driver always contains (its own `of_property_read_u32()` call), so it
+appears once in every kernel Image regardless of DTB content. A build whose **DTB also sets**
+that property adds a second occurrence (the FDT string table entry). Only `lane420-reset.wic`
+shows count=2 — every other build on disk has the property absent.
+
+**Reconstructed sequence, matches the DTSI's own removal comment exactly:**
+`reset-drive15` (TASK-141 XRES fix alone, no rate override) → `lane420-reset` (**same XRES fix +
+`rockchip,lane-rate=420` together** — this is almost certainly the build that hit the "-110 BTA"
+failures the DTSI comment describes, and is a strong candidate for the actual green-noise/
+vignetting session result) → override removed again (`20260614094322`) → final state
+(`revert-step-a` / current default `rootfs.wic` — confirmed by today's live dmesg: burst=0,
+468 Mbps).
+
+**Consequence for the kill test above:** `lane420-reset.wic` already combines the exact
+XRES-fix + lane-rate=420 configuration I was about to rebuild from source. **No rebuild needed.**
+Recommending the owner flash this existing file directly instead of a fresh build — same test,
+zero disk risk, zero build time. If the owner confirms this is (or isn't) the build that produced
+the reported noise/vignetting, that closes a real gap in Section 5 of the charter.
+
+**Cleanup not yet performed** — holding off on deleting anything under `build/tmp/deploy/images/`
+until these candidates are evaluated, since they may be the only surviving copies of undocumented
+bench history. Once a bench result confirms/rules out `lane420-reset`, the losing candidates
+(`reset-drive15`, `20260614094322`) can be deleted for ~5.8 GB back — flagging this as the
+recommended safe cleanup target instead of touching `sstate-cache` (which would slow future
+builds) or `downloads` (would need network to refetch).
 
 ### Next (in order, no scope required)
 
