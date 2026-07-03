@@ -399,18 +399,98 @@ XRES max-drive fix + BIST confirmed absent — first time this exact combination
 
 **Not yet flashed.** Awaiting owner to flash and report both dmesg and glass.
 
+### `420clean-xres.wic` flashed and booted (2026-07-03) — BIST hypothesis FALSIFIED
+
+Owner flashed and captured:
+
+```
+jadard: VENDOR-CLOCK-MATCH — VIDEO non-burst (PLL_CLO...
+jadard: reset gpio = gpio-22
+jadard: XRES assert / XRES release
+jadard: dsi mode_flags=0x00000201 lanes=4 format=0 video=1 burst=0
+jadard: DCS-INIT
+jadard: FAE page-4 clock fix (pre-SLPOUT)
+jadard: SLPOUT sent
+jadard: DISON sent
+jadard: GET_POWER_MODE pre-TE read failed: -110
+jadard: DIAG15 0x04 read err=-110
+jadard: DIAG15 0x0F read err=-110
+jadard: FAE TE on (0x35,0x00)
+jadard: DIAG15 0x45 read err=-110
+jadard: init table: 196 cmds, rc=0
+dw-mipi-dsi-rockchip: final DSI-Link bandwidth: (420 x 4, per DTB)
+```
+
+**No "BIST armed" line** — confirmed by the absence in this capture and by the `.o`/Image string
+check already on record (0020 not applied, `FAE_BIST` branch unreachable). This build was
+genuinely BIST-free. **Yet every DCS read failed with `-110` again, identically to the
+BIST-confounded `lane420-reset.wic` run.** This falsifies the "BIST alone explains the `-110`
+reads" conclusion reached earlier in this same session (the `79a104f` DTSI comment and the
+"vendor-parity, confound-free" framing of this build's own artifact triple above were **both
+wrong** — flagging my own error per the owner's instruction not to trust prior conclusions
+uncritically, including my own from a few hours earlier).
+
+**Re-isolation:** compared this build's DTS/DTSI against the one build in this entire campaign
+that had clean reads at 420 Mbps non-burst (`7dbf72d9…`, TASK-140, 2026-06-13, predates the
+`6eb2f37` checkpoint commit). Traced `lcd_rst_pin` (TASK-141's `pcfg_pull_up_drv_level_15` XRES
+pinctrl override, `pinctrl-0` on `panel@0`) with `git log -p` — it first enters the tree at
+`6eb2f37`, i.e. **`7dbf72d9` did not have it**. With BIST now also ruled out as the cause on this
+specific build, `lcd_rst_pin` is the **only** remaining structural difference between this
+failing build and the last known-clean-read baseline. The diary itself flagged this exact
+suspicion on 2026-06-13 (line ~140 above: "possibly interacting with the not-yet-applied XRES
+drive-strength fix... never bisected against each other") and it was never followed up.
+
+**Isolation test built (2026-07-03):** removed only `pinctrl-names`/`pinctrl-0 = <&lcd_rst_pin>`
+from `panel@0` in `elevator-hmi-lmt101sx006c-panel.dtsi` (commented out with a dated explanation,
+`lcd_rst_pin` node definition left in place in the board DTS, unreferenced, zero effect — so it
+can be restored with a one-line change if this test clears it). Nothing else touched: still 420
+Mbps, still `0018` DCS-INIT, still FAE page-4 clock fix, still 20 ms XRES pulse. Rebuilt
+`virtual/kernel` (`compile -f` + `deploy -f`, exit 0, 2 warnings/taint only) and
+`core-image-minimal` (`image_wic -f` + `image_complete -f`, exit 0, 4 warnings/taint only).
+Verified before declaring done: new `Image` binary strings show `DCS-INIT`, `FAE page-4 clock
+fix`, `VENDOR-CLOCK-MATCH` present and `BIST armed (FAE_CLOCK + vendor TEST 2)` **absent** (only
+the unreachable dead-code string `BIST armed (500ms post-unlock)` remains, as before).
+
+**New artifact triple:**
+
+| Field | Value |
+|---|---|
+| WIC SHA-256 | `c30f3697eed5deb1309f44a8526c4f2bf8c12a3f456aed3469b1c43a242cb622` |
+| WIC file | `core-image-minimal-elevator-hmi-em3566.rootfs-20260703190118.wic` (symlink `…rootfs-no-pinctrl-fix.wic`, `…rootfs.wic`) |
+| git HEAD | `201a9a2e2c2bd0fb01b2c27ca105dd504e4e08db` + uncommitted panel DTSI change (pinctrl removal) — commit pending |
+| Single variable removed vs `420clean-xres` (`ba421411…`) | `pinctrl-0 = <&lcd_rst_pin>` on `panel@0` — TASK-141's XRES max-drive/pull-up override |
+| Everything else | Identical: 420 Mbps non-burst, `0018` DCS-INIT, FAE page-4 clock fix, 20 ms XRES pulse, BIST (0020) absent |
+| Expected dmesg if TASK-141 pinctrl was the cause | Clean reads, matching `7dbf72d9…` precedent: `GET_POWER_MODE pre-TE=0x1c`, `DIAG15 self-diag=0xc0`, `DIAG15 scanline=0x00`, no `-110` anywhere |
+| Expected dmesg if TASK-141 pinctrl was NOT the cause | `-110` on all four reads again — would mean the regression is something else not yet isolated (next suspects: non-determinism/flakiness — reboot the *same* image and check for repeatability first; or an interaction between `0018`'s `dcs_write_buffer` calling convention and 420 Mbps non-burst specifically, since `7dbf72d9` and this build differ from `lane420-reset` in more than just BIST — recheck bbappend/patch stack order if this doesn't clear it) |
+| Glass | Report regardless — this test is about register-read visibility, not new booster/glass fix |
+
+**Explicitly not sent to the vendor.** The `-110` BTA read timeouts are an artifact of our own
+in-repo DIAG15 debug instrumentation (`mipi_dsi_dcs_read` calls we added ourselves) racing against
+something on our host/DTS side — LCD Mall's FAE has no visibility into that code and cannot act on
+it, and it is not yet even isolated on our end. Reporting it now would repeat the exact mistake
+already made twice this campaign (blaming 468→420 rate, then blaming BIST, both premature). The
+vendor-facing finding that remains valid regardless of this regression is unchanged: `0x0A` never
+shows the booster bit set, `0x45` (scanline) reads `0x00` when it reads at all — the analog boost
+question is still open and is a separate axis from this read-timeout regression.
+
+**Not yet flashed.** Awaiting owner to flash `…rootfs-no-pinctrl-fix.wic` and report
+`dmesg | grep -iE "jadard|bandwidth|mode_flags"` plus glass.
+
 ### Next (in order, no scope required)
 
-1. **Owner to confirm exactly which WIC/git state produced the capture above** — need this to
-   know if `mode_flags`/lane-rate were 0019-clock-match-only (`7dbf72d9…`), the reverted/no-DT-
-   override state (would show ~468 Mbps), or something else. Ask for `dmesg | grep -iE
-   "jadard|bandwidth|mode_flags"` from the same boot to get this for free.
-2. Rebuild `6eb2f37` clean, capture the actual `final DSI-Link bandwidth: ... Mbps` line, and
-   treat 420-vs-468 as a **separate, explicit, single-variable test** from the XRES
-   drive-strength fix — do not re-conflate them like the pre-existing uncommitted diff did.
+1. **Flash `no-pinctrl-fix.wic` and report dmesg + glass** — this closes or reopens the TASK-141
+   pinctrl hypothesis. If reads come back clean, TASK-141's pinctrl override goes on a real
+   suspect list (either revert it and find another way to fix the XRES release-under-load
+   marginality it was solving, or keep it but only during the actual reset pulse and remove it
+   before DCS traffic — needs more thought if confirmed).
+2. If reads are still `-110` on this build too, **reboot the same board without reflashing**
+   first (cheapest possible check) to see if the failure is even deterministic before spending
+   another build cycle chasing it.
 3. **H6 spare-panel swap** remains the cheapest, equipment-free, most decisive test available
-   (charter §7 item 3) and can run in parallel with (1)–(2) whenever convenient on the bench.
-4. Draft and send the vendor status update LCD Mall is waiting on (owed regardless of firmware
-   findings) — separate from this technical thread, flag when ready to draft.
+   for the underlying booster/glass question (charter §7 item 3) and can run in parallel with
+   (1)–(2) whenever convenient on the bench.
+4. Draft and send the vendor status update LCD Mall is waiting on (their 1 July "have you solved
+   it?" follow-up is now 2 days unanswered) — separate from this technical thread, flag when
+   ready to draft.
 
 ---

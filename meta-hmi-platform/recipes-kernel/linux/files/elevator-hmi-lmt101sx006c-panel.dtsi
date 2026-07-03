@@ -83,9 +83,27 @@
 		vccio-supply = <&vcca_1v8>;
 		backlight = <&backlight>;
 		reset-gpios = <&gpio0 RK_PC6 GPIO_ACTIVE_LOW>;
-		/* TASK-141: max drive + pull-up on XRES (lcd_rst_pin in board DTS). */
-		pinctrl-names = "default";
-		pinctrl-0 = <&lcd_rst_pin>;
+		/*
+		 * 2026-07-03: TASK-141's pinctrl-0 = <&lcd_rst_pin> (max drive + pull-up on
+		 * XRES) temporarily REMOVED for an isolation test — do not re-add without
+		 * re-reading diary/SESSION-LOG.md first.
+		 *
+		 * The only build in this campaign with clean DCS register reads at 420 Mbps
+		 * non-burst (WIC 7dbf72d9..., TASK-140, 2026-06-13) did NOT have this pinctrl
+		 * override -- it was added later in an uncommitted diff and first landed in
+		 * git at 6eb2f37 (2026-07-03), bundled with patches 0018-0020. Today's build
+		 * ("420clean-xres", ba421411...) combined 420 Mbps + this pinctrl override +
+		 * confirmed-absent BIST, and got the SAME all-registers -110 (ETIMEDOUT)
+		 * failure previously (wrongly) blamed entirely on patch 0020's BIST-unlock.
+		 * With BIST now proven absent in that build too, this pinctrl override is the
+		 * only remaining structural difference from the known-clean 7dbf72d9 baseline
+		 * -- see diary/SESSION-LOG.md 2026-07-03 entries for the full isolation chain.
+		 *
+		 * This build removes ONLY this property (single-variable test) to check
+		 * whether DCS reads become clean again. lcd_rst_pin itself is left defined
+		 * in the board DTS (unreferenced, zero effect) so it can be reinstated with
+		 * a one-line change if this test shows it was not the cause.
+		 */
 
 		port {
 			panel_in_dsi: endpoint {
