@@ -9,6 +9,13 @@ Trust tiers (charter §1): Tier 1 = owner/vendor direct statement. Tier 2 = scop
 verbatim dmesg with artifact triple. Tier 3 = prior agent conclusion — re-derive, don't trust the
 label. Every entry below states its tier.
 
+**Current flash target (kept in sync here, not in `docs/FLASH-PROCEDURE.md` — see that file's
+"READ THIS FIRST" banner for why):** `core-image-minimal-elevator-hmi-em3566.rootfs-lane420-reset.wic`,
+SHA-256 `7b01a63cd96b5e580fe1eaed7e2ea1db8207bf1dc18c41112d8fd13dc5885723`. Untested single-variable
+kill test (420 Mbps + TASK-141 XRES fix together) — see 2026-07-03 entry below for full reasoning.
+**Update this line whenever the recommended target changes; it is the one thing every other doc in
+this repo should point back to instead of copying.**
+
 ---
 
 ## 2026-06-14 — [TRANSCRIBED FROM CHARTER, NOT INDEPENDENTLY VERIFIED — Tier 3 until confirmed]

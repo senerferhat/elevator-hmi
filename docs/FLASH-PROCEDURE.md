@@ -6,28 +6,64 @@ Run `**rkdeveloptool**` on the **host** (not inside a Docker/kas-only environmen
 
 ---
 
-## VENDOR-MATCH (no-BIST) — Current canonical image (2026-06-13)
+## ⚠️ READ THIS FIRST — how to find today's actual flash target
 
-**This is the image to flash now.** Full vendor-match: 420 Mbps lane rate (`rockchip,lane-rate=420`), 20 ms XRES low pulse, max-drive pinctrl on GPIO0_C6, BIST disarmed, DCS init packets, FAE page-4 clock fix, DIAG15 reads.
+**Do not trust any hardcoded filename/SHA below without checking it first.** This doc drifted out
+of sync with reality at least once already (2026-06-13 → 2026-07-03: the "canonical" build below
+was deleted from disk, and its pass/fail dmesg expectations no longer matched the current board
+state — see `diary/SESSION-LOG.md` 2026-07-03 entry for the full story). Named "canonical" sections
+in this file are a **point-in-time snapshot**, not a live pointer — they will go stale again.
+
+**Single source of truth going forward: `diary/SESSION-LOG.md`, newest entry, "current flash
+target" / "kill test" line.** That file is append-only and dated — the newest entry always wins.
+Steps:
+
+1. Open `diary/SESSION-LOG.md`, read the **last** entry (bottom of file).
+2. Find the filename + SHA-256 it names as the thing to flash/test next.
+3. `sha256sum` that exact file before flashing — **if the hash doesn't match, stop and re-check the
+   log; don't flash it anyway.**
+4. Do **not** substitute `ls -t *.wic | head -1` for this lookup — the newest-*mtime* file on disk
+   is frequently a diagnostic-only scratch build (BIST test, register-probe build, etc.), not
+   necessarily the one actually recommended to test next. Mtime tells you build recency, not intent.
+5. After flashing, capture `dmesg | grep -iE "jadard|bandwidth|mode_flags"` in full and compare
+   against what the session-log entry says to *expect* — if the entry says "unknown / this is what
+   we're testing," don't force-fit the result against an older doc's checklist (see problem this
+   section fixes, above).
+
+*(The superseded 2026-06-13 "VENDOR-MATCH (no-BIST)" canonical-image section that used to live here
+is preserved in this file's git history — `git log -p -- docs/FLASH-PROCEDURE.md` — not repeated
+below, to avoid a second stale pointer existing alongside the current one.)*
+
+---
+
+## CURRENT TEST TARGET (2026-07-03) — `lane420-reset.wic`, untested single-variable kill test
+
+**Status: recommended for next flash, result unknown — this is a test, not a validated-good image.**
+Combines the TASK-141 XRES max-drive pinctrl fix with `rockchip,lane-rate=420` (DT override) to
+test whether running non-burst DSI mode at the vendor-exact 420 Mbps (vs. the current default's
+468 Mbps fallback) explains a previously-unreconciled green-noise/vignetting result. Full reasoning:
+`diary/SESSION-LOG.md` 2026-07-03, "Disk-space check turned up undocumented 2026-06-14 WIC
+artifacts."
 
 | Field | Value |
 |---|---|
-| **Symlink** | `core-image-minimal-elevator-hmi-em3566.rootfs-vendor-match.wic` |
-| **Timestamped file** | `core-image-minimal-elevator-hmi-em3566.rootfs-20260613143254.wic` |
-| **WIC SHA-256** | `438091efd2063076ac9f78e9c39b95dc0afcce3e8f1c95f4d4c340d69e2bd35b` |
-| **git HEAD at build** | `task/TASK-132-vcc3v3-lcd0-active-low-pfet` branch, post-0019+0020(disabled)+0021 |
-| **Required dmesg sentinel** | `jadard: VENDOR-CLOCK-MATCH` + `jadard: FAE page-4 clock fix` + `jadard: DCS-INIT` + `jadard: DIAG15` |
+| **File** | `core-image-minimal-elevator-hmi-em3566.rootfs-lane420-reset.wic` (already built, on disk — **no rebuild needed**) |
+| **Built** | 2026-06-13 17:14:45 (pre-existing artifact from an undocumented session, recovered 2026-07-03) |
+| **WIC SHA-256** | `7b01a63cd96b5e580fe1eaed7e2ea1db8207bf1dc18c41112d8fd13dc5885723` |
+| **Known risk** | This exact combination (420 + XRES fix) previously correlated with DCS BTA `-110` read failures — DIAG15 register reads may fail. Accepted tradeoff; the glass output is the primary observable for this test, not the diagnostic reads. |
+| **Expected dmesg** | **Unknown — this is what we're testing.** Capture `jadard\|bandwidth\|mode_flags` in full and report verbatim; do not assume 420 vs 468 in advance. |
+| **What to report back** | (a) full `dmesg -iE "jadard\|bandwidth\|mode_flags"` output, (b) glass appearance (flat black / noise-vignetting / other) |
 
-### Flash commands (vendor-match image)
+### Flash commands (current test target)
 
 ```bash
 # ── 0. From repository root ──────────────────────────────────────────
 DEPLOY=build/tmp/deploy/images/elevator-hmi-em3566
-WIC=core-image-minimal-elevator-hmi-em3566.rootfs-vendor-match.wic
+WIC=core-image-minimal-elevator-hmi-em3566.rootfs-lane420-reset.wic
 
 # ── 1. Verify SHA before touching the board ──────────────────────────
 sha256sum "$DEPLOY/$WIC"
-# Expected: 438091efd2063076ac9f78e9c39b95dc0afcce3e8f1c95f4d4c340d69e2bd35b
+# Expected: 7b01a63cd96b5e580fe1eaed7e2ea1db8207bf1dc18c41112d8fd13dc5885723
 
 # ── 2. Enter Maskrom ─────────────────────────────────────────────────
 #    Power OFF → hold RECOVERY → plug USB OTG → release after 2 s
@@ -60,33 +96,33 @@ sudo minicom -D /dev/ttyACM0 -b 1500000
 
 ### Post-flash validation (on board as `root`)
 
-```bash
-# ── MANDATORY: confirm correct image loaded ───────────────────────────
-dmesg | grep -i jadard
-# MUST see ALL of:
-#   jadard: DCS-INIT
-#   jadard: VENDOR-CLOCK-MATCH — VIDEO non-burst (PLL_CLOCK=420)
-#   jadard: FAE page-4 clock fix (pre-SLPOUT)
-#   jadard: XRES assert  / jadard: XRES release
-#   jadard: SLPOUT sent  / jadard: DISON sent
-#   jadard: GET_POWER_MODE(0x0A) pre-TE=0x??  ← record; expect 0x1c
-#   jadard: DIAG15 0x0F=0xC0 0x04=0x93 0x45=0x00
-# MUST NOT see: jadard: BIST armed
+**This is an untested build — report what you actually see, don't check it against a fixed
+pass/fail list.** (The old fixed checklist here — "MUST see 420 Mbps," etc. — is exactly the kind
+of hardcoded assumption that went stale last time; see the warning banner at the top of this file.)
 
-# ── DSI link bandwidth ────────────────────────────────────────────────
-dmesg | grep -iE "dsi-link|bandwidth"
-# Expected: "final DSI-Link bandwidth: 420 x 4 Mbps = 1680 Mbps"
+```bash
+# ── Capture everything relevant, verbatim, full output ────────────────
+dmesg | grep -iE "jadard|bandwidth|mode_flags|dsi-link"
+# Report this whole block back as-is. Things worth noticing (not requirements):
+#   - Does "jadard: DCS-INIT" appear? (confirms 0018 compiled in)
+#   - What bandwidth does "final DSI-Link bandwidth: ... Mbps" actually report? (420 expected
+#     given the DT override in this build, but confirm — don't assume)
+#   - Any "-110" / ETIMEDOUT on the DIAG15 register reads? (known risk for this specific build,
+#     see CURRENT TEST TARGET section above — if present, that's a real result, not a failure
+#     of the test itself)
+#   - GET_POWER_MODE(0x0A) value, DIAG15 ID/self-diag/scanline values if reads succeed
 
 # ── Modeset + scanout ─────────────────────────────────────────────────
 CONN=$(modetest -M rockchip 2>&1 | awk '/connected/ && /DSI/ {print $1; exit}')
 echo "Connector: $CONN"
 modetest -M rockchip -s ${CONN}@112:#0 -P 96@112:800x1280+0+0 -F tiles -v
-# Expect: 60 Hz sustained; glass lit or backlit-black
+# Report actual result: 60 Hz sustained or not; glass appearance (flat black / noise / vignetting /
+# lit / other) — describe what you actually see, take a photo if possible.
 
-# ── Scope targets if glass still black ───────────────────────────────
+# ── Scope targets if glass still black (unchanged from prior sessions, no equipment currently) ──
 # H1b:  CON1 pin 3 (VDDIN, FPC pin 2/3) — must be stable ≥3.0 V at SLPOUT+120 ms
 # H5:   Set BL supply to exactly 9.6 V (currently 9.0 V → vendor spec 9.6 V)
-# H6:   Swap panel sample (fresh LMT101SX006C from stock / TASK-137)
+# H6:   Swap panel sample (fresh LMT101SX006C from stock — on hand per diary/SESSION-LOG.md)
 # CLK:  Scope MIPI CLK+D0 at video start (confirmatory; LP→HS transition)
 ```
 
@@ -209,12 +245,22 @@ A stable symlink `**core-image-minimal-elevator-hmi-em3566.rootfs.wic`** may exi
 
 ## Step 2 — Identify latest WIC
 
+**⚠️ "Latest by file timestamp" is not the same thing as "the recommended/intended build."** This
+`ls -t | head -1` trick is a reasonable fallback only when you're deliberately flashing whatever
+you personally just finished building in this same session. For any other case — e.g. picking up
+where a previous session left off — use the **CURRENT TEST TARGET** section above (or the newest
+`diary/SESSION-LOG.md` entry) instead, and verify the SHA-256 against what that log names. This
+project's deploy directory routinely accumulates diagnostic-only scratch builds (BIST tests,
+register-probe builds) that can have a newer mtime than the actual intended test image — see the
+2026-07-03 `diary/SESSION-LOG.md` entry for a concrete example of exactly this happening.
+
 From the **repository root** (or any directory, using an explicit path):
 
 ```bash
 DEPLOY=build/tmp/deploy/images/elevator-hmi-em3566
 WIC=$(ls -t "$DEPLOY"/*.wic | head -1)
 echo "Will flash: $WIC"
+# Cross-check this against diary/SESSION-LOG.md's current target before trusting it.
 ```
 
 After `**cd**` into `**$DEPLOY**` (Step 3), resolve again so the name is correct for `**wl**`:
