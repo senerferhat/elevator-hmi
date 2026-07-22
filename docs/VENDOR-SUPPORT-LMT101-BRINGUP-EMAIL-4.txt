@@ -71,9 +71,19 @@ in this campaign:
   0x45 (scanline)        = 0x00   (constant, in every capture ever taken)
   init table             = 196/196 commands accepted, rc=0
 
-For completeness: our earlier tests ran the identical sequence at your stated
-420 Mbps/lane (device-tree rate override) and at our host default 468 Mbps/lane
-— the panel register readback was byte-identical at both rates.
+Read-reliability note, for full transparency: at 468 Mbps/lane, the DCS
+diagnostic reads above have succeeded on every build and every boot. At your
+stated 420 Mbps/lane (device-tree rate override), one 2026-06-13 build
+produced successful reads, byte-identical to the 468 Mbps values above (that
+capture was attached to our 3 July email); four other 420 Mbps builds returned
+host-side read timeouts (BTA/read-turnaround, error -110) on ALL diagnostic
+reads. We did not root-cause that host-side quirk; it is the reason our
+current baseline runs at 468 Mbps, where diagnostics are fully reliable.
+Register WRITES succeeded at both rates in every build (init table rc=0), and
+one 420 Mbps build visibly delivered video energy to the glass (noise/
+flicker), so the write/video direction was functional at 420 as well. This
+note does not affect section 1: the BIST run above was performed at 468 Mbps
+with fully reliable reads in the same boot.
 
 ================================================================================
 3. HARDWARE STATE THE TEST RAN ON (complete, including one rework)
@@ -125,7 +135,8 @@ command — consistent with the order in your Q1 timing diagram.
     vfp/vsync/vbp = 30/4/10, pixel clock 70 MHz, 800x1280, RGB888, 4 lanes.
   - DSI mode: video mode, non-burst (mode_flags 0x00000201), 4 lanes.
     Host-calculated link rate 468 Mbps/lane on this build; 420 Mbps/lane was
-    tested earlier via explicit override with byte-identical register results.
+    tested earlier via explicit override (see the read-reliability note at the
+    end of section 2 for the full record at that rate).
   - Command framing: DCS writes for the init table (generic-write framing was
     also tested earlier: byte-identical results).
   - SoC pixel path (from the same boot, for completeness): VOP2 port vp1,

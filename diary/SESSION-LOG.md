@@ -854,6 +854,18 @@ panel-side defect independent of the (self-test-healthy) timing controller logic
   bidirectional readback. Rate becomes relevant only after a panel lights. The
   PLL_CLOCK=420 semantics (420 Mbps/lane vs 420 MHz clock lane = 840 Mbps/lane)
   goes to the vendor as neutral factual question A, not as a test build.
+- Owner challenge (correct): "at 420 the reads failed — is 420 guilty, and was the
+  vendor mail accurate?" Re-derived from the record: 420 not PROVEN guilty (one
+  dmesg-confirmed 420 build, `7dbf72d9`, read clean) but all four other 420 builds
+  hit `-110` on every read and 468 has never failed once; co-variable never isolated
+  (BIST and pinctrl both falsified). Writes worked at 420 in all builds. The 7/3
+  email's parity claim was true only for succeeded reads and glossed the failures
+  in the body (attachments disclosed it). EMAIL-4 v2 corrected: explicit
+  read-reliability paragraph added to section 2 (1 clean / 4 failed at 420, -110
+  = host BTA, root cause unknown, baseline 468 for reliable diagnostics; BIST
+  verdict unaffected — produced at 468 with clean reads). No 420 re-test build now:
+  BIST is rate-independent; revisit only if vendor's answer to question A requires
+  rate parity.
 - **Vendor email #4 REWRITTEN as pure state dump** (owner direction: "don't lead the
   vendor, perfect state dump with all sources"): BIST result both units, verbatim
   dmesg, full hardware state incl. bypass rework disclosure, exact firmware config,
