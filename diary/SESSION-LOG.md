@@ -845,6 +845,23 @@ panel-side defect independent of the (self-test-healthy) timing controller logic
 - Pending confirmation passes before finalizing the vendor verdict: (1) one power cycle
   watched continuously, dim room, backlight confirmed ON; (2) same BIST image with the
   spare panel connected → would make it BIST-black on BOTH units.
+- **CONFIRMED (owner, same day): spare panel connected, same BIST image, same result —
+  BLACK on both units.** dmesg identical (BIST armed 4.471s, clean DIAG15, rc=0).
+- Engineering decision on the rate question (owner asked "anything left to test?"):
+  NO further rate/mode builds. Vendor's own definition — BIST runs "independently of
+  the host MIPI video stream" — means no host lane-rate/burst setting can alter a
+  BIST-black outcome; the command channel BIST depends on is proven working by
+  bidirectional readback. Rate becomes relevant only after a panel lights. The
+  PLL_CLOCK=420 semantics (420 Mbps/lane vs 420 MHz clock lane = 840 Mbps/lane)
+  goes to the vendor as neutral factual question A, not as a test build.
+- **Vendor email #4 REWRITTEN as pure state dump** (owner direction: "don't lead the
+  vendor, perfect state dump with all sources"): BIST result both units, verbatim
+  dmesg, full hardware state incl. bypass rework disclosure, exact firmware config,
+  VDDIN-jpg reading + window question, 7 factual questions (A–G) incl. 3rd ask of
+  peak-inrush spec and boost-architecture contradiction, disposition options
+  (ship back / known-good module / further tests). File:
+  docs/VENDOR-SUPPORT-LMT101-BRINGUP-EMAIL-4.txt (v2). Send checklist at bottom
+  (log txt, two photos, bypass wording check, source attachment).
 - Also reviewed vendor's VDDIN_20260707.jpg scope shot (owner posted): power-up window
   only — 0V → ~1.3V pre-charge shelf ~90ms → hard step to 3.33V, rise time 72ms, no
   post-step sag. NOT the post-SLPOUT inrush window Ferhat asked for; peak/inrush current
