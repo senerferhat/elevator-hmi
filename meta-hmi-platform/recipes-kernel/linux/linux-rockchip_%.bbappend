@@ -26,10 +26,11 @@ SRC_URI += "file://0018-drm-panel-jadard-lmt101-dcs-init.patch"
 # TASK-140 VENDOR-CLOCK-MATCH: non-burst -> 420 Mbps (PLL_CLOCK=420) + Q1 20ms XRES low
 SRC_URI += "file://0019-drm-panel-jadard-lmt101-vendor-clock-match.patch"
 # Vendor TEST 2: arm BIST self-test on top of full FAE_CLOCK init (diagnostic image ONLY).
-# DISARMED for the production/vendor-match image: vendor (13 Jun) states BIST is a separate
-# diagnostic, and E3,01 soft-resets the display engine (our H4a test: 0x0A=0x08) — it sabotages
-# the normal video path. Re-enable only to build a dedicated BIST self-test image.
-# SRC_URI += "file://0020-drm-panel-jadard-lmt101-fae-clock-bist-arm.patch"
+# E3,01 soft-resets the display engine (our H4a test: 0x0A=0x08) — it sabotages the normal
+# video path. ENABLED 2026-07-22 per vendor 7/7 request: dedicated BIST image on the
+# clean-reads 468 Mbps base (DIAG15 reads land before BIST arm). Disable again for the
+# production video image after the BIST verdict is recorded.
+SRC_URI += "file://0020-drm-panel-jadard-lmt101-fae-clock-bist-arm.patch"
 # H4a test: ELIMINATED 2026-06-10 — E3,01 causes panel soft-reset (0x0A=0x08), not booster enable
 # SRC_URI += "file://0016-drm-panel-jadard-lmt101-h4a-e3-booster-enable.patch"
 # FAE BUILD A v2 (BIST + 500ms + no burst): comment 0013, enable 0012+0014
