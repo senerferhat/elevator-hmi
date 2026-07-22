@@ -778,3 +778,57 @@ panel-side defect independent of the (self-test-healthy) timing controller logic
   exhausted as a variable.
 
 ---
+
+## 2026-07-22 (second entry — owner redirect: full audit + vendor-first plan)
+
+- Action: Owner direction (verbatim intent): forget prior conclusions post-hardware-changes;
+  either do what the vendor says or audit the full firmware path SoC→panel with zero trust;
+  hardware vouched (reset correct, rails correct, backlight lit, no image); full control
+  granted. Executed: (a) zero-trust source audit of the entire display path from the actual
+  patched build tree, (b) boot-log review of the live board, (c) fresh BIST diagnostic build
+  per the vendor's 7/7 request.
+- Kill test defined before acting: BIST image — pattern on glass = panel healthy, fault in
+  host video path (next suspect: MediaTek PLL_CLOCK semantics, see finding 2); black = vendor's
+  own criterion "hardware issue confirmed", on two panels, with verified rails/reset → vendor
+  must provide hardware disposition. Written into FLASH-PROCEDURE.md before flashing.
+- Result (artifact triple):
+  - **Audit finding 1 — init table verified byte-identical by script**: 196/196 entries,
+    same order, vendor `LMT101SX006C initial codes.txt` vs compiled
+    `lmt101sx006c_init_cmds[]` (a naive diff trips over a legitimate mid-table page-1
+    `0x11` register write at index 93 — accounted for). Reset sequence, porches
+    (40/20/20, 30/4/10), 70 MHz, enable path: all match vendor spec exactly. The
+    command/config layer is exonerated with direct evidence, not inherited claims.
+  - **Audit finding 2 — NEW SUSPECT, never tested in the whole campaign**: the vendor init
+    file is MediaTek LCM format; in that convention `PLL_CLOCK=420` is the D-PHY **clock
+    lane frequency in MHz**, i.e. **840 Mbps/lane** DDR data rate — not 420 Mbps/lane.
+    Every build ever tested ran 420 or 468 Mbps/lane. If correct, we have never matched
+    the fixture's electrical condition; "rate doesn't matter" (vendor 7/7) was concluded
+    from two rates that are both ~half the fixture's. Question added for vendor; candidate
+    single-variable test if BIST shows a pattern: `rockchip,lane-rate=<840>` + restore
+    `VIDEO_BURST`.
+  - **Boot-log review (owner-supplied full UART capture, board = 468-clean-reads image,
+    identity confirmed via mode_flags 0x201/burst=0/468x4 bandwidth/no BIST sentinel)**:
+    dclk_vop1 exactly 70 MHz; XRES 27 ms low, first DCS 126 ms later; standing signature
+    unchanged (0x0A=0x1c, 0x0F=0xC0, 0x45=0x00). New observations: (i) gpio0-22 pin
+    conflict — EVB leftover `fe6e0030.pwm` (IR remote) loses the pin race to the panel;
+    benign today, probe-order race by construction; cleanup: disable node in board DTS
+    (separate commit, never mixed into a test build). (ii) rk808/RK809 PMIC never binds
+    ("failed to read chip id"); all rails are fixed-regulator stand-ins → kernel cannot
+    actually gate panel power on this carrier; real power = hardware/bypass, DMM-verified
+    by owner. (iii) DRAM reports 1006 MiB vs 2 GB spec — BOM/SoM-variant flag, not
+    display-related. (iv) eMMC 7.23 GiB vs 16 GB spec — same flag.
+  - **Repo state fixed**: pending DTSI/FLASH-PROCEDURE deltas committed (`c934583`) —
+    tree matches flashed image for the first time this campaign. BIST toggle commit
+    `e7871a9` (patch 0020 enabled; revert for video builds).
+  - **BIST image built**: `…rootfs-20260722201147.wic` (symlink `…rootfs-bist-468.wic`),
+    WIC SHA-256 `de0e0b6035074d7d75bb0d4d661888a9054b0c01a143d6448c3ca28c59428473`,
+    git HEAD `e7871a9`, clean tree. Confound check: Image strings contain
+    `BIST armed (FAE_CLOCK + vendor TEST 2)`; DTB has 0×`lane-rate`, 2×`lcd-rst`.
+- Conclusion: firmware path fully audited and clean; one genuinely new electrical suspect
+  (840 Mbps) queued behind the vendor's BIST test. Board behavior matches source exactly.
+- Next: owner flashes `bist-468.wic` (procedure + expected dmesg in FLASH-PROCEDURE.md),
+  reports dmesg + glass photo. Then: pattern → build 840 Mbps burst test; black → vendor
+  email #4 (draft ready) upgraded with the BIST-on-two-panels verdict, demanding hardware
+  disposition.
+
+---

@@ -36,9 +36,52 @@ below, to avoid a second stale pointer existing alongside the current one.)*
 
 ---
 
-## CURRENT TEST TARGET (2026-07-03, final) — reverted to proven clean-reads state (468 Mbps)
+## CURRENT TEST TARGET (2026-07-22) — BIST diagnostic image (vendor 7/7 request), 468 Mbps base
 
-**Status: recommended for next flash.** Supersedes `420clean-xres.wic`, `no-pinctrl-fix.wic`, and
+**Status: recommended for next flash.** Vendor's 7 Jul decision tree, run fresh on the
+now-validated hardware (owner: reset correct, rails DMM-verified, backlight lit; spare panel
+already swapped — also black). Patch 0020 arms the vendor TEST 2 BIST sequence
+(`F0,55 / F1,AA / E0,01 / E3,01`) after the full 196-cmd init + page-4 clock fix + SLPOUT/DISON,
+with the DIAG15 reads (`0x0A/0x04/0x0F/0x45`) captured BEFORE the BIST arm. Built on the
+clean-reads 468 Mbps base so the register verdict is reliable in the same boot.
+
+**Kill test (written before flashing):**
+- **Test pattern appears on glass** → panel + boost healthy → fault is in the host video path;
+  next single-variable suspect is the MediaTek `PLL_CLOCK=420` interpretation (420 MHz clock
+  lane = **840 Mbps/lane** DDR, never tested — every build so far ran 420 or 468 Mbps/lane).
+- **Still black** → by the vendor's own written criterion ("panel or JD5001 boost circuit
+  faulty — hardware issue confirmed"), on TWO panels with verified reset/rails/backlight →
+  reply to vendor demands hardware disposition (RMA / cross-test / fixture comparison), no
+  further firmware permutations.
+
+| Field | Value |
+|---|---|
+| **File** | `core-image-minimal-elevator-hmi-em3566.rootfs-20260722201147.wic` (symlink `…rootfs-bist-468.wic`) |
+| **Built** | 2026-07-22 23:16 (fresh, this session) |
+| **WIC SHA-256** | `de0e0b6035074d7d75bb0d4d661888a9054b0c01a143d6448c3ca28c59428473` |
+| **git HEAD** | `e7871a9` (clean tree — no uncommitted kernel/DTS deltas for the first time this campaign) |
+| **Confound check** | Image `strings`: `BIST armed (FAE_CLOCK + vendor TEST 2)` present; DTB: `rockchip,lane-rate` 0 occurrences (468 base), `lcd-rst` 2 (reset fix intact) |
+| **Expected dmesg** | Same clean sequence as 468-clean-reads PLUS sentinel `jadard: BIST armed (FAE_CLOCK + vendor TEST 2)` after the DIAG15 reads |
+| **What to report back** | (a) `dmesg \| grep -iE "jadard\|bandwidth"` in full, (b) **glass appearance / photo** — pattern vs black is the entire verdict, (c) note: E3,01 soft-resets the display engine, so normal video will NOT work on this image — that is expected |
+
+### Flash commands (BIST image)
+
+```bash
+# ── 0. From repository root ──────────────────────────────────────────
+DEPLOY=build/tmp/deploy/images/elevator-hmi-em3566
+WIC=core-image-minimal-elevator-hmi-em3566.rootfs-bist-468.wic
+
+# ── 1. Verify SHA before touching the board ──────────────────────────
+sha256sum "$DEPLOY/$WIC"
+# Expected: de0e0b6035074d7d75bb0d4d661888a9054b0c01a143d6448c3ca28c59428473
+# (then follow the same Maskrom + rkdeveloptool steps as the section below)
+```
+
+---
+
+## PREVIOUS TEST TARGET (2026-07-03, final) — reverted to proven clean-reads state (468 Mbps)
+
+**Status: flashed 2026-07-03, confirmed on board 2026-07-22 (boot log reviewed — image identity verified).** Supersedes `420clean-xres.wic`, `no-pinctrl-fix.wic`, and
 `final-reset-restored.wic` (all preserved in git history). Full story, in order today: (1) blamed
 420 Mbps for `-110` DCS-read timeouts — wrong, `7dbf72d9…` proved 420 Mbps alone reads clean;
 (2) blamed BIST (patch 0020) — wrong, a BIST-free rebuild still showed `-110`; (3) blamed TASK-141's
