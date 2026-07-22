@@ -831,4 +831,25 @@ panel-side defect independent of the (self-test-healthy) timing controller logic
   email #4 (draft ready) upgraded with the BIST-on-two-panels verdict, demanding hardware
   disposition.
 
+### BIST flash result (same day, later)
+
+- First flash attempt FAILED and was caught: wrong `$WIC` var (pointed at old
+  468-clean-reads symlink) + `udo` typo; `wl 0` errored ("can't open file"), only
+  idblock/uboot rewrote; board booted old image (no BIST sentinel in dmesg). Owner's
+  "too fast" instinct was correct. Reflash with corrected sequence succeeded.
+- **Result (artifact triple): WIC SHA `de0e0b6035074d7d75bb0d4d661888a9054b0c01a143d6448c3ca28c59428473`
+  / dmesg sentinel `jadard: BIST armed (FAE_CLOCK + vendor TEST 2)` at 4.466s, after clean
+  DIAG15 (`0x0A=0x1c`, `0x0F=0xc0`, `0x45=0x00`, ID 93 00 00, rc=0) / git HEAD `e7871a9`.**
+- **Glass: STILL BLACK with BIST armed.** Vendor's own 7/7 criterion: "Still black →
+  panel or JD5001 boost circuit is faulty – hardware issue confirmed."
+- Pending confirmation passes before finalizing the vendor verdict: (1) one power cycle
+  watched continuously, dim room, backlight confirmed ON; (2) same BIST image with the
+  spare panel connected → would make it BIST-black on BOTH units.
+- Also reviewed vendor's VDDIN_20260707.jpg scope shot (owner posted): power-up window
+  only — 0V → ~1.3V pre-charge shelf ~90ms → hard step to 3.33V, rise time 72ms, no
+  post-step sag. NOT the post-SLPOUT inrush window Ferhat asked for; peak/inrush current
+  question remains unanswered (3rd time). Healthy reference: 3.3V stiff. Note: their
+  fixture lights panels despite a non-monotonic POR-hazard ramp → VDDIN ramp shape is
+  not a plausible failure axis on our side.
+
 ---
