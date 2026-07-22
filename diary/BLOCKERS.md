@@ -12,6 +12,22 @@
 **Severity:** **HIGH** — blocks Phase 1 display gate; no further userspace tests change diagnosis  
 **Owner:** A1 / vendor FAE  
 
+**2026-07-22 — VENDOR BIST TEST EXECUTED: BLACK ON BOTH PANEL UNITS — hardware
+branch of vendor's own criterion.** Fresh BIST image (`bist-468.wic`, WIC SHA
+`de0e0b60…`, git `e7871a9`): full 196-cmd init + page-4 fix + SLPOUT/DISON +
+vendor TEST 2 arm (`F0,55/F1,AA/E0,01/E3,01`), clean DIAG15 in same boot
+(`0x0A=0x1c`, `0x0F=0xC0`, `0x45=0x00`, rc=0), sentinel `BIST armed` logged.
+Glass black on unit #1 AND spare unit #2, backlight lit, watched 30+ s. Ran on
+the **stock VCC3V3_LCD switch path** (bypass jumper removed — see BLK-013
+supersede note). Per vendor 7/7: "Still black → panel or JD5001 boost circuit
+is faulty – hardware issue confirmed." Zero-trust firmware audit same day:
+init table 196/196 byte-identical by script; reset/porches/enable path all
+vendor-exact. **No further firmware permutations planned.** State-dump reply
+drafted (`docs/VENDOR-SUPPORT-LMT101-BRINGUP-EMAIL-4.txt`, questions A–G incl.
+PLL_CLOCK semantics, analog-rail pin map for DMM, 3rd ask of peak-inrush spec,
+boost-architecture contradiction, disposition). **Blocker now waits on vendor
+answer / hardware disposition.**
+
 **2026-06-13 — VENDOR-CLOCK-MATCH image built (TASK-140 / patch 0019).** Workspace synced to vendor truths: lane rate forced to **420 Mbps** (drop `VIDEO_BURST`, vendor PLL_CLOCK=420 / 5 Jun "rate mismatch") and XRES low pulse **20 ms** (vendor Q1). Init table / porches / FAE page-4 clock / tail / DIAG15 already vendor-matched. WIC `vendor-clock-match` SHA `7dbf72d902a580c05db0d236665b18eaf227309395104257efa075c3ea1217a7`, git `d9565d6`+0019. Bench pending: flash, confirm `420 x 4 Mbps`, BL **9.6 V**, VDDIN/lane scope. Vendor 13 Jun Q2 says LP-at-0x11 not gating → continuous-HS-before-init deferred to scope.
 
 

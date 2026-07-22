@@ -1,0 +1,48 @@
+Elevator HMI — EM3566 v3 + LMT101SX006C bring-up
+Capture date: 2026-07-04 (session date per local project log; board local clock unset)
+Build: core-image-minimal-elevator-hmi-em3566.rootfs-468-clean-reads.wic
+       SHA-256: 962c58ebea61f62d9b02e2890d1cb36e4b3503adc514f9d3c787581022a96466
+DT state: `rockchip,lane-rate` override REMOVED (driver falls back to
+          pixel-clock-derived rate; DTB confirmed no "lane-rate" string present)
+TASK-141 XRES pinctrl (max drive strength + pull-up): PRESENT
+BIST (patch 0020): NOT armed on this build
+
+Command run on target:
+    dmesg | grep -iE "jadard|bandwidth|mode_flags"
+
+Raw output (verbatim, as captured — two lines below are terminal-width
+truncated; see note at bottom):
+
+root@elevator-hmi-em3566:~# dmesg | grep -iE "jadard|bandwidth|mode_flags"
+[    2.450675] jadard-jd9365da fe060000.dsi.0: jadard: VENDOR-CLOCK-MATCH — VIDEO non-burst (PLL_CLO)
+[    2.450835] jadard-jd9365da fe060000.dsi.0: jadard: reset gpio = gpio-22
+[    3.492526] jadard-jd9365da fe060000.dsi.0: jadard: XRES assert
+[    3.519205] jadard-jd9365da fe060000.dsi.0: jadard: XRES release
+[    3.646016] jadard-jd9365da fe060000.dsi.0: jadard: dsi mode_flags=0x00000201 lanes=4 format=0 video=1 burst0
+[    3.646064] jadard-jd9365da fe060000.dsi.0: jadard: DCS-INIT
+[    3.698952] jadard-jd9365da fe060000.dsi.0: jadard: FAE page-4 clock fix (pre-SLPOUT)
+[    3.701087] jadard-jd9365da fe060000.dsi.0: jadard: SLPOUT sent
+[    3.829248] jadard-jd9365da fe060000.dsi.0: jadard: DISON sent
+[    3.896628] jadard-jd9365da fe060000.dsi.0: jadard: GET_POWER_MODE(0x0A) pre-TE=0x1c
+[    3.912545] jadard-jd9365da fe060000.dsi.0: jadard: DIAG15 ID=0x93 0x00 0x00 (expect 93 65 04)
+[    3.930009] jadard-jd9365da fe060000.dsi.0: jadard: DIAG15 self-diag=0xc0 (0xC0=OK 0x80=func-fault 0x40=reg-)
+[    3.942848] jadard-jd9365da fe060000.dsi.0: jadard: FAE TE on (0x35,0x00)
+[    3.978996] jadard-jd9365da fe060000.dsi.0: jadard: DIAG15 scanline=0x00 (non-0=timing-ctrl-running)
+[    3.979040] jadard-jd9365da fe060000.dsi.0: jadard: DIAG15
+[    3.979049] jadard-jd9365da fe060000.dsi.0: jadard: init table: 196 cmds, rc=0
+[    3.979099] dw-mipi-dsi-rockchip fe060000.dsi: [drm:dw_mipi_dsi_bridge_atomic_enable] final DSI-Link bandwids
+root@elevator-hmi-em3566:~#
+
+NOTE ON TRUNCATION: the terminal window cut off two lines at the right edge:
+  - "...format=0 video=1 burst0" is "...format=0 video=1 burst=0" (mode_flags
+    0x201 = MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_NO_EOT_PACKET; burst bit
+    cleared per patch 0019 VENDOR-CLOCK-MATCH logic).
+  - "...final DSI-Link bandwids" is "...final DSI-Link bandwidth: 468 x 4
+    Mbps" (468 Mbps = host-calculated rate when no `rockchip,lane-rate`
+    override is present in the device tree; confirmed by reading
+    dw-mipi-dsi-rockchip.c source, not directly observed in this truncated
+    capture). A full-width recapture (`dmesg | grep -iE ... | cat -A` or a
+    wider terminal) can be provided on request.
+
+Glass state at time of capture: backlit black (backlight on, no image,
+external ambient light bleed only visible).

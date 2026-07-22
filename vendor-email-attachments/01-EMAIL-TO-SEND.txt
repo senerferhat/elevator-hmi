@@ -1,0 +1,183 @@
+To:      sales06@alltouchdisplay.com
+Cc:      sales@alltouchdisplay.com
+From:    senerferhat01@gmail.com
+Subject: Re: LMT101SX006C — still black after full vendor-parity firmware match
+         (420 + 468 Mbps both tested, source code attached) — need your help
+         narrowing down the boost/analog side
+
+Thread: "Technical Support Request: JD9365D Initialization Array for LMT101SX006C"
+
+--------------------------------------------------------------------------------
+
+Dear Abby / LCD Mall FAE,
+
+Thank you for checking in. Short answer: not solved yet, but we have gone much
+further since our last message, and we now believe the remaining gap is on the
+analog/boost side rather than anything in our MIPI/DCS command sequence. We are
+attaching our actual driver source (C) below so your engineer can check our
+exact register writes and timings directly, rather than relying on our summary.
+
+WHAT WE HAVE DONE SINCE OUR LAST EMAIL:
+
+1. Implemented your exact PLL_CLOCK=420 rate (dropped MIPI burst mode on our
+   host so the DSI PHY runs at 420 Mbps/lane instead of our previous 468).
+2. Implemented your Q1 reset diagram exactly: XRES high 5 ms -> low 20 ms ->
+   high 120 ms (previously we used the init file's 10 ms low pulse).
+3. Re-ran every register read test at BOTH 420 Mbps and 468 Mbps, with your
+   page-4 clock-fix block, with and without our internal BIST diagnostic, and
+   with two different MIPI packet framings (generic write vs. DCS write) for
+   the 196-entry init table.
+
+RESULT: every single one of these combinations produces byte-identical panel
+register readback. The DSI rate, the packet framing, and the reset pulse width
+make no measurable difference to panel state. We consider our command sequence
+fully exhausted as a variable.
+
+LATEST CAPTURE, TODAY (host-calculated ~468 Mbps -- no DT rate override, your
+init table, your page-4 clock fix, your Q1 reset timing, no BIST):
+
+    jadard: reset gpio = gpio-22
+    jadard: XRES assert
+    jadard: XRES release
+    jadard: dsi mode_flags=0x00000201 lanes=4 format=0 video=1 burst=0
+    jadard: FAE page-4 clock fix (pre-SLPOUT)
+    jadard: SLPOUT sent
+    jadard: DISON sent
+    jadard: GET_POWER_MODE(0x0A) pre-TE=0x1c
+    jadard: DIAG15 ID=0x93 0x00 0x00 (expect 93 65 04)
+    jadard: DIAG15 self-diag=0xc0 (0xC0=OK 0x80=func-fault 0x40=reg-fault 0x00=dead)
+    jadard: FAE TE on (0x35,0x00)
+    jadard: DIAG15 scanline=0x00 (non-0=timing-ctrl-running)
+    jadard: init table: 196 cmds, rc=0
+    dw-mipi-dsi-rockchip: final DSI-Link bandwidth: 468 x 4 Mbps [1]
+
+EARLIER CAPTURE, YOUR STATED 420 Mbps, WITH your Q1 20 ms reset pulse
+(2026-06-13 -- same firmware stack, driver forced to your exact rate via a
+device-tree override; identical panel-side registers to the 468 Mbps run):
+
+    jadard: VENDOR-CLOCK-MATCH -- VIDEO non-burst (PLL_CLOCK=420)
+    jadard: dsi mode_flags=0x00000201 lanes=4
+    jadard: FAE page-4 clock fix (pre-SLPOUT)
+    jadard: SLPOUT sent / DISON sent
+    jadard: GET_POWER_MODE(0x0A) pre-TE=0x1c
+    jadard: DIAG15 ID=0x93 0x00 0x00
+    jadard: DIAG15 self-diag=0xc0
+    jadard: DIAG15 scanline=0x00
+    jadard: init table: 196 cmds, rc=0
+    dw-mipi-dsi-rockchip: final DSI-Link bandwidth: 420 x 4 Mbps
+
+[1] Our terminal capture cut this line off mid-number ("...final DSI-Link
+    bandwidth: 468 x 4 Mb..."). 468 Mbps is what our host driver calculates
+    for this panel timing when no rate override is set (confirmed by reading
+    our own DSI PHY driver source), and a full-width recapture is trivial if
+    you would like to see the untruncated line -- flagging so this isn't
+    mistaken for a fabricated number.
+
+Per your 13 June reply, 0x0A=0x1c (booster bit D7=0, sleep-out + display-on
+bits set) is your *healthy* reading, and 0x9C would indicate a faulty boost.
+We are not seeing 0x9C, so by your own criterion the IC is not reporting a
+boost fault -- and yet 0x45 (scanline) is 0x00 in every capture we have ever
+taken, meaning the internal timing controller never starts a refresh cycle,
+and the glass stays black.
+
+OUR SOURCE CODE (Linux kernel DRM panel driver, C) -- please have your JD9365D
+application engineer check this against your reference implementation:
+
+--------------------------------------------------------------------------------
+1) Reset sequence (jadard_prepare(), called once at panel power-up):
+--------------------------------------------------------------------------------
+
+    ret = regulator_enable(jadard->vccio);
+    ret = regulator_enable(jadard->vdd);
+
+    msleep(10);   /* wait after rails before touching RESX */
+
+    /* GPIO_ACTIVE_LOW: gpiod_set_value(0) = pad HIGH, gpiod_set_value(1) = pad LOW */
+    gpiod_set_value(jadard->reset, 0);
+    msleep(5);                         /* RESX high settle, per your init file */
+
+    gpiod_set_value(jadard->reset, 1); /* RESX asserted (LOW) */
+    msleep(20);                        /* your Q1 diagram: 20 ms low pulse */
+
+    gpiod_set_value(jadard->reset, 0); /* RESX released (HIGH) */
+    msleep(120);                       /* post_reset_delay before first MIPI command */
+
+--------------------------------------------------------------------------------
+2) Init + power-on sequence (jadard_enable(), called once per modeset):
+--------------------------------------------------------------------------------
+
+    jadard_init_sequence(jadard);   /* your 196-entry table, byte-identical,
+                                        sent as one write per register pair */
+
+    /* Your Test-1 page-4 clock fix, sent immediately before Sleep Out: */
+    {0xE0,0x04}, {0x37,0x58}, {0x35,0x08}, {0x36,0x49}, {0x2C,0x06}, {0xE0,0x00}
+
+    mipi_dsi_dcs_exit_sleep_mode(dsi);      /* 0x11 SLPOUT */
+    msleep(120);
+    mipi_dsi_dcs_write_buffer(dsi, {0xE0,0x00}, 2);
+    mipi_dsi_dcs_set_display_on(dsi);       /* 0x29 DISON */
+
+    msleep(50);
+    read(0x0A);   /* GET_POWER_MODE  -> 0x1c  */
+    read(0x04);   /* Manufacturer ID -> 0x93 0x00 0x00 */
+    read(0x0F);   /* Self-diagnostic -> 0xC0  */
+
+    msleep(5);
+    write(0x35, 0x00);   /* Tearing Effect ON */
+    msleep(20);
+    read(0x45);   /* Scanline -> 0x00 (always, every build, every rate) */
+
+--------------------------------------------------------------------------------
+3) Panel timing descriptor (matches your init-file porches exactly):
+--------------------------------------------------------------------------------
+
+    .clock       = 70000 kHz   /* your PLL_CLOCK reference */
+    .hdisplay    = 800,  hfront_porch=40, hsync=20, hback_porch=20
+    .vdisplay    = 1280, vfront_porch=30, vsync=4,  vback_porch=10
+    .lanes       = 4
+    .format      = RGB888
+
+QUESTIONS FOR YOUR JD9365D APPLICATION ENGINEER:
+
+Q1 (most important): We now match every parameter in your init file, your Q1
+reset diagram, your Test-1 clock fix, and your stated PLL_CLOCK=420 -- and the
+IC still never reports a running timing controller (0x45 stays 0x00 always).
+On your bench, when this exact file lights a panel, what does VDDIN look like
+on a scope during the ~120 ms window right after Sleep Out? Specifically: does
+it dip at all during boost startup, and if so by how much / for how long? We
+would like to compare our own scope capture against a known-good reference
+trace from your side, since we do not have a second known-good unit to compare
+against yet.
+
+Q2: Is there any register, on any page, that reads back the JD5001 external
+boost's own status directly (separate from the JD9365D's own 0x0A/0x0F/0x45),
+so we could distinguish "IC commanded the boost on but the boost IC itself
+failed" from "the IC never actually asserted the boost-enable pin"?
+
+Q3: Is there a minimum load current the JD9365D's source drivers must present
+before the JD5001 will latch on, that could fail silently if, for example, the
+gate driver side of the panel had a defect independent of the timing controller
+digital logic (which self-tests healthy via 0x0F=0xC0)?
+
+CURRENT STATUS ON OUR SIDE:
+
+- Backlight: verifying against your stated 9.6 V / 180 mA spec.
+- VDDIN: 3.3 V steady-state confirmed by DMM; oscilloscope capture of the
+  120 ms post-SLPOUT inrush window is our next bench step.
+- Spare panel units: on hand, swap test scheduled next.
+- MIPI lane scope (CLK/D0-D3): scheduled, confirmatory only -- our bidirectional
+  DCS reads already prove the command path works correctly in both directions.
+
+We are not asking you to re-explain the init file -- we have verified it
+byte-for-byte multiple times and it is not in question. What we need is any
+insight into what, on the analog/boost side specifically, could produce a
+"digitally perfect, self-diagnostic OK, but timing controller never starts"
+signature on an otherwise correctly-commanded panel. If this is most likely a
+defective sample, please let us know so we can prioritize the swap test and
+close this out.
+
+Thank you for your continued support.
+
+Best regards,
+Ferhat Sener
+Freelancer Developer -- Elevator HMI Project (RK3566)

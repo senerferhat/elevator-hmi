@@ -2,6 +2,36 @@
 
 **Format:** One entry per session. Most recent entry first.
 
+> **NOTE (2026-07-23):** day-to-day investigation record moved to
+> `diary/SESSION-LOG.md` (flat log, charter rev 2). This file now carries
+> milestone-level summaries only.
+
+## 2026-07-22/23 — Vendor BIST test: black on BOTH panels; state-dump reply ready; workspace cleaned
+
+**Agent:** lead (single-agent, charter rev 2)
+
+- **Zero-trust firmware audit** (owner directive): init table re-verified **196/196
+  byte-identical** to vendor file by script; reset timing, porches, enable path, dclk
+  (70 MHz exact) all vendor-exact from the actual patched build tree. Command layer
+  exonerated with direct evidence.
+- **Vendor's 7/7 BIST test executed** on fresh `bist-468.wic` (SHA `de0e0b60…`, git
+  `e7871a9`): BIST armed + clean DIAG15 same boot → **glass BLACK on unit #1 and
+  spare unit #2** — the "hardware issue confirmed" branch of the vendor's own
+  criterion. Ran on the stock VCC3V3_LCD switch path (bypass jumper removed;
+  BLK-013 superseded — May diagnosis was wrong-pin/inverted-polarity).
+- **Record corrections:** email #3 confirmed SENT 7/3; 420 Mbps read-reliability
+  stated precisely (1 clean / 4 × `-110` builds; 468 always clean); dclk question
+  closed.
+- **Vendor reply #4** (pure state dump, no diagnosis pushed):
+  `docs/VENDOR-SUPPORT-LMT101-BRINGUP-EMAIL-4.txt` — verbatim logs, full hardware
+  state, questions A–G (PLL_CLOCK semantics 420 vs 840 Mbps/lane, analog-rail FPC
+  pin map + healthy DC values for DMM check, peak-inrush spec 3rd ask, VDDIN-jpg
+  capture window, external-vs-integrated boost, BIST preconditions, disposition).
+  Owner send checklist at file bottom. **Waiting on vendor.**
+- **Workspace cleanup:** junk removed, scratch dirs → `local-archive/` (ignored),
+  serial captures → `diary/captures/`, `vendor-email-attachments/` + email #3
+  tracked, `.gitignore` covers `build/`, `.claude/`.
+
 ## 2026-06-13 (session 10) — VENDOR-CLOCK-MATCH image built (TASK-140)
 
 **Agent:** A1 implement + build

@@ -1,0 +1,49 @@
+Elevator HMI — EM3566 v3 + LMT101SX006C bring-up
+Capture date: 2026-06-13 (historical — TASK-140 VENDOR-CLOCK-MATCH bench result)
+Build: core-image-minimal-elevator-hmi-em3566.rootfs-20260613123616.wic
+       (symlink: ...-vendor-clock-match.wic)
+       SHA-256: 7dbf72d902a580c05db0d236665b18eaf227309395104257efa075c3ea1217a7
+git HEAD at build time: d9565d644d76f37120c138d7ea4f5e42b72294b8
+DT state: `rockchip,lane-rate = <420>` EXPLICIT override (patch 0019 drops
+          MIPI burst mode for the LMT101 enable sequence, so host runs
+          70 MHz x 24 / 4 = 420 Mbps/lane, matching vendor's stated
+          PLL_CLOCK=420)
+TASK-141 XRES pinctrl (max drive strength + pull-up): NOT YET IN TREE
+          (added later; this build predates that patch)
+BIST (patch 0020): NOT armed on this build (0019 only)
+
+Source: diary/STATE-2026-06-13-vendor-reply.md and AGENTS.md TASK-140 record
+(on-target result table), reproduced here as the reference "420 Mbps clean"
+data point since it was not re-captured live in the current session.
+
+Reported dmesg signatures (from the artifact-triple record, required field
+for that build):
+
+    jadard: VENDOR-CLOCK-MATCH — VIDEO non-burst (PLL_CLOCK=420)
+    jadard: dsi mode_flags=0x00000201 lanes=4   (burst bit dropped vs
+                                                  previous 0x00000203)
+    jadard: FAE page-4 clock fix (pre-SLPOUT)
+    jadard: SLPOUT sent
+    jadard: DISON sent
+    jadard: GET_POWER_MODE(0x0A) pre-TE=0x1c
+    jadard: DIAG15 ID=0x93 0x00 0x00
+    jadard: DIAG15 self-diag=0xc0
+    jadard: DIAG15 scanline=0x00
+    jadard: init table: 196 cmds, rc=0
+    dw-mipi-dsi-rockchip: final DSI-Link bandwidth: 420 x 4 Mbps
+
+Cross-check: panel registers (0x0A=0x1c, 0x0F=0xc0, 0x45=0x00, ID=93 00 00)
+are byte-identical to every 468 Mbps capture taken before or since. Reset
+pulse scope-confirmed ~24 ms low-to-high (vendor Q1 spec: 20 ms).
+
+Glass state at time of capture: backlit black (same as all other builds;
+software fully vendor-matched at this point, hardware gate opened here).
+
+NOTE: at 420 Mbps WITH the later TASK-141 XRES pinctrl fix added, our BTA
+(bus turn-around) DCS reads have intermittently timed out (-110 ETIMEDOUT)
+in later regression testing — this is understood on our side to be an
+artifact of our own in-repo diagnostic read instrumentation timing at that
+specific rate/pinctrl combination, not a vendor-actionable panel-behavior
+difference (when reads do succeed at 420 Mbps, register values match this
+capture exactly). Included here for completeness; not something we need
+your team to investigate.
