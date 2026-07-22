@@ -27,39 +27,32 @@
 
 &dsi0 {
 	/*
-	 * 2026-07-03: vendor-exact PLL rate, corrected history (session-log
-	 * entries this date).
+	 * 2026-07-03: `rockchip,lane-rate = <420>` REMOVED again (owner direction:
+	 * revert to the one state proven to give clean DIAG15 register reads,
+	 * before drawing any further hardware conclusion). Without this
+	 * property the driver falls back to pixel_clock * (bpp/lanes) * 10/9 =
+	 * ~468 Mbps (dw_mipi_dsi_calculate_lane_mpbs() in
+	 * dw-mipi-dsi-rockchip.c never inspects mode_flags -- confirmed by
+	 * direct source read). This is NOT the vendor's stated PLL_CLOCK=420
+	 * (library/LMT101/LMT101SX006C initial codes.txt) -- that mismatch is
+	 * accepted for now in exchange for reliable diagnostics.
 	 *
-	 * Confirmed by reading dw_mipi_dsi_calculate_lane_mpbs() in
-	 * dw-mipi-dsi-rockchip.c directly: it never inspects mode_flags.
-	 * Without this DT property the driver falls back to
-	 * pixel_clock * (bpp/lanes) * 10/9 = ~468 Mbps (verified on-target:
-	 * "final DSI-Link bandwidth: 468 x 4 Mbps" with burst dropped) --
-	 * NOT the vendor's stated PLL_CLOCK=420 (library/LMT101/LMT101SX006C
-	 * initial codes.txt).
+	 * History: this property was added, then removed ("revert-step-a"),
+	 * then re-added today ("kill test", commit 769e5a0) to test vendor-rate
+	 * parity now that BIST (patch 0020) was confirmed as a separate,
+	 * unrelated confound. Result: `-110` DCS-read timeouts persisted at
+	 * 420 Mbps even with BIST absent and even with/without the TASK-141
+	 * XRES pinctrl fix present -- see diary/SESSION-LOG.md 2026-07-03 for
+	 * the full isolation chain across all four combinations tested. No
+	 * single-variable root cause was isolated. Meanwhile every build
+	 * WITHOUT this property (468 Mbps, driver-calculated) has produced
+	 * clean reads every single time tested (0x0A=0x1c, 0x0F=0xC0,
+	 * 0x45=0x00, ID=0x93) -- most recently confirmed 2026-07-03.
 	 *
-	 * CORRECTED ATTRIBUTION (do not re-blame the rate for BTA failures):
-	 * an earlier comment here claimed "420 + non-burst caused DCS BTA
-	 * reads to fail with -110" and this property was removed on that
-	 * basis ("revert-step-a"). diary/STATE-2026-06-13-vendor-reply.md
-	 * (already in-repo, predates that removal) shows this was a
-	 * misattribution: the -110 failures were traced to patch 0020
-	 * (BIST-unlock E3,01) soft-resetting the video engine on that same
-	 * build, not to the 420 Mbps rate. With 0020 disarmed, WIC
-	 * 7dbf72d9... ran 420 Mbps non-burst with clean DIAG15 reads
-	 * (0x0A=0x1c, 0x0F=0xC0, 0x45=0x00, ID=0x93 -- byte-identical to the
-	 * 468 Mbps baseline). Verified 2026-07-03 by reading the currently
-	 * compiled panel-jadard-jd9365da-h3.c: the LMT101 FAE_CLOCK enable
-	 * path has zero BIST-arm code reachable, and the bbappend has 0020
-	 * commented out. This build is confirmed clean of that confound.
-	 *
-	 * Expected outcome (per 7dbf72d9 precedent): clean reads at 420 Mbps,
-	 * identical register values to the 468 Mbps baseline, glass still
-	 * black. This is still the first time 420 Mbps has been tested
-	 * together with the TASK-141 XRES max-drive fix with BIST confirmed
-	 * absent -- closes the rate question with both fixes present at once.
+	 * Do not re-add this property without a new, explicit reason -- vendor
+	 * PLL_CLOCK=420 parity is a documented, accepted, deliberate deviation
+	 * while this investigation is open, not an oversight.
 	 */
-	rockchip,lane-rate = <420>;
 
 	/delete-node/ panel@0;
 
@@ -84,26 +77,28 @@
 		backlight = <&backlight>;
 		reset-gpios = <&gpio0 RK_PC6 GPIO_ACTIVE_LOW>;
 		/*
-		 * 2026-07-03: TASK-141's pinctrl-0 = <&lcd_rst_pin> (max drive + pull-up on
-		 * XRES) temporarily REMOVED for an isolation test — do not re-add without
-		 * re-reading diary/SESSION-LOG.md first.
+		 * TASK-141: max drive strength + pull-up on XRES (lcd_rst_pin in board
+		 * DTS). RETAINED PERMANENTLY — owner confirmed this configuration is
+		 * bulletproof/reliable (2026-07-03), and it predates the 420 Mbps
+		 * change. Do not remove or test removal of this property again
+		 * without new physical (scope/multimeter) evidence directly
+		 * implicating it; a prior isolation test that removed this property
+		 * to chase a BTA -110 (ETIMEDOUT) DIAG15-read symptom was withdrawn
+		 * per owner direction — see diary/SESSION-LOG.md 2026-07-03 "reset
+		 * pin bulletproof" entry.
 		 *
-		 * The only build in this campaign with clean DCS register reads at 420 Mbps
-		 * non-burst (WIC 7dbf72d9..., TASK-140, 2026-06-13) did NOT have this pinctrl
-		 * override -- it was added later in an uncommitted diff and first landed in
-		 * git at 6eb2f37 (2026-07-03), bundled with patches 0018-0020. Today's build
-		 * ("420clean-xres", ba421411...) combined 420 Mbps + this pinctrl override +
-		 * confirmed-absent BIST, and got the SAME all-registers -110 (ETIMEDOUT)
-		 * failure previously (wrongly) blamed entirely on patch 0020's BIST-unlock.
-		 * With BIST now proven absent in that build too, this pinctrl override is the
-		 * only remaining structural difference from the known-clean 7dbf72d9 baseline
-		 * -- see diary/SESSION-LOG.md 2026-07-03 entries for the full isolation chain.
-		 *
-		 * This build removes ONLY this property (single-variable test) to check
-		 * whether DCS reads become clean again. lcd_rst_pin itself is left defined
-		 * in the board DTS (unreferenced, zero effect) so it can be reinstated with
-		 * a one-line change if this test shows it was not the cause.
+		 * Context for future readers: the -110 DIAG15 read-timeout symptom
+		 * (seen on some 420 Mbps + this-pinctrl builds) does NOT change the
+		 * standing BLK-014 diagnosis either way -- builds with successful
+		 * reads (0x0A=0x1c, 0x45=0x00) and builds with -110 timeouts both
+		 * show the panel's analog boost (AVDD/AVEE/VGH/VGL) never starting.
+		 * Whether the debug register read itself succeeds or times out is a
+		 * secondary instrumentation detail, not the root blocker. Root
+		 * blocker remains hardware (VDDIN inrush, BL 9.6V, MIPI lane scope,
+		 * TASK-137 spare-panel swap) per AGENTS.md TASK-140 gate.
 		 */
+		pinctrl-names = "default";
+		pinctrl-0 = <&lcd_rst_pin>;
 
 		port {
 			panel_in_dsi: endpoint {

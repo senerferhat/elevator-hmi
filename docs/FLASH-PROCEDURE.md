@@ -36,45 +36,46 @@ below, to avoid a second stale pointer existing alongside the current one.)*
 
 ---
 
-## CURRENT TEST TARGET (2026-07-03, rebuilt again) — TASK-141 pinctrl override removed, isolation test
+## CURRENT TEST TARGET (2026-07-03, final) — reverted to proven clean-reads state (468 Mbps)
 
-**Status: recommended for next flash, result unknown.** Supersedes the same-day
-`420clean-xres.wic` entry (preserved below this section and in git history). That build was
-believed to be "vendor-parity, BIST confound-free" but **still failed every DCS register read
-with `-110`**, identically to the earlier BIST-confounded `lane420-reset.wic` run — this
-falsified the "BIST alone explains `-110`" conclusion from a few hours earlier in this same
-session. Full falsification chain: `diary/SESSION-LOG.md` 2026-07-03, "`420clean-xres.wic`
-flashed and booted — BIST hypothesis FALSIFIED."
+**Status: recommended for next flash.** Supersedes `420clean-xres.wic`, `no-pinctrl-fix.wic`, and
+`final-reset-restored.wic` (all preserved in git history). Full story, in order today: (1) blamed
+420 Mbps for `-110` DCS-read timeouts — wrong, `7dbf72d9…` proved 420 Mbps alone reads clean;
+(2) blamed BIST (patch 0020) — wrong, a BIST-free rebuild still showed `-110`; (3) blamed TASK-141's
+XRES pinctrl fix — wrong, owner confirmed it predates the 420 Mbps change and restoring it changed
+nothing; (4) **owner call: stop guessing which single variable causes `-110` at 420 Mbps, and
+instead revert to the one state proven to give clean reads on every occasion it's been tested** —
+non-burst, driver-calculated ~468 Mbps (no `rockchip,lane-rate` DT override), reset-pin fix intact.
+Full chain: `diary/SESSION-LOG.md` 2026-07-03, all entries this date.
 
-Re-isolation found exactly one structural difference between `420clean-xres` and the *only* build
-in this whole campaign with clean 420 Mbps reads (`7dbf72d9…`, TASK-140, predates 2026-07-03):
-**TASK-141's XRES pinctrl override** (`pinctrl-0 = <&lcd_rst_pin>`, max drive + pull-up on
-GPIO0_C6). This build removes **only** that one property — single-variable test, nothing else
-touched (still 420 Mbps, still `0018` DCS-INIT, still FAE page-4 clock fix, still 20 ms XRES
-pulse, BIST still absent).
+This build removes the `rockchip,lane-rate = <420>` property (vendor PLL_CLOCK=420 parity is
+knowingly deferred, not abandoned) while keeping TASK-141's pinctrl fix, `0018` DCS-INIT, and the
+FAE page-4 clock fix exactly as they are. Purpose: get to the most diagnostically trustworthy state
+— reliable register reads — before treating the booster-off finding (`0x0A` bit clear) as solid
+grounds for a hardware conclusion. Every prior test of this exact configuration (no rate override)
+has produced clean reads; if this one does too, that closes the reliability question and the
+booster-off finding stands on its own without any `-110` caveat.
 
 | Field | Value |
 |---|---|
-| **File** | `core-image-minimal-elevator-hmi-em3566.rootfs-20260703190118.wic` (symlink `…rootfs-no-pinctrl-fix.wic`) |
-| **Built** | 2026-07-03 22:01 (fresh rebuild, this session) |
-| **WIC SHA-256** | `c30f3697eed5deb1309f44a8526c4f2bf8c12a3f456aed3469b1c43a242cb622` |
-| **git HEAD** | `201a9a2e2c2bd0fb01b2c27ca105dd504e4e08db` + uncommitted panel DTSI change (pinctrl removed) |
-| **Single variable vs `420clean-xres` (`ba421411…`)** | `pinctrl-0 = <&lcd_rst_pin>` removed from `panel@0`. That's the only diff. |
-| **Confound check** | `strings` on compiled Image: `DCS-INIT`, `FAE page-4 clock fix`, `VENDOR-CLOCK-MATCH` present; `BIST armed (FAE_CLOCK + vendor TEST 2)` absent (0020 not applied) |
-| **Expected dmesg if TASK-141 pinctrl was the cause** | Clean reads matching `7dbf72d9…`: `GET_POWER_MODE pre-TE=0x1c`, `DIAG15 self-diag=0xc0`, `DIAG15 scanline=0x00`, **no `-110` anywhere** |
-| **Expected dmesg if NOT the cause** | `-110` on all four reads again — would mean reboot-the-same-image-first (check determinism) before chasing another variable |
-| **What to report back** | (a) full `dmesg -iE "jadard\|bandwidth\|mode_flags"` output — does `-110` appear or not, (b) glass appearance (not expected to change either way — this test is about register-read visibility, not a new booster fix) |
+| **File** | `core-image-minimal-elevator-hmi-em3566.rootfs-20260703200725.wic` (symlink `…rootfs-468-clean-reads.wic`) |
+| **Built** | 2026-07-03 23:07 (fresh rebuild, this session) |
+| **WIC SHA-256** | `962c58ebea61f62d9b02e2890d1cb36e4b3503adc514f9d3c787581022a96466` |
+| **git HEAD** | `7bbb717b4c722c7a7e3a90e1315583d86d6a6856` + lane-rate revert + pinctrl-restore (commits pending) |
+| **Confound check** | DTB `strings`: `rockchip,lane-rate` — 0 occurrences (removed); `lcd-rst-pin` — 2 occurrences (reset fix intact) |
+| **Expected dmesg** | `final DSI-Link bandwidth: 468 x 4 Mbps` (NOT 420); `XRES assert`/`XRES release`; `DCS-INIT`; `FAE page-4 clock fix`; clean `GET_POWER_MODE(0x0A)=0x1c`, `DIAG15 self-diag=0xc0`, `DIAG15 scanline=0x00`, `ID=0x93` — no `-110` expected |
+| **What to report back** | (a) full `dmesg -iE "jadard\|bandwidth\|mode_flags"` output — confirm bandwidth is 468 and reads are clean, (b) glass appearance |
 
 ### Flash commands (current test target)
 
 ```bash
 # ── 0. From repository root ──────────────────────────────────────────
 DEPLOY=build/tmp/deploy/images/elevator-hmi-em3566
-WIC=core-image-minimal-elevator-hmi-em3566.rootfs-no-pinctrl-fix.wic
+WIC=core-image-minimal-elevator-hmi-em3566.rootfs-468-clean-reads.wic
 
 # ── 1. Verify SHA before touching the board ──────────────────────────
 sha256sum "$DEPLOY/$WIC"
-# Expected: c30f3697eed5deb1309f44a8526c4f2bf8c12a3f456aed3469b1c43a242cb622
+# Expected: 962c58ebea61f62d9b02e2890d1cb36e4b3503adc514f9d3c787581022a96466
 
 # ── 2. Enter Maskrom ─────────────────────────────────────────────────
 #    Power OFF → hold RECOVERY → plug USB OTG → release after 2 s
