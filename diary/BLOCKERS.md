@@ -168,7 +168,19 @@ Post-DISON reads: `0x04` (ID), `0x0F` (self-diag), `0x45` (scanline). Sentinel: 
 ### BLK-013 — VCC3V3_LCD on EM3566 v3 (`vcc3v3_lcd0_n` / load switch)
 **Opened:** 2026-05-18 — **Closed:** 2026-05-21  
 **Severity was:** HIGH  
-**Resolution:**  
+
+> **SUPERSEDED — 2026-07-22 (owner confirmation):** the "defective load switch"
+> diagnosis below was made while the DT drove a **wrong enable pin with inverted
+> polarity**. TASK-132 (commit `287374c`) bench-traced the real enable chain —
+> PWM0_M0 → R457 → Q18 (NPN) → Q17 (P-FET) → correct enable is **GPIO0_B7,
+> ACTIVE-HIGH** — and the current DTS uses it (`enable-active-high`,
+> `regulator-always-on`). With the corrected config the switch **works**: 3.3 V
+> present at CON1 pins 5/6 through the stock switch path. The Plan B bypass
+> jumper has been **removed**; all 2026-07-22 tests (incl. the BIST runs on both
+> panels) ran on the proper switch path. The resolution text below is retained
+> as history only — do not cite it as current hardware state.
+
+**Resolution (historical, superseded — see note above):**  
 **Bench — carrier load switch defective (hardware fault):** With **`TASK-132`** + **`TASK-133`** in tree, **CON1 pin 13** (`LCD_PWREN_H`, **`GPIO0_C7`**) was **~0 V** when the rail should be **ON** — software polarity is **validated correct**. **`VCC3V3_LCD`** (**pins 5/6**) did **not** reach **~3.3 V** (observed **~0.8 V** on this prototype reference carrier). Responsibility is isolated to **non-functional / defective analogue switch path on the carrier board**, not DTS or regulator glue in Yocto (stop Phase 1 software iteration on rails).
 
 **Permanent hardware mitigation —** jumper a clean **3.3 V** (`VCC3V3_SYS`, input side of the defective switch) to **CON1 pins 5/6** (`VCC3V3_LCD`). Standard Phase 0/1 bring-up when a **prototype carrier** load switch fails. **Rail power-management** (`vcc3v3_lcd0_n`-mediated sleep / cut-off) **deferred to production carrier** — panel stays powered whenever board 3.3 V is present; **TASK-133** DTS + TASK-132 polarity remain authoritative for reproducible builds and future boards. Caveats (**A1 2026-05-21**): no software power-down via that rail on reference hardware; ensure bypass wire gauge and rail capacity for panel **inrush** (usually acceptable from main 3.3 V).

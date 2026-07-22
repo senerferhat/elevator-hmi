@@ -866,7 +866,16 @@ panel-side defect independent of the (self-test-healthy) timing controller logic
   verdict unaffected — produced at 468 with clean reads). No 420 re-test build now:
   BIST is rate-independent; revisit only if vendor's answer to question A requires
   rate parity.
-- **Vendor email #4 REWRITTEN as pure state dump** (owner direction: "don't lead the
+- **VDDIN record corrected (owner, 2026-07-22): the Plan B bypass jumper NO LONGER
+  EXISTS.** The May "defective load switch" diagnosis (BLK-013) was made while the DT
+  drove a wrong enable pin with inverted polarity; TASK-132 (`287374c`) bench-traced
+  the real chain (PWM0_M0 → R457 → Q18 NPN → Q17 P-FET → GPIO0_B7 ACTIVE-HIGH), the
+  current DTS uses it, the switch works, the jumper is removed, and today's BIST runs
+  (both panels) used the stock switch path. BLK-013 annotated SUPERSEDED in
+  BLOCKERS.md; EMAIL-4 section 3 rewritten (proper switch path + honest history line;
+  bypass-disclosure framing dropped; inrush question C reworded — load-switch current
+  limit makes the peak-inrush spec directly decision-relevant). NOTE: charter §3
+  "power bypass in place / not yet disclosed" is stale on this point too. (owner direction: "don't lead the
   vendor, perfect state dump with all sources"): BIST result both units, verbatim
   dmesg, full hardware state incl. bypass rework disclosure, exact firmware config,
   VDDIN-jpg reading + window question, 7 factual questions (A–G) incl. 3rd ask of

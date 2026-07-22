@@ -95,19 +95,25 @@ SoM/carrier: Compulab CM3566 (RK3566) on Boardcon EM3566 v3, panel on the
 Wiring (from the carrier schematic, verified by continuity/DMM):
   - MIPI D0–D3 + CLK: CON1 pins 29–40 (4-lane DSI0)
   - Panel RESET (FPC pin 5): CON1 pin 11 → SoC GPIO0_C6, active-low
-  - Panel 3.3 V (VDDIN): CON1 pins 5/6 — SEE REWORK BELOW
+  - Panel 3.3 V (VDDIN): CON1 pins 5/6, via the carrier's VCC3V3_LCD load
+    switch (see VDDIN path note below)
   - 1.8 V panel IO rail: carrier vcca_1v8
   - Backlight LEDA/LEDK: external bench supply (see below)
 
-REWORK DISCLOSURE (important — the stock schematic does not describe this):
-The carrier's VCC3V3_LCD load switch is physically defective on our unit: its
-enable signal toggles correctly, but the switched output stays at ~0 V in both
-enable polarities (DMM-verified). To proceed, we wired the panel 3.3 V input
-directly from the board's main VCC3V3_SYS rail to CON1 pins 5/6, bypassing the
-dead switch. Short jumper wire, no additional local capacitance added at the
-connector. VDDIN measures 3.3 V steady-state by DMM. We do not currently have
-an oscilloscope at this bench, so we cannot capture the transient behaviour of
-this feed during boost start-up — relevant to questions B and C below.
+Panel 3.3 V (VDDIN) path — current state and history, for full transparency:
+VDDIN is supplied through the carrier's own VCC3V3_LCD load switch (P-FET
+switch, enable via SoC GPIO0_B7, active-high, held on from kernel regulator
+init). 3.3 V is DMM-verified at CON1 pins 5/6 in this configuration, and the
+BIST test in section 1 ran on this proper switch path. History: earlier in the
+campaign (May) this rail was misdiagnosed as a defective load switch — the
+device tree was driving a wrong enable pin with inverted polarity — and the
+panel was temporarily fed by a direct jumper from the 3.3 V system rail while
+that was investigated. The enable configuration has since been corrected, the
+jumper removed, and all current tests use the stock switch path. We do not
+currently have an oscilloscope at this bench, so we cannot capture the
+transient behaviour of this feed during boost start-up — relevant to
+questions B and C below (a load switch typically has its own current limit,
+which makes your peak-inrush figure directly decision-relevant).
 
 Reset: XRES pulse measured/logged on every boot — high 5 ms, low 20 ms
 (your Q1 diagram), high, then 120 ms before the first MIPI command.
@@ -116,9 +122,9 @@ Backlight: external supply on LEDA/LEDK (your spec: 9.6 V ±0.1 V, 180 mA).
 LED string visibly lit during all tests — the "black" observations are with
 glowing backlight, i.e. the glass is illuminated but shows no pixel content.
 
-Power sequencing note: on this carrier the panel 3.3 V is present from board
-power-on (direct rail), i.e. VDDIN is up long before the XRES pulse and first
-command — consistent with the order in your Q1 timing diagram.
+Power sequencing note: VDDIN is switched on at kernel regulator init, roughly
+one second before the XRES pulse and first MIPI command — consistent with the
+order in your Q1 timing diagram (power stable well before reset and commands).
 
 ================================================================================
 4. FIRMWARE STATE (exact, source-verifiable)
@@ -173,8 +179,9 @@ C. Peak VDDIN current during boost start-up, and the minimum allowed VDDIN
    voltage during that transient. We have asked on 11 June and 3 July; the
    75 mA figure you provided is the steady-state active current, which is a
    different number. Without an oscilloscope, this specification is the only
-   way we can evaluate whether our reworked 3.3 V feed (section 3) is
-   adequate during the inrush window.
+   way we can evaluate whether the carrier's VCC3V3_LCD load-switch feed
+   (section 3) — which has its own current limit — is adequate during the
+   inrush window.
 
 D. The capture window of VDDIN_20260707.jpg (see section 5).
 
@@ -216,7 +223,7 @@ Freelancer Developer — Elevator HMI Project (RK3566)
 SEND CHECKLIST (owner):
   [ ] Save full BIST-run serial log to a .txt and attach
   [ ] Photos of both units under BIST (backlight visibly on)
-  [ ] Confirm bypass wire description in section 3 matches reality
-      (gauge/length/capacitance wording: "short jumper wire, no added
-      capacitance" — edit if not accurate)
+  [ ] Confirm section-3 VDDIN description matches the bench: jumper removed,
+      rail delivered via the carrier load switch (GPIO0_B7 active-high), and
+      3.3 V re-measured at CON1 pins 5/6 in THIS configuration
   [ ] Attach 05-driver-source-snippet.c
