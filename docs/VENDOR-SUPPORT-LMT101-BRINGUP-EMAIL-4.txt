@@ -1,0 +1,167 @@
+To:      sales06@alltouchdisplay.com
+Cc:      sales@alltouchdisplay.com
+From:    senerferhat01@gmail.com
+Subject: Re: LMT101SX006C — second panel also black (swap test done); BIST
+         equivalent already ran 11 June; hardware disclosure + DMM-only
+         measurement plan — three questions
+
+Thread: "Technical Support Request: JD9365D Initialization Array for LMT101SX006C"
+
+STATUS: DRAFT — owner review required before sending.
+Owner must fill/confirm the two [OWNER] items below before this goes out.
+
+--------------------------------------------------------------------------------
+
+Dear Abby / LCD Mall FAE,
+
+Thank you for the VDDIN reference waveform and for the troubleshooting plan in
+your 7 July emails. We have significant new results and one important hardware
+disclosure. Answers to your requests first, then three questions.
+
+================================================================================
+1. NEW RESULT — SPARE PANEL SWAP: SECOND UNIT ALSO BLACK
+================================================================================
+
+We physically swapped in our second (never-before-used) LMT101SX006C unit and
+ran the same firmware. Result: identical — backlight on, glass black, no image.
+
+Two independent panel units failing in exactly the same way makes a single
+defective sample very unlikely. The fault is almost certainly in something
+common to both setups: our carrier board's panel power path (see the
+disclosure in section 3), the FPC/connector seating, or a drive condition
+common to both runs. Please factor this into your analysis — it answers the
+closing question of our 3 July email: prioritizing a swap test is no longer
+the path to closing this out.
+
+================================================================================
+2. YOUR RECOMMENDED BIST TEST — AN EQUIVALENT ALREADY RAN ON 11 JUNE (BLACK)
+================================================================================
+
+Before we flash anything new, we want to flag that your recommended self-test
+has, in substance, already been run. As reported in our 10 June email: on the
+then-current firmware, after the full 196-register init table, Sleep Out and
+Display On, we sent the BIST arm sequence you provided —
+F0,55 / F1,AA / E0,01 / E3,01 — and the glass stayed black, with no self-test
+pattern of any kind.
+
+By the decision criterion in your 7 July email ("still black → panel or JD5001
+boost circuit is faulty — hardware issue confirmed"), that result already
+satisfies the "hardware issue confirmed" branch — on two panel units, given
+section 1 above.
+
+Question A: does the 11 June result already count for your purposes, or is
+there something specifically different about the dedicated BIST firmware image
+you proposed (e.g. the point in the sequence where the BIST arm is issued, or
+BIST before vs. after the init table) that could change the outcome? If there
+is a real difference, tell us what it is and we will run it exactly that way.
+If not, we would rather not spend a flash cycle re-confirming a known result.
+
+================================================================================
+3. HARDWARE DISCLOSURE — PANEL 3.3 V SUPPLY IS A REWORK, NOT THE STOCK CARRIER
+================================================================================
+
+You asked for our schematic (power supply + FPC portions). Before anything
+else, you need to know about a rework on our carrier, because the stock
+schematic does not describe the hardware we are actually running:
+
+- The carrier's VCC3V3_LCD load switch is physically defective on our unit:
+  its enable signal toggles correctly, but the switched output (panel 3.3 V,
+  connector pins 5/6) stays at ~0 V regardless of enable state. Verified by
+  DMM in both enable polarities.
+- To proceed, we wired the panel 3.3 V input directly from the board's main
+  VCC3V3_SYS rail to the panel connector pins 5/6, bypassing the dead switch.
+- [OWNER: fill in — approximate wire gauge and length of the bypass, and
+  whether any local decoupling/bulk capacitance was added at the connector
+  end. If none was added, say "no added capacitance."]
+
+Implication we want your judgment on: if the JD9365D's boost start-up draws a
+significant current transient at Sleep Out, a marginal bypass feed could sag
+exactly then — and from the panel's side that failure would look precisely
+like what we observe (digitally healthy IC, booster bit never sets, timing
+controller never starts, black glass on BOTH panels). This is also why your
+still-unanswered question matters so much — see Question C.
+
+On the schematic itself: the carrier is a third-party development board
+(Boardcon EM3566 v3) and we need to confirm we may share their document
+[OWNER: confirm whether the EM3566 schematic PDF can be sent, or whether we
+send only a hand-drawn excerpt of the panel power path + FPC connector with
+the rework marked]. Either way, the description above is the ground truth of
+the power path feeding the panel.
+
+Our driver source: attached as a standalone C file (same content as the
+excerpts embedded in our 3 July email, now as a compilable file for your
+application engineer).
+
+================================================================================
+4. EQUIPMENT CONSTRAINT + WHAT WE CAN MEASURE — PLEASE GIVE US DMM TARGETS
+================================================================================
+
+We currently have no oscilloscope at this bench — only a digital multimeter.
+So we cannot capture the 120 ms post-Sleep-Out transient window you asked us
+to probe, and we cannot yet compare against your VDDIN waveform on equal terms.
+
+But a DMM can still answer the single most important question: do the analog
+rails exist at all in steady state? Concretely, we propose to measure, with
+the panel connected and firmware idle after Display On:
+
+  - VDDIN (panel 3.3 V input) — DC level under load
+  - AVDD  — present or absent, DC value
+  - VGH   — present or absent, DC value
+  - VGL   — present or absent, DC value
+
+Question B: please tell us, for the LMT101SX006C FPC, which pins (or module
+test points) carry AVDD, VGH and VGL, and what DC values a healthy module
+shows in the ON state. Even a static present/absent answer splits the fault
+space in half: rails absent → boost never engages (consistent with everything
+we see); rails present at spec → the failure is downstream of the boost
+despite healthy rails. If probing the FPC directly risks damage, tell us the
+safe probing method you use on your fixture.
+
+Question C: we have asked twice (11 June and 3 July) for the PEAK VDDIN
+current during boost start-up and the minimum allowed VDDIN voltage during
+that inrush. Both times we received the steady-state active current (75 mA),
+which is a different number. Without a scope, this figure is the only way we
+can judge whether our reworked 3.3 V feed (section 3) is adequate — please
+ask your engineer for the peak/inrush specification.
+
+Also, regarding your VDDIN reference waveform (VDDIN_20260707.jpg): thank you.
+Please confirm what the capture window is — initial power-up of VDDIN, or the
+window immediately after the 0x11 Sleep Out command where boost start-up
+occurs — and the vertical/horizontal scale, so we can use it as the comparison
+reference once we have scope access.
+
+================================================================================
+5. ONE CLARIFICATION FROM YOUR 13 JUNE EMAIL — EXTERNAL OR INTEGRATED BOOST?
+================================================================================
+
+Your 13 June email described the boost in two different ways in the same
+message: the Q1 answer described a "Mode 4/Mode 5 external boost architecture"
+with the JD9365D "driving the JD5001 to initiate AVDD/AVEE boost" (an external
+boost IC), while the Q2 answer said "the current test unit features an
+integrated Boost architecture." For the LMT101SX006C specifically: is the
+AVDD/VGH/VGL generation done by an external JD5001 IC on the module FPC/PCB,
+or integrated in the JD9365D? This determines which physical node we probe
+and how we interpret a missing rail, so we need the definitive answer.
+
+================================================================================
+CURRENT FIRMWARE STATE (for your records)
+================================================================================
+
+Per your 7 July statement that the MIPI rate does not address this symptom, we
+have standardized on our host driver's calculated 468 Mbps/lane (4-lane,
+non-burst), where our diagnostic register reads are fully reliable. Both 420
+and 468 Mbps produce byte-identical panel register readback, as reported on
+3 July. No firmware changes are planned until the questions above are
+answered — the command path is exhausted as a variable.
+
+Thank you for your continued support.
+
+Best regards,
+Ferhat Sener
+Freelancer Developer — Elevator HMI Project (RK3566)
+
+--------------------------------------------------------------------------------
+ATTACHMENTS TO INCLUDE WHEN SENDING:
+  - vendor-email-attachments/05-driver-source-snippet.c  (their source-file request)
+  - Schematic excerpt or PDF per [OWNER] decision in section 3
+  - Optional: photo of second panel showing backlit black (swap-test evidence)

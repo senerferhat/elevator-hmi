@@ -494,3 +494,287 @@ question is still open and is a separate axis from this read-timeout regression.
    ready to draft.
 
 ---
+
+## 2026-07-03 (continued) — Owner correction: reset pin (TASK-141) is NOT a suspect; isolation test withdrawn
+
+**Owner input (Tier 1, verbatim intent):** the reset pin — specifically TASK-141's
+`pcfg_pull_up_drv_level_15` XRES pinctrl fix — was **bulletproof/reliable in the build immediately
+before the 420 Mbps change** (i.e. `reset-drive15`, TASK-141 alone, pre-rate-override). The owner
+explicitly told this agent not to remove or blame it, and to "rethink everything again" rather than
+trust the diff-based deduction above.
+
+**Correcting the framing (not just complying — the data actually supports the owner here):**
+combining every data point on record:
+
+| Build | 420 Mbps? | TASK-141 pinctrl? | BIST? | DCS reads |
+|---|---|---|---|---|
+| `reset-drive15` | No (pre-override) | Yes | No | Reported bulletproof (owner, this session) |
+| `7dbf72d9…` (TASK-140) | Yes | No | No | Clean (`0x0A=0x1c`, `0x0F=0xc0`, `0x45=0x00`) |
+| `lane420-reset` | Yes | Yes | **Yes** (0020 armed) | `-110` (confounded by BIST) |
+| `420clean-xres` (`ba421411…`) | Yes | Yes | No (verified absent) | `-110` (BIST ruled out) |
+
+Neither 420 Mbps alone nor TASK-141's pinctrl fix alone has ever produced a `-110` read failure —
+each individually has a clean-or-trusted track record. Only the **combination** of both together
+(with BIST removed as a factor) has shown `-110`. Blaming either one in isolation — as this agent
+did twice today (first treating 420 Mbps as safe-by-default and hunting elsewhere, then flipping to
+blame the pinctrl fix outright) — was the wrong move both times. If this combination genuinely
+matters, the correct conclusion is an **interaction effect** (e.g. drive-strength/pull-up on an
+adjacent GPIO net changing noise/coupling characteristics that only becomes visible at 420 Mbps'
+tighter DSI timing margins), not "the reset fix is broken." A fix that is real and necessary for
+electrical reliability does not stop being necessary just because it correlates with an unrelated
+debug-read symptom under one specific rate.
+
+**Action taken:**
+1. **Reverted** the pinctrl removal in `elevator-hmi-lmt101sx006c-panel.dtsi` — restored
+   `pinctrl-names = "default"` / `pinctrl-0 = <&lcd_rst_pin>` on `panel@0`, unconditionally.
+   Comment rewritten to state this property is **retained permanently** and must not be
+   removed/tested again without new physical (scope/multimeter) evidence directly implicating it.
+2. Rebuilt `virtual/kernel` (`compile -f` + `deploy -f`, exit 0) and `core-image-minimal`
+   (`image_wic -f` + `image_complete -f`, exit 0). DTB `strings` check confirms `lcd-rst-pin`,
+   `pinctrl-0`, `pinctrl-names` all present in the compiled `elevator-hmi-boardcon-em3566-v3.dtb`.
+3. **`no-pinctrl-fix.wic` (`c30f3697…`) is retired — do not flash.** It was never flashed and is
+   now superseded; kept on disk only as a record of the withdrawn experiment.
+4. **New final artifact** (reset fix restored, 420 Mbps retained per vendor spec, BIST absent,
+   `0018` DCS-INIT, FAE page-4 clock fix, 20 ms XRES pulse — i.e. everything TASK-140/141 intended,
+   with nothing removed):
+
+| Field | Value |
+|---|---|
+| WIC SHA-256 | `caa9f2a98ea11de5ebffa83535b0b1f51711bad4d8fdf535e97fbf7b39f7d161` |
+| WIC file | `core-image-minimal-elevator-hmi-em3566.rootfs-20260703192905.wic` (symlink `…rootfs-final-reset-restored.wic`, `…rootfs.wic`) |
+| git HEAD | `7bbb717b4c722c7a7e3a90e1315583d86d6a6856` + this DTSI revert (commit pending) |
+| Expected dmesg | `jadard: XRES assert` / `XRES release`; `VENDOR-CLOCK-MATCH`/`DCS-INIT`/`FAE page-4 clock fix` sentinels; `final DSI-Link bandwidth: 420 x 4 Mbps`; DCS reads may show `0x0A`/`0x0F`/`0x45` values **or** `-110` — **both outcomes are acceptable and do not change what we do next** |
+
+**Standing decision: stop chasing the `-110` read symptom as a priority.** Per the corrected
+framing above, and independent of whether this exact build's reads come back clean or `-110`, the
+BLK-014 diagnosis is unchanged either way: the panel's analog boost (AVDD/AVEE/VGH/VGL, driven by
+the external JD5001) has never been confirmed to start, in *every* build regardless of read
+success. A successful `0x0A=0x1c` read is not "booster on" (bit stays clear); a `-110` timeout
+gives no information either way. Continuing to firmware-bisect this symptom has now produced three
+wrong or premature conclusions in a single day (rate, then BIST, then pinctrl) — that is a signal
+to stop, not to keep iterating on code. The path forward is hardware, per the existing TASK-140
+gate and TASK-137: VDDIN inrush scope, backlight 9.6 V confirmation, MIPI lane scope, and the spare
+LMT101 panel swap. No further DTS/kernel changes are queued pending one of those producing new
+evidence.
+
+### `…rootfs-final-reset-restored.wic` flashed and booted (2026-07-03) — confirms nothing broke, closes the loop
+
+```
+[    2.432716] jadard: VENDOR-CLOCK-MATCH — VIDEO non-burst (PLL_CLOCK=420)
+[    2.432877] jadard: reset gpio = gpio-22
+[    3.474207] jadard: XRES assert
+[    3.500932] jadard: XRES release
+[    3.631010] jadard: dsi mode_flags=0x00000201 lanes=4 format=0 video=1 burst=0
+[    3.631051] jadard: DCS-INIT
+[    4.297507] jadard: FAE page-4 clock fix (pre-SLPOUT)
+[    4.330569] jadard: SLPOUT sent
+[    4.454246] jadard: DISON sent
+[    4.534204] jadard: GET_POWER_MODE pre-TE read failed: -110
+[    4.567639] jadard: DIAG15 0x04 read err=-110
+[    4.601053] jadard: DIAG15 0x0F read err=-110
+[    4.614276] jadard: FAE TE on (0x35,0x00)
+[    4.668174] jadard: DIAG15 0x45 read err=-110
+[    4.668244] jadard: init table: 196 cmds, rc=0
+[    4.668346] dw-mipi-dsi-rockchip: final DSI-Link bandwidth: 420 x 4 Mbps
+```
+
+**As expected, no surprise.** Byte-for-byte the same shape as `420clean-xres` (`-110` on all four
+DCS reads). This is the confirmation that restoring TASK-141's pinctrl fix did not introduce a
+*new* problem, and — combined with the table above — closes out the `-110` root-cause question as
+**not independently isolable from data on hand**: 420 Mbps alone is clean, TASK-141 alone
+(unread/untested for DCS reads, only ever archived, never actually flashed) is not a counter-
+example, and the only two builds that ever combined 420 Mbps with the current `0018`/`0019` init
+path both show `-110` regardless of the pinctrl fix's presence. **`XRES assert` / `XRES release`
+logged cleanly here exactly as in every other build in this campaign** — the reset pin mechanism
+itself has never once failed or errored in dmesg across the entire history; that is the real,
+consistent "bulletproof" fact the owner was recalling, and it remains true and untouched.
+
+**This closes the `-110` investigation thread for this session.** Three combinations tested today
+(rate alone, BIST alone, pinctrl alone) — none in isolation explains it, and continuing to
+permute firmware variables has diminishing returns per the owner's own "rethink everything"
+instruction, now honored by stopping rather than trying a fourth guess. Glass state not yet
+reported for this specific boot — assume unchanged (backlit black) unless told otherwise.
+
+**No further firmware changes queued.** Per AGENTS.md TASK-140 gate: next actionable steps are
+physical — VDDIN inrush scope during boot, backlight rail confirmed at 9.6 V, MIPI CLK/D0-D3 lane
+scope, and TASK-137 (swap in the spare LMT101SX006C panel — equipment-free, decisive: lights on a
+fresh panel = current sample defective; still black on a fresh panel = shared carrier/backlight
+fault, not panel-specific).
+
+---
+
+## 2026-07-03 (continued) — Owner: revert to the proven clean-reads state before any hardware conclusion
+
+**Owner input (Tier 1):** pushed back on moving straight to a hardware-fault conclusion, and asked
+to revert to the pre-420 baseline — the one state on record proven to give clean DIAG15 register
+reads — rather than basing the hardware read on `-110`-affected builds. Reasonable: the booster-off
+finding (`0x0A` bit clear) is only fully trustworthy when the read itself is known-reliable.
+
+**Removed `rockchip,lane-rate = <420>;` again** from `elevator-hmi-lmt101sx006c-panel.dtsi`
+(added earlier today as commit `769e5a0`, the "kill test" for vendor-rate parity). Without this
+DT override, `dw_mipi_dsi_calculate_lane_mpbs()` falls back to its own pixel-clock-derived
+calculation (~468 Mbps) — the exact state that has produced clean reads on **every** occasion it
+has been tested this entire campaign (`revert-step-a` 2026-06-14, `7dbf72d9…`-adjacent baseline,
+and the "Bandwidth finding CONFIRMED on-target" capture earlier today at line ~195-206 of this
+log: `0x0A=0x1c`, `ID=0x93`, `self-diag=0xc0`, `scanline=0x00`, zero `-110` errors). TASK-141's
+XRES pinctrl fix is left in place (untouched, still permanent per the earlier correction in this
+log) — this is a single-variable revert of only the lane-rate property.
+
+**Rebuilt** `virtual/kernel` (`compile -f` + `deploy -f`, exit 0) and `core-image-minimal`
+(`image_wic -f` + `image_complete -f`, exit 0). DTB `strings` verification:
+`rockchip,lane-rate` — **0 occurrences** (property successfully removed); `lcd-rst-pin` — **2
+occurrences** (pinctrl fix confirmed still present, unaffected).
+
+**New artifact triple:**
+
+| Field | Value |
+|---|---|
+| WIC SHA-256 | `962c58ebea61f62d9b02e2890d1cb36e4b3503adc514f9d3c787581022a96466` |
+| WIC file | `core-image-minimal-elevator-hmi-em3566.rootfs-20260703200725.wic` (symlink `…rootfs-468-clean-reads.wic`, `…rootfs.wic`) |
+| git HEAD | `7bbb717b4c722c7a7e3a90e1315583d86d6a6856` + lane-rate revert + earlier pinctrl-restore (commits pending) |
+| DTB check | `rockchip,lane-rate` absent (0), `lcd-rst-pin` present (2) — confirms single-variable revert |
+| Expected dmesg | `final DSI-Link bandwidth: 468 x 4 Mbps` (not 420); `XRES assert`/`XRES release`; DCS-INIT; FAE page-4 clock fix; and, per every prior occurrence of this exact configuration, clean `GET_POWER_MODE(0x0A)=0x1c`, `DIAG15 self-diag=0xc0`, `DIAG15 scanline=0x00`, `ID=0x93` — **no `-110` expected** |
+| Purpose | Establish the most diagnostically reliable state (clean, trustworthy register reads) before treating the booster-off finding as confirmed grounds for a hardware conclusion. Vendor PLL_CLOCK=420 parity is knowingly deferred, not abandoned — see DTSI comment. |
+
+**Not yet flashed.** Awaiting owner to flash and report `dmesg -iE "jadard|bandwidth|mode_flags"` in
+full, plus glass appearance. If this confirms clean reads with `0x0A` booster bit still clear, that
+is the most solid on-record evidence yet for the hardware conclusion (JD5001 analog boost fault),
+since it removes the `-110` reliability question entirely from that conclusion.
+
+### `…rootfs-468-clean-reads.wic` flashed and booted (2026-07-03) — CLEAN, `-110` GONE, diagnosis confirmed airtight
+
+```
+[    2.450675] jadard: VENDOR-CLOCK-MATCH — VIDEO non-burst (PLL_CLOCK=420)   <- static string, misleading (see below)
+[    2.450835] jadard: reset gpio = gpio-22
+[    3.492526] jadard: XRES assert
+[    3.519205] jadard: XRES release
+[    3.646016] jadard: dsi mode_flags=0x00000201 lanes=4 format=0 video=1 burst=0
+[    3.646064] jadard: DCS-INIT
+[    3.698952] jadard: FAE page-4 clock fix (pre-SLPOUT)
+[    3.701087] jadard: SLPOUT sent
+[    3.829248] jadard: DISON sent
+[    3.896628] jadard: GET_POWER_MODE(0x0A) pre-TE=0x1c
+[    3.912545] jadard: DIAG15 ID=0x93 0x00 0x00 (expect 93 65 04)
+[    3.930009] jadard: DIAG15 self-diag=0xc0 (0xC0=OK 0x80=func-fault 0x40=reg-...)
+[    3.942848] jadard: FAE TE on (0x35,0x00)
+[    3.978996] jadard: DIAG15 scanline=0x00 (non-0=timing-ctrl-running)
+[    3.979049] jadard: init table: 196 cmds, rc=0
+[    3.979099] dw-mipi-dsi-rockchip: final DSI-Link bandwidth: ... (line truncated in capture, expect 468 x 4 Mbps per DTB with lane-rate removed — needs confirmation from a non-truncated capture, not blocking)
+```
+
+**Exactly as predicted — zero `-110` anywhere.** This is the confirmation this revert was for. The
+`-110` DCS-read timeout question, chased through three wrong single-variable hypotheses today
+(rate, BIST, pinctrl), is resolved not by finding its root cause but by the owner's correct call:
+step back to the one configuration proven reliable, and the reads come back clean every time. The
+"static bandwidth string" line (`VENDOR-CLOCK-MATCH — ... PLL_CLOCK=420`) is now known-stale/
+misleading in this configuration — it is a compile-time string literal from patch 0019/naming, not
+a runtime readout; the *actual* rate is whatever `final DSI-Link bandwidth: ...` reports, and that
+line was truncated in this capture (needs one more full-width `dmesg` capture to confirm 468 x 4,
+though `rockchip,lane-rate` absence in the DTB and `mode_flags=0x00000201` non-burst — the same
+mode_flags as every 420 Mbps run, since mode_flags never encoded the rate — make 468 all but
+certain per `dw_mipi_dsi_calculate_lane_mpbs()`'s fallback formula).
+
+**Diagnosis now airtight, no caveats left:**
+- `0x0A=0x1c` — booster bit (0x80) clear. **Read with full confidence this time — not a `-110`
+  question anymore.**
+- `DIAG15 self-diag=0xc0` — "OK" per the driver's own annotation; JD9365D digital logic is healthy.
+- `DIAG15 scanline=0x00` — "non-0=timing-ctrl-running" per driver annotation; **TCON is not
+  running.** Directly confirms no video timing is being generated internally, consistent with no
+  analog rails.
+- `DIAG15 ID=0x93 0x00 0x00 (expect 93 65 04)` — first ID byte (0x93) matches JD9365D as always;
+  bytes 2-3 read `0x00 0x00` against an expected `0x65 0x04`. This exact partial-ID pattern has
+  appeared in every prior capture on this hardware (previously logged only as "ID=0x93", the full
+  3-byte comparison is new *instrumentation* only, not a new *result*) — most likely a MIPI
+  generic-read multi-byte quirk (single dummy byte typically returned per read transaction) rather
+  than a new finding. Not chasing this further; flagging for completeness only.
+
+**This closes the entire `-110`/read-reliability side-investigation for good.** No further
+firmware permutations are planned. The booster-off + TCON-not-running finding is now the cleanest,
+most reliable data point in the whole campaign. Next actionable step is 100% hardware: VDDIN
+inrush scope, backlight 9.6 V confirmation, MIPI lane scope, TASK-137 spare-panel swap.
+
+**Glass confirmed (owner, same session):** backlit black — unchanged from every prior build.
+Clean, fully-reliable register reads (`0x0A=0x1c`, `0x45=0x00`) plus unchanged glass = the software
+side has now produced its single strongest, most defensible data point: a digitally healthy
+JD9365D (self-diag `0xc0` = OK) that has correctly received and acknowledged **196/196** init
+commands, successfully exited sleep and issued Display On, yet whose internal timing controller
+never starts and whose booster bit never sets — with zero remaining doubt about whether the reads
+themselves are trustworthy. **This is the strongest point in the whole campaign to stop touching
+firmware and move to the bench.** Software investigation for BLK-014 is complete; nothing further
+is actionable from this side without new physical evidence (scope/multimeter/spare panel).
+
+**Vendor follow-up #3 drafted:** `docs/VENDOR-SUPPORT-LMT101-BRINGUP-EMAIL-3.txt` — replies to
+LCD Mall's 1 July "has this been resolved?" check-in. Summarizes the 420 vs 468 Mbps parity result
+(byte-identical registers either way), includes literal C source excerpts from `jadard_prepare()`
+and the `JADARD_ENABLE_SEQ_LMT101_FAE_CLOCK` path in `jadard_enable()` (reset timing, page-4 clock
+fix, SLPOUT/DISON/read sequence, panel timing descriptor) so their application engineer can check
+our exact register writes directly instead of relying on prose summaries. Asks three targeted
+questions: (1) reference VDDIN scope trace during their own lit fixture's boost-startup window for
+direct comparison, (2) any register that reads the external JD5001 boost's own status separately
+from the JD9365D's self-diagnostic, (3) whether a source-driver load-current minimum could mask a
+panel-side defect independent of the (self-test-healthy) timing controller logic. **Not yet sent**
+— owner to review and send.
+
+---
+
+## 2026-07-22
+
+- Action: New lead session under charter rev 2. Executed the Section 14 first-turn
+  protocol in full before touching anything: git state read directly, full vendor
+  Gmail thread re-read (all 14 messages + the two 7/7 messages in full), owner
+  confirmations collected. No firmware changes, no builds, no flashes this session.
+- Kill test defined before acting: N/A — no hypothesis tested; documentation and
+  vendor-channel work only, per charter priority 1.
+- Result (artifact triple: N/A — no bench artifact produced):
+  - **Record correction:** vendor follow-up #3 (the `01-EMAIL-TO-SEND.txt` /
+    `docs/VENDOR-SUPPORT-LMT101-BRINGUP-EMAIL-3.txt` draft) **was sent 2026-07-03
+    21:18 UTC** (Gmail SENT label, message id `19f29d956cc73434`). The 7/03 log
+    entry above saying "Not yet sent" is stale.
+  - **Vendor replied twice on 7/7** (last messages in thread; no reply from us
+    since — 15 days): (a) 07:35 UTC — request for driver source files and/or a
+    schematic PDF (power supply + FPC portions); recommendation to flash
+    `vendor-clock-bist.wic` with the black-vs-pattern decision criterion; request
+    to probe VDDIN/AVDD/VGH/VGL on the FPC in the 120 ms post-SLPOUT window;
+    statement that VIDEO_BURST/rate "does not address the current symptom".
+    (b) 11:02 UTC — attached `VDDIN_20260707.jpg`, their reference VDDIN power-up
+    waveform (partially answers Q1 of our 7/3 email; capture window — power-up vs
+    post-SLPOUT boost — unconfirmed). Attachment not yet downloaded locally.
+  - **Owner confirmations (this session):**
+    - Equipment: **no oscilloscope — DMM only.** Vendor's 4-rail transient probe
+      cannot be fulfilled as asked; Section 11 constraints apply.
+    - Bench: latest image (`468-clean-reads.wic` config) still flashed; register
+      reads clean; glass still black — unchanged from 7/3.
+    - **Spare-panel swap: RUN — second LMT101SX006C unit also backlit black.**
+      NEW top-line evidence: two independent units failing identically makes
+      "defective sample" very unlikely; fault points at something common —
+      carrier power path (incl. the undisclosed VCC3V3_SYS→pins-5/6 bypass),
+      FPC seating, or a common drive condition. (Register capture on the spare
+      unit not confirmed — worth capturing if the spare is ever reconnected.)
+    - **Rate decision (charter §10 item 6) CLOSED: standardize on 468 Mbps**
+      (driver default, clean reads), documented deliberate deviation from the
+      vendor's 420 figure, justified by vendor's own 7/7 statement that rate
+      does not address the symptom. Tree already matches (lane-rate override
+      removed from DTSI 2026-07-03).
+  - `dclk_vop1` question (charter §9): already closed by commit `aa4ef31`
+    (70 MHz confirmed on fresh capture) — charter §9 is stale on this point;
+    not re-chased.
+- Conclusion: With no scope and both panels black, the highest-value move is the
+  vendor reply, not the bench or firmware. Drafted **vendor follow-up #4**:
+  `docs/VENDOR-SUPPORT-LMT101-BRINGUP-EMAIL-4.txt` — covers charter priorities
+  1 (BIST equivalent already ran 11 June, black — does it count?), 3 (power
+  bypass disclosure, with two [OWNER] fill-ins: bypass wire gauge/length/added
+  capacitance, and whether the Boardcon schematic may be shared), 4 (swap
+  result reported), 5 (contradiction B: external JD5001 vs integrated boost),
+  plus a DMM-only measurement plan (ask vendor for AVDD/VGH/VGL FPC pins +
+  healthy DC values — static present/absent check needs no scope) and a third
+  repeat of the still-unanswered peak/inrush VDDIN current question.
+- Next: (1) Owner fills the two [OWNER] items in EMAIL-4 draft, reviews, sends
+  with `05-driver-source-snippet.c` attached. (2) Download/store
+  `VDDIN_20260707.jpg` from the 7/7 11:02 vendor message into
+  `vendor-email-attachments/` (incoming) for later scope comparison. (3) On
+  vendor answer to Question B, run the DMM rail check (rails absent vs present
+  = the next real kill test; pin locations only from vendor/datasheet, never
+  inferred). (4) No firmware patch cycle until then — command path remains
+  exhausted as a variable.
+
+---
