@@ -36,7 +36,19 @@ below, to avoid a second stale pointer existing alongside the current one.)*
 
 ---
 
-## CURRENT TEST TARGET (2026-07-23) — BIST-IN-PREPARE: self-test on corrected command ordering
+## ⚠️ ARCHIVE POLICY (added 2026-08-07 — read before flashing)
+
+**Never flash from `build/tmp/deploy/images/.../` by a symlink name.** Yocto's deploy step
+**deletes** the previous build's timestamped `.wic` on every new `kas build` — this bit us
+directly on 2026-08-07: a symlinked `init-in-prepare.wic` and `bist-inprep.wic` both went
+dangling mid-session when a later build pruned their targets, causing two failed/wasted flash
+attempts (`wl 0` errored, `can't open file`, rootfs never written).
+
+**Fix:** every image worth reflashing is hardlinked (zero extra disk, immune to pruning) into
+`~/Projects/elevator-hmi/images-archive/`, alongside `loader.bin` / `idblock.img` / `uboot.img`.
+Always flash from **that directory**, by its short name, never by the deploy-dir symlink.
+
+## CURRENT TEST TARGET (2026-08-07) — BIST-IN-PREPARE: self-test on corrected command ordering
 
 **Status: recommended for next flash (owner-selected: BIST-first).** Built on the 2026-07-23
 root-cause finding: this vendor kernel switches the DSI host to VIDEO mode BEFORE
@@ -57,33 +69,44 @@ window before DRM starts video.
 
 | Field | Value |
 |---|---|
-| **File** | `core-image-minimal-elevator-hmi-em3566.rootfs-20260807121413.wic` (symlink `…rootfs-bist-inprep.wic`) |
+| **Archive file** | `~/Projects/elevator-hmi/images-archive/bist-inprep.wic` |
 | **WIC SHA-256** | `6b74331dd7d27c750a47741694764327317cbec4c409716d9ffe3be32dbce2a1` |
 | **git HEAD** | `ba66670` (clean tree) |
 | **Confound check** | Image strings: `BIST armed (INIT-IN-PREPARE, cmd-mode, pre-video)` + `INIT-IN-PREPARE (cmd-mode, pre-video)` present |
 | **Expected dmesg** | `INIT-IN-PREPARE (cmd-mode, pre-video)` → `DCS-INIT` → `FAE page-4 clock fix` → `SLPOUT sent` → `DISON sent` → `BIST armed (INIT-IN-PREPARE, cmd-mode, pre-video)` — all BEFORE the `dsi mode_flags`/enable lines; then enable prints `INIT-IN-PREPARE active - enable() diagnostics only` + DIAG15 reads |
 | **What to report back** | (a) full `dmesg \| grep -iE "jadard\|bandwidth"`, (b) glass during boot — watch continuously from power-on; the 2 s window lands ~4–6 s in |
 
-### Checkpoint ledger (all WICs retained in deploy dir — reflash any of them directly)
+### Checkpoint ledger (permanent archive — `~/Projects/elevator-hmi/images-archive/`)
 
-| Checkpoint | Symlink | SHA-256 | git |
-|---|---|---|---|
-| Video baseline, old ordering | `…rootfs-468-clean-reads.wic` | `962c58eb…` | `c934583` |
-| BIST, old ordering (black × 2 panels) | `…rootfs-bist-468.wic` | `de0e0b60…` | `e7871a9` |
-| Video, corrected ordering (NEXT after BIST) | `…rootfs-init-in-prepare.wic` | `9900365b…` | `f04ae58` |
-| **BIST, corrected ordering (FLASH FIRST)** | `…rootfs-bist-inprep.wic` | `6b74331d…` | `ba66670` |
+| Checkpoint | Archive filename | SHA-256 | git | Status |
+|---|---|---|---|---|
+| Video baseline, old ordering | *(not archived — pruned)* | `962c58eb…` | `c934583` | rebuild to restore |
+| BIST, old ordering (black × 2 panels) | *(not archived — pruned)* | `de0e0b60…` | `e7871a9` | rebuild to restore |
+| Video, corrected ordering (NEXT after BIST) | `init-in-prepare.wic` | `0c947979de9a79621f12c984171070400c47ceab86eb8c16cf7de8b7669a5801` | `f04ae58` | ✅ archived 2026-08-07 (rebuilt — SHA differs from the original same-commit build, expected: binary is not bit-reproducible across rebuilds) |
+| **BIST, corrected ordering (FLASH FIRST)** | `bist-inprep.wic` | `6b74331dd7d27c750a47741694764327317cbec4c409716d9ffe3be32dbce2a1` | `ba66670` | ✅ archived 2026-08-07 |
 
-To rebuild any checkpoint from source: `git checkout <commit> && kas build kas/elevator-hmi.yml`.
+To rebuild any non-archived checkpoint: `git checkout <commit> -- meta-hmi-platform/recipes-kernel/linux/'linux-rockchip_%.bbappend' && kas build kas/elevator-hmi.yml`, then immediately hardlink the result into `images-archive/` before building anything else.
 
-### Flash commands (bist-inprep)
+### Flash commands (bist-inprep) — from the permanent archive
 
 ```bash
-cd ~/Projects/elevator-hmi/build/tmp/deploy/images/elevator-hmi-em3566
-WIC=core-image-minimal-elevator-hmi-em3566.rootfs-bist-inprep.wic
-sha256sum "$WIC"   # expect 6b74331d…
+cd ~/Projects/elevator-hmi/images-archive
+sha256sum bist-inprep.wic   # expect 6b74331dd7d27c750a47741694764327317cbec4c409716d9ffe3be32dbce2a1
 # Maskrom, then:
 sudo rkdeveloptool db loader.bin
-sudo rkdeveloptool wl 0      "$WIC"
+sudo rkdeveloptool wl 0      bist-inprep.wic
+sudo rkdeveloptool wl 64     idblock.img
+sudo rkdeveloptool wl 0x4000 uboot.img
+sudo rkdeveloptool rd
+```
+
+### Flash commands (init-in-prepare, video — run only after BIST result is in)
+
+```bash
+cd ~/Projects/elevator-hmi/images-archive
+sha256sum init-in-prepare.wic   # expect 0c947979de9a79621f12c984171070400c47ceab86eb8c16cf7de8b7669a5801
+sudo rkdeveloptool db loader.bin
+sudo rkdeveloptool wl 0      init-in-prepare.wic
 sudo rkdeveloptool wl 64     idblock.img
 sudo rkdeveloptool wl 0x4000 uboot.img
 sudo rkdeveloptool rd
