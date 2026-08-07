@@ -1011,3 +1011,48 @@ panel-side defect independent of the (self-test-healthy) timing controller logic
   grep-filtered) to check for PHY/DSI-level warnings hidden by the narrow filter so far.
 
 ---
+
+## 2026-08-07 (continued) — dclk_vop1 intermittent 10x clock race REOPENED (owner-directed full-dmesg hunt)
+
+- Action: owner requested a full, unfiltered dmesg (not grep-filtered to jadard|bandwidth) to
+  hunt for anything hidden by the narrow filter used all campaign — sound instinct given two
+  panels failing identically points to a shared, not-yet-examined cause.
+- Result: found `rockchip-vop2 fe040000.vop: [drm:vop2_crtc_atomic_enable] set dclk_vop1 to
+  700000000` in a full capture from the power-delay-250ms.wic BIST-black boot — 9 digits,
+  700 MHz, a 10x error vs the expected 70 MHz (panel's `.clock = 70000` kHz descriptor,
+  unchanged across every patch 0018-0023). This is the EXACT item flagged in the charter
+  (Section 9) and declared "closed, confirmed 70MHz" by commit `aa4ef31` (2026-06-13) — based
+  on what now appears to have been a single non-representative sample.
+- Traced print statement to source (`rockchip_drm_vop2.c:8998`, Tier 2 verbatim):
+  `dclk_rate = adjusted_mode->crtc_clock * 1000 / vp->dclk_div; ...
+  DRM_DEV_INFO(..., "set %s to %ld, get %ld\n", ..., dclk_rate, clk_get_rate(vp->dclk));` —
+  format is `set <name> to <requested>, get <hardware readback>`; our terminal was truncating
+  the `, get ...` half on every capture this whole campaign (narrow window, hard cut, not
+  soft-wrapped) — genuinely never seen before now.
+  `fold` unavailable on this busybox image; worked around with
+  `dmesg | grep dclk_vop1 | sed 's/, get/\n  get/'`.
+- **Rebooted, recaptured on the SAME image: `set dclk_vop1 to 70000000` / `get 70000000` —
+  correct, matching, on this boot.**
+- **Conclusion: INTERMITTENT, boot-to-boot race — not a deterministic bug, not a non-issue.**
+  Same image, same hardware, wrong (700MHz, unconfirmed get-value) on one boot, correct
+  (70MHz, get matches) on the next. Consistent with a PLL-lock-timing/clock-parent-selection
+  race during early boot on RK3566's CRU tree, not something any of our jadard driver patches
+  (0018-0023) could cause or fix (architecturally unrelated file, never touched).
+- Scope, stated precisely: this clock feeds VOP pixel data into the DSI encoder for VIDEO
+  transmission only. Architecturally unrelated to BIST (command-mode, pre-video, per vendor's
+  own definition) - does NOT explain the BIST-black result, does not change the standing
+  boost/TCON diagnosis. DOES reopen, with real evidence, a candidate explanation for why
+  actual VIDEO (as opposed to BIST) has never once rendered in this campaign, independent of
+  panel health - relevant once/if a genuine video-mode test is run again.
+- Also scanned the rest of the full dmesg for anything else DSI/PHY/MIPI-relevant: nothing
+  new. CSI/camera sensor probe failures (gc8034/ov5695, rk3x-i2c timeouts) are a DIFFERENT
+  PHY (csi2-dphy0, camera input, not our DSI0 display output) - unrelated. PCIe link fail -
+  no card installed, unrelated. Ethernet DMA reset fail - unrelated subsystem. gpio0-22/pwm7
+  pin race and rk808 PMIC failure - both already logged 2026-07-22, not new. No DSI0
+  controller-level CRC/ECC/framing/timeout errors found anywhere in either capture.
+- Next: if pursued, needs its own multi-boot characterization (reboot N times, log
+  dclk_vop1 set/get each time, establish failure rate) - separate from the BIST/boost
+  investigation, not blocking it. Not yet correlated against an actual video-mode attempt
+  (only tested under BIST images so far, where this clock is never exercised for output).
+
+---
