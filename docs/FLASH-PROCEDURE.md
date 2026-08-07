@@ -36,7 +36,62 @@ below, to avoid a second stale pointer existing alongside the current one.)*
 
 ---
 
-## CURRENT TEST TARGET (2026-07-22) — BIST diagnostic image (vendor 7/7 request), 468 Mbps base
+## CURRENT TEST TARGET (2026-07-23) — BIST-IN-PREPARE: self-test on corrected command ordering
+
+**Status: recommended for next flash (owner-selected: BIST-first).** Built on the 2026-07-23
+root-cause finding: this vendor kernel switches the DSI host to VIDEO mode BEFORE
+`drm_panel_enable()`, so every prior build sent init/SLPOUT/DISON (and the old BIST arm)
+inside live-video blanking — the panel received HS video before init on every boot of this
+campaign. Patches 0021+0022 relocate the ENTIRE vendor sequence (196-cmd table → page-4 fix →
+SLPOUT → 120 ms → DISON → vendor TEST 2 BIST arm) into `prepare()` — DSI COMMAND mode,
+pre-video, fixture-identical — with a **2 s dwell** after the BIST arm as an observation
+window before DRM starts video.
+
+**Kill test (written before flashing):**
+- **Pattern on glass (even only during the 2 s window)** → panel/boost/TCON healthy; the
+  video-mode init ordering was the root cause → flash `init-in-prepare.wic` (video image,
+  same ordering, no BIST) and expect fbcon.
+- **Still black** → panel fails its own self-test under fixture-identical ordering, correct
+  power (stock switch), correct reset, two units → hardware verdict final; send email #4
+  (updated with this result).
+
+| Field | Value |
+|---|---|
+| **File** | `core-image-minimal-elevator-hmi-em3566.rootfs-20260807121413.wic` (symlink `…rootfs-bist-inprep.wic`) |
+| **WIC SHA-256** | `6b74331dd7d27c750a47741694764327317cbec4c409716d9ffe3be32dbce2a1` |
+| **git HEAD** | `ba66670` (clean tree) |
+| **Confound check** | Image strings: `BIST armed (INIT-IN-PREPARE, cmd-mode, pre-video)` + `INIT-IN-PREPARE (cmd-mode, pre-video)` present |
+| **Expected dmesg** | `INIT-IN-PREPARE (cmd-mode, pre-video)` → `DCS-INIT` → `FAE page-4 clock fix` → `SLPOUT sent` → `DISON sent` → `BIST armed (INIT-IN-PREPARE, cmd-mode, pre-video)` — all BEFORE the `dsi mode_flags`/enable lines; then enable prints `INIT-IN-PREPARE active - enable() diagnostics only` + DIAG15 reads |
+| **What to report back** | (a) full `dmesg \| grep -iE "jadard\|bandwidth"`, (b) glass during boot — watch continuously from power-on; the 2 s window lands ~4–6 s in |
+
+### Checkpoint ledger (all WICs retained in deploy dir — reflash any of them directly)
+
+| Checkpoint | Symlink | SHA-256 | git |
+|---|---|---|---|
+| Video baseline, old ordering | `…rootfs-468-clean-reads.wic` | `962c58eb…` | `c934583` |
+| BIST, old ordering (black × 2 panels) | `…rootfs-bist-468.wic` | `de0e0b60…` | `e7871a9` |
+| Video, corrected ordering (NEXT after BIST) | `…rootfs-init-in-prepare.wic` | `9900365b…` | `f04ae58` |
+| **BIST, corrected ordering (FLASH FIRST)** | `…rootfs-bist-inprep.wic` | `6b74331d…` | `ba66670` |
+
+To rebuild any checkpoint from source: `git checkout <commit> && kas build kas/elevator-hmi.yml`.
+
+### Flash commands (bist-inprep)
+
+```bash
+cd ~/Projects/elevator-hmi/build/tmp/deploy/images/elevator-hmi-em3566
+WIC=core-image-minimal-elevator-hmi-em3566.rootfs-bist-inprep.wic
+sha256sum "$WIC"   # expect 6b74331d…
+# Maskrom, then:
+sudo rkdeveloptool db loader.bin
+sudo rkdeveloptool wl 0      "$WIC"
+sudo rkdeveloptool wl 64     idblock.img
+sudo rkdeveloptool wl 0x4000 uboot.img
+sudo rkdeveloptool rd
+```
+
+---
+
+## PREVIOUS TEST TARGET (2026-07-22) — BIST diagnostic image (vendor 7/7 request), 468 Mbps base — RESULT: BLACK, both panels
 
 **Status: recommended for next flash.** Vendor's 7 Jul decision tree, run fresh on the
 now-validated hardware (owner: reset correct, rails DMM-verified, backlight lit; spare panel

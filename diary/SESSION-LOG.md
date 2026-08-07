@@ -891,3 +891,38 @@ panel-side defect independent of the (self-test-healthy) timing controller logic
   not a plausible failure axis on our side.
 
 ---
+
+## 2026-07-23 (owner-directed full re-audit — ROOT-CAUSE CANDIDATE FOUND)
+
+- Action: owner ordered zero-trust re-audit of the ENTIRE boot→BIST path ("don't trust
+  any older agent run"). Audited: deployed DTB (decompiled from the flashed binary),
+  jadard driver, and — for the first time in the campaign — the DSI host core
+  (`drivers/gpu/drm/bridge/synopsys/dw-mipi-dsi.c`, vendor 6.1 fork) line by line.
+- Kill test defined before acting: see FLASH-PROCEDURE 2026-07-23 section (pattern vs
+  black grid for both new images).
+- Result:
+  - **FINDING (structural, campaign-wide): this vendor kernel switches the DSI host to
+    VIDEO mode in `bridge_atomic_enable()` BEFORE calling `drm_panel_enable()`** —
+    `pre_enable` = command mode + `drm_panel_prepare` only. Our mainline-style jadard
+    driver sends the whole vendor bring-up from enable() → every build since May sent
+    init/SLPOUT/DISON/BIST as HS commands inside live-video blanking, panel receiving
+    video packets before init. Fixture (MTK flow) inits in command mode pre-video;
+    Rockchip's simple-panel-dsi puts init in prepare() for exactly this reason. Dmesg
+    order (jadard prints before `final DSI-Link bandwidth`) confirms on-target.
+  - Secondary observations: commands sent HS (no MODE_LPM; fixture uses LP) — noted,
+    not changed (single variable); dsi1's leftover simple-panel node is inert (parent
+    disabled); -110-at-420 plausibly reframed as BTA in zero-margin blanking (noted,
+    not chased).
+  - **Patch 0021 INIT-IN-PREPARE** (`f04ae58`): full vendor sequence moved to prepare()
+    (command mode, pre-video); enable() keeps DIAG15/TE only. Video image built:
+    `…rootfs-init-in-prepare.wic`, SHA `9900365b…` — SET ASIDE as checkpoint per owner.
+  - **Patch 0022 BIST-IN-PREPARE** (`ba66670`): vendor TEST 2 arm appended inside the
+    corrected sequence + 2 s observation dwell. Image built:
+    `…rootfs-bist-inprep.wic`, SHA `6b74331d…`. **Owner flash order: BIST first.**
+  - Checkpoint ledger added to FLASH-PROCEDURE (all four WICs retained; reflash or
+    rebuild from git at any time).
+  - **Email #4 ON HOLD until these two results are in** (outcome changes the letter).
+- Next: owner flashes `bist-inprep.wic`, watches glass continuously from power-on
+  (window ~4–6 s), reports dmesg + observation; then `init-in-prepare.wic`.
+
+---
