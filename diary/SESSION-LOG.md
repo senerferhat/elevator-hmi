@@ -966,3 +966,48 @@ panel-side defect independent of the (self-test-healthy) timing controller logic
   result added as the strongest evidence yet.
 
 ---
+
+### POWER-DELAY (10ms->250ms) result — KILL TEST ANSWERED: rail-settle hypothesis FALSIFIED
+
+- Action: owner-directed test — extend VCC3V3_LCD-to-XRES delay from vendor's stated 10 ms
+  to 250 ms (25x), on top of the already-proven-good base (0021 ordering + 0022 BIST).
+  Single variable, kill test written before flashing (FLASH-PROCEDURE.md).
+- Result (artifact triple): WIC SHA `542ab97ef79c80b8a343356165563e4874199f6c66962dd1ff695b2bc7d838d8`
+  (`images-archive/power-delay-250ms.wic`), git HEAD `d655a82`, clean tree.
+- Timing verified by direct arithmetic on the two dmesg captures (old 10ms vs new 250ms):
+  XRES assert/release, DCS-INIT, and BIST-armed timestamps all shifted by a consistent
+  +251 to +255 ms — exactly matching the intended +240 ms delay increase, confirming the
+  patch landed precisely where designed and nothing else drifted. BIST-arm-to-video gap
+  held at ~2.0-2.2 s in both runs (msleep(2000) intact, normal DRM-stack variance).
+- **Glass: BLACK again, full window, same as the 10 ms baseline.** Owner report: "result
+  again black screen."
+- Register reads in this capture (`0x0A=0x08`, `ID=0x38 00 00`, `self-diag=0x11`,
+  `scanline=0x28`) are the EXACT same byte values as the previous (10 ms) BIST-in-prepare
+  capture — reproducible, not random, which corroborates rather than contradicts the
+  page-1-artifact explanation already on record (2026-08-07 BIST-IN-PREPARE entry): this is
+  consistent wrong-page register content, not a new hardware signal, not evidence either way.
+- **Rail-settle-time hypothesis FALSIFIED up to 250 ms** (25x vendor's stated 10 ms, without
+  a scope trace of the actual VCC3V3_LCD rise — can't rule out needing more than 250 ms, but
+  25x margin over a fixture value that works on vendor's own bench makes that unlikely).
+- Conclusion: both firmware-timing hypotheses tested this session (command-mode ordering,
+  rail-settle delay) are now cleanly falsified, on top of content/framing/rate already
+  verified/exonerated earlier in the campaign. Firmware-side timing knobs are effectively
+  exhausted. Standing hardware diagnosis (boost/TCON path, both panels) survives its most
+  rigorous set of challenges yet.
+- Owner raised a separate, still-open line independently (same session): two panels failing
+  IDENTICALLY is stronger evidence for a SHARED cause than two coincidental panel defects —
+  sound logic. Re-examined for hidden HOST-side (not panel) causes never yet checked:
+  (a) MIPI LP/command-mode transactions conventionally only exercise Lane 0 + clock — D1/D2/D3
+  have never been exercised by anything proven working in this campaign (every "it works"
+  signal — 196 cmds ACKed, bidirectional reads, BIST handshake — all ride LP command mode).
+  Charter R-02 (SoM shared LVDS/MIPI TX mux) was cleared by owner reading a block diagram,
+  never physically lane-verified end-to-end. (b) Attempted to widen the dmesg search beyond
+  the narrow `jadard|bandwidth` grep used all campaign, using already-saved captures —
+  `diary/captures/*.cap` turned out to be pre-panel-era DDR/SPL training logs, not useful;
+  **no full unfiltered kernel dmesg has ever been captured/saved in this campaign.**
+- Next (owner decision, no firmware patch needed for either):
+  (1) DMM continuity check, D1/D2/D3, SoC pin through CON1 to panel FPC — bench-doable now,
+  never done before in this campaign. (2) Full unfiltered `dmesg` capture on next boot (not
+  grep-filtered) to check for PHY/DSI-level warnings hidden by the narrow filter so far.
+
+---
