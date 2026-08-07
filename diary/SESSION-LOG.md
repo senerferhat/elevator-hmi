@@ -1056,3 +1056,25 @@ panel-side defect independent of the (self-test-healthy) timing controller logic
   (only tested under BIST images so far, where this clock is never exercised for output).
 
 ---
+
+## 2026-08-07 (continued) — returned to main thread: vendor email #4 finalized with isolation-test evidence
+
+- Action: updated docs/VENDOR-SUPPORT-LMT101-BRINGUP-EMAIL-4.txt with the two firmware tests
+  run since the draft was last touched (command-mode ordering isolation, 250ms power delay) —
+  both now presented as "ADDITIONAL ISOLATION TESTING" in section 1, with a register-free,
+  timing-only proof (BIST-armed-to-video-mode gap = 2.02s, matching the intentional hold to
+  the millisecond) for the command-mode claim. Question F rewritten to state precisely what's
+  already been excluded (video/HS-clock precondition, power settle time) so the vendor's own
+  BIST-precondition question is answered as far as we can answer it ourselves.
+- Scoping check: isolation tests (i) and (ii) explicitly marked "unit #1" only in the email —
+  the spare panel was tested under the ORIGINAL vendor-specified BIST config (video-timed
+  ordering, section 1/2 main result) but NOT under the newer command-mode-isolated variant.
+  Not overclaiming both units under both configs.
+- Send checklist updated: two serial logs now needed (original BIST both units, isolation
+  test unit #1 only), with WIC SHAs referenced for owner to locate the right captures.
+- Status: email is now the strongest version of the case this campaign has produced —
+  content/framing/rate exonerated, ordering and rail-timing hypotheses tested and falsified
+  under conditions stricter than the vendor's own BIST specification, on top of the original
+  both-panels-black result. Still on owner review before send (checklist above).
+
+---
