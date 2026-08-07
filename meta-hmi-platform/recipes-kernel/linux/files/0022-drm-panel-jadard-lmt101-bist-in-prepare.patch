@@ -1,0 +1,51 @@
+From: Elevator HMI meta-hmi-platform
+Subject: [PATCH] drm: panel: jadard - LMT101 arm BIST inside INIT-IN-PREPARE (cmd-mode, pre-video)
+
+Vendor TEST 2 self-test on top of the corrected command ordering (patch
+0021): the BIST arm (F0,55 / F1,AA / E0,01 / E3,01) is sent immediately
+after Display On, still in DSI COMMAND mode with no video streaming -
+matching the fixture flow exactly. The panel must paint its internal
+pattern with zero host-video involvement. A 2 s dwell after arming gives
+an unmissable observation window before DRM starts video.
+
+DIAGNOSTIC IMAGE ONLY - E3,01 soft-resets the display engine; normal
+video will not survive. Sentinel:
+"jadard: BIST armed (INIT-IN-PREPARE, cmd-mode, pre-video)".
+
+Applies on top of 0021.
+
+---
+--- a/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
++++ b/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
+@@ -170,6 +170,31 @@
+ 	if (desc->display_on_delay)
+ 		msleep(desc->display_on_delay);
+ 
++	{
++		/*
++		 * Vendor TEST 2 BIST arm, relocated with the init sequence: sent in
++		 * DSI COMMAND mode, pre-video, right after Display On - the panel
++		 * paints its internal pattern with no host streaming involved.
++		 * 2 s observation window before DRM proceeds to start video.
++		 * DIAGNOSTIC IMAGE ONLY (E3,01 soft-resets the display engine).
++		 */
++		static const u8 fae_bist[][JD9365DA_INIT_CMD_LEN] = {
++			{ 0xF0, 0x55 },
++			{ 0xF1, 0xAA },
++			{ 0xE0, 0x01 },
++			{ 0xE3, 0x01 },
++		};
++		unsigned int b;
++
++		for (b = 0; b < ARRAY_SIZE(fae_bist); b++) {
++			if (jadard_generic_reg_val(dsi, dev, fae_bist[b][0],
++						   fae_bist[b][1]) < 0)
++				return;
++		}
++		dev_info(dev, "jadard: BIST armed (INIT-IN-PREPARE, cmd-mode, pre-video)\n");
++		msleep(2000);
++	}
++
+ 	jadard->init_sent = true;
+ }
+ 

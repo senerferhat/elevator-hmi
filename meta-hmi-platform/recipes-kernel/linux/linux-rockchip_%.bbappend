@@ -36,6 +36,10 @@ SRC_URI += "file://0019-drm-panel-jadard-lmt101-vendor-clock-match.patch"
 # mode before drm_panel_enable; enable()-time init rides live-video blanking). Kill test in
 # docs/FLASH-PROCEDURE.md.
 SRC_URI += "file://0021-drm-panel-jadard-lmt101-init-in-prepare.patch"
+# 0022 BIST-IN-PREPARE (2026-07-23): vendor TEST 2 arm inside the corrected cmd-mode
+# pre-video sequence + 2s observation dwell. DIAGNOSTIC IMAGE ONLY - comment out for
+# the video test image (init-in-prepare.wic).
+SRC_URI += "file://0022-drm-panel-jadard-lmt101-bist-in-prepare.patch"
 # H4a test: ELIMINATED 2026-06-10 — E3,01 causes panel soft-reset (0x0A=0x08), not booster enable
 # SRC_URI += "file://0016-drm-panel-jadard-lmt101-h4a-e3-booster-enable.patch"
 # FAE BUILD A v2 (BIST + 500ms + no burst): comment 0013, enable 0012+0014
