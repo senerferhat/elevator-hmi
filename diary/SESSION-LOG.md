@@ -1198,3 +1198,14 @@ panel-side defect independent of the (self-test-healthy) timing controller logic
   previously logged, unrelated or already-known items, unchanged.
 
 ---
+
+## 2026-08-07 (continued) — MASTER IMAGE glass result: black (both phases)
+
+- Owner report: master-image.wic showed nothing on the glass through the boot --
+  no BIST pattern in phase 1, no video in phase 2. Consistent with every prior
+  test this campaign; the DIAG15 anomaly (0x0A=0x08, self-diag=0x00) reported
+  separately does not correspond to any visible change on glass either way.
+- Owner now flashing init-in-prepare.wic (comparison test, no BIST) per the
+  pending ask -- result not yet in.
+
+---
