@@ -48,7 +48,48 @@ attempts (`wl 0` errored, `can't open file`, rootfs never written).
 `~/Projects/elevator-hmi/images-archive/`, alongside `loader.bin` / `idblock.img` / `uboot.img`.
 Always flash from **that directory**, by its short name, never by the deploy-dir symlink.
 
-## CURRENT TEST TARGET (2026-08-07) — BIST-IN-PREPARE: self-test on corrected command ordering
+## CURRENT TEST TARGET (2026-08-07, later) — POWER-DELAY test: 250ms rail settle before XRES
+
+**Status: recommended for next flash.** BIST-in-prepare kill test came back black through
+the full 2 s command-mode-only window (ordering hypothesis falsified — see the RESULT block
+in the previous section below). New single-variable test on top of that same base: the
+vendor's Q1 diagram states 10 ms between VCC3V3_LCD assertion and the RESX pulse; our rail's
+actual ramp time has never been scoped, and the power path has been through two hardware
+corrections this campaign. Patch 0023 extends that one `msleep()` to 250 ms — nothing else
+changes (0021 ordering fix + 0022 BIST arm both still active).
+
+**Kill test (written before flashing):**
+- **Pattern appears (even only in the BIST window)** → 10 ms was insufficient rail settle
+  time on our specific hardware — a real, fixable finding, independent of the panel/vendor's
+  own fixture characteristics.
+- **Still black** → further evidence against rail-timing as an explanation (not fully
+  conclusive without a scope trace of the actual VCC3V3_LCD rise — no oscilloscope on this
+  bench yet).
+
+| Field | Value |
+|---|---|
+| **Archive file** | `~/Projects/elevator-hmi/images-archive/power-delay-250ms.wic` |
+| **WIC SHA-256** | `542ab97ef79c80b8a343356165563e4874199f6c66962dd1ff695b2bc7d838d8` |
+| **git HEAD** | `d655a82` (also restores 0022, which had been accidentally reverted out of git metadata by an earlier recovery step — the previously-archived `bist-inprep.wic` binary itself was never affected, only the tracked config had drifted) |
+| **Confound check** | Image strings: `BIST armed (INIT-IN-PREPARE, cmd-mode, pre-video)` + `INIT-IN-PREPARE (cmd-mode, pre-video)` both present, confirming 0021+0022 both compiled in alongside 0023 |
+| **Expected dmesg** | Same shape as the previous BIST-in-prepare test, but with a visibly longer gap between `XRES assert`/`XRES release` and the earlier init lines — the extra 240 ms (250 ms new vs 10 ms old) should show up directly in the timestamps before `XRES assert` |
+| **What to report back** | (a) full `dmesg \| grep -iE "jadard\|bandwidth"`, (b) glass during boot — watch continuously from power-on; window is now ~4.2–6.2 s in (shifted later by the extra 240 ms) |
+
+### Flash commands (power-delay-250ms) — from the permanent archive
+
+```bash
+cd ~/Projects/elevator-hmi/images-archive
+sha256sum power-delay-250ms.wic   # expect 542ab97ef79c80b8a343356165563e4874199f6c66962dd1ff695b2bc7d838d8
+sudo rkdeveloptool db loader.bin
+sudo rkdeveloptool wl 0      power-delay-250ms.wic
+sudo rkdeveloptool wl 64     idblock.img
+sudo rkdeveloptool wl 0x4000 uboot.img
+sudo rkdeveloptool rd
+```
+
+---
+
+## PREVIOUS TEST TARGET (2026-08-07) — BIST-IN-PREPARE: self-test on corrected command ordering — RESULT: BLACK through full command-mode window, ordering hypothesis FALSIFIED
 
 **Status: recommended for next flash (owner-selected: BIST-first).** Built on the 2026-07-23
 root-cause finding: this vendor kernel switches the DSI host to VIDEO mode BEFORE
