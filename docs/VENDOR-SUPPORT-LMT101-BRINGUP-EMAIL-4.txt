@@ -7,7 +7,18 @@ Subject: Re: LMT101SX006C — BIST test completed as requested: no pattern, both
 
 Thread: "Technical Support Request: JD9365D Initialization Array for LMT101SX006C"
 
-STATUS: DRAFT v2 (state-dump format, owner review before sending).
+STATUS: SENT 2026-07-23 00:00 (Gmail thread confirmed). Owner sent a shorter
+version of this text — the ADDITIONAL ISOLATION TESTING and TIMING PROOF
+sections below were added to THIS local file after the send, during later
+2026-08-07 firmware testing, and were NEVER included in what actually went
+out. This file should not be treated as "pending to send" from this point
+forward — see docs/VENDOR-SUPPORT-LMT101-BRINGUP-EMAIL-5.txt for the
+follow-up covering what's new since the actual send.
+
+Also note: the sent email's actual attachment list (per Gmail) was
+05-driver-source-snippet.c ONLY — the serial log and photos referenced in
+the email body text were never attached. Closed in email #5.
+
 Style per owner direction: complete factual dump, no diagnosis pushed.
 
 --------------------------------------------------------------------------------

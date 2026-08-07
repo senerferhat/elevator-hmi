@@ -1,0 +1,105 @@
+To:      sales06@alltouchdisplay.com
+Cc:      sales@alltouchdisplay.com
+From:    senerferhat01@gmail.com
+Subject: Re: Re: Technical Support Request: JD9365D Initialization Array for
+         LMT101SX006C — follow-up: BIST re-tested with zero video ever sent
+         (stricter than your own spec), still no pattern
+
+Thread: "Technical Support Request: JD9365D Initialization Array for LMT101SX006C"
+
+STATUS: DRAFT (owner review before sending).
+Purpose: short, focused follow-up to the 23 July state-dump email, adding
+two new findings only. Does not repeat the earlier email's content.
+
+--------------------------------------------------------------------------------
+
+Dear Abby / LCD Mall FAE,
+
+Thank you for your reply and for pushing this to your engineering team.
+While we wait, here are two additional tests we ran since our 23 July
+email — both push your BIST test to conditions stricter than your own
+specification, and both still came back black. We're also attaching the
+serial log and photos that were referenced but not actually included in
+the 23 July email — apologies for the omission.
+
+================================================================================
+1. NEW TEST — BIST WITH ZERO VIDEO EVER SENT (stricter than "independent of
+   the host MIPI video stream")
+================================================================================
+
+Your 7 July email described BIST as running "independently of the host MIPI
+video stream." We rebuilt our firmware so that is literally, completely true:
+the entire sequence — init table, page-4 clock fix, Sleep Out, Display On,
+and the BIST arm itself — now executes while our DSI host is still in
+low-power COMMAND mode, before our host has ever switched to video mode at
+all. We then held that state for a measured 2.02-second window (proof below)
+before allowing video mode to start.
+
+During that 2.02 s window, the panel had received precisely zero video data
+of any kind, ever, since power-on. Result: unchanged — black, watched
+continuously, no flash, no bars, no pattern.
+
+Timing proof (verbatim target log, unit #1):
+
+  [    3.624] jadard: entering command-mode init sequence (pre-video)
+  [    3.624] jadard: init table sent (196 cmds)
+  [    3.678] jadard: page-4 clock fix sent
+  [    3.678] jadard: Sleep Out (0x11) sent
+  [    3.804] jadard: Display On (0x29) sent
+  [    3.764] jadard: BIST armed (F0,55/F1,AA/E0,01/E3,01)
+  [    5.784] jadard: host switches to video mode <- first video ever sent
+
+Gap from BIST-armed to video-mode switch: 2.02 seconds, matching our
+intentional hold to the millisecond. Every command before that line
+transacted over DSI low-power signaling only.
+
+================================================================================
+2. NEW TEST — 25x EXTENDED POWER-ON SETTLE TIME
+================================================================================
+
+Per your 11 May answer (Q2), MIPI commands must not be sent until VCC3V3_LCD
+has stabilized at >=90% of rated value, with your Q1 diagram citing a 10 ms
+delay. In case our rail's actual settle time differs from your fixture's, we
+extended that delay to 250 ms — 25x your stated value — with everything else
+unchanged. Result: unchanged — black.
+
+================================================================================
+3. WHAT THIS ADDS TO OUR 23 JULY REPORT
+================================================================================
+
+Neither test touched the init table, the command bytes, or anything you
+specified — both changed only host-side timing/sequencing around the same
+unmodified, byte-verified command stream. Combined with the 23 July result
+(both panel units black under your originally-specified test), we believe
+this now closes off the two most likely remaining host-side explanations
+(video-mode interference, power settle time) for why BIST has never produced
+a visible pattern on either of our units.
+
+We remain very open to any further test you or your application engineer
+would like us to run, and to shipping one or both units back for direct
+inspection on your fixture.
+
+================================================================================
+
+Attachments:
+  - Full serial log, BIST test as specified 7 July (unit #1 + unit #2)
+  - Full serial log, command-mode-isolation test above (unit #1)
+  - Photo: panel unit #1, backlight on, BIST armed, glass black
+  - Photo: panel unit #2, same state
+
+Thank you again for your continued support.
+
+Best regards,
+Ferhat Sener
+Freelancer Developer — Elevator HMI Project (RK3566)
+
+--------------------------------------------------------------------------------
+SEND CHECKLIST (owner):
+  [ ] Save full BIST-run serial log (original, both units) to .txt and attach
+      (WIC SHA de0e0b60... — the one actually referenced in the 23 July email)
+  [ ] Save full serial log of the command-mode-isolation test to .txt and
+      attach (WIC SHA 6b74331d...)
+  [ ] Photos of both units under BIST (backlight visibly on) — closes the
+      gap left by the 23 July send
+  [ ] This is a NEW reply in the thread — do not resend 05-driver-source-
+      snippet.c, it's already there from 23 July

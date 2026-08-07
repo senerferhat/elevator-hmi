@@ -1078,3 +1078,35 @@ panel-side defect independent of the (self-test-healthy) timing controller logic
   both-panels-black result. Still on owner review before send (checklist above).
 
 ---
+
+## 2026-08-07 (continued) — RECORD CORRECTION: email #4 was already sent 2026-07-23; vendor re-engaged; email #5 drafted
+
+- Action: owner pasted the live Gmail thread. Discovered: docs/VENDOR-SUPPORT-LMT101-
+  BRINGUP-EMAIL-4.txt was NOT still a draft — a shorter version was actually SENT
+  2026-07-23 00:00, before this session's ordering-isolation and power-delay tests
+  existed. This session's edits to that file (ADDITIONAL ISOLATION TESTING, TIMING
+  PROOF sections) were made under the stale belief it was still pending send — those
+  sections were never sent and don't exist in the vendor's inbox. Corrected the file's
+  STATUS header to state this plainly and point to email #5.
+- Also found: the 23 July send's actual Gmail attachment list is 05-driver-source-
+  snippet.c ONLY — the serial log and photos the email text references were never
+  attached. Gap, not previously caught (the send checklist existed but apparently
+  wasn't fully worked through, or was worked through with an earlier/shorter draft
+  before those checklist items were added).
+- Thread activity since: 2026-08-07 12:31 owner sent a one-line nudge ("keen to
+  resolve... could you review the logs... advise next steps"); 12:38 owner forwarded
+  the thread to a third party (SerkanSume1@gmail.com — likely stakeholder/colleague,
+  not otherwise identified in this campaign's records); 13:38 vendor (Abby) replied
+  same-day: "I will push the engineering to check and reply soon." Thread is active,
+  not stalled.
+- Drafted docs/VENDOR-SUPPORT-LMT101-BRINGUP-EMAIL-5.txt: short, standalone follow-up
+  (does not repeat the 23 July state dump). Covers exactly the two genuinely new
+  findings from this session — command-mode-only BIST isolation (zero video ever sent,
+  2.02s measured window, still black) and 25x power-settle-time test (250ms vs vendor's
+  10ms, still black) — plus closes the missing-attachment gap (serial logs, photos).
+  Owner review + attachment checklist at file bottom before send.
+- Next: owner reviews/sends email #5 (or waits for vendor engineering reply first,
+  owner's call — vendor has committed to respond, no urgency to preempt them, but the
+  new evidence is ready either way).
+
+---
