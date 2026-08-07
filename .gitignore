@@ -136,3 +136,7 @@ test-results/
 build/
 .claude/
 local-archive/
+
+# Flashable image archive (hardlinked from build/tmp/deploy — survives Yocto
+# pruning) — binaries, never tracked. See docs/FLASH-PROCEDURE.md.
+images-archive/
