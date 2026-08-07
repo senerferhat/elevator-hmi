@@ -925,4 +925,44 @@ panel-side defect independent of the (self-test-healthy) timing controller logic
 - Next: owner flashes `bist-inprep.wic`, watches glass continuously from power-on
   (window ~4–6 s), reports dmesg + observation; then `init-in-prepare.wic`.
 
+### BIST-IN-PREPARE result — KILL TEST ANSWERED: ordering hypothesis FALSIFIED
+
+- Result (artifact triple): WIC SHA `6b74331dd7d27c750a47741694764327317cbec4c409716d9ffe3be32dbce2a1`
+  (`images-archive/bist-inprep.wic`), git HEAD `ba66670`, clean tree.
+- dmesg confirms the fix executed as designed: `DCS-INIT`(3.624)→`SLPOUT`(3.625)→
+  `DISON`(3.750)→`BIST armed (INIT-IN-PREPARE, cmd-mode, pre-video)`(3.764), all
+  inside `prepare()` — then a measured **2.02 s gap** before `mode_flags=...video=1`
+  at 5.784, matching the built-in `msleep(2000)` exactly. Confirms: BIST armed with
+  ZERO video ever having reached the panel, for a full 2 seconds, in pure DSI
+  command mode — the strictest, most fixture-identical test run in this campaign.
+- **Glass observation (owner, watched continuously power-on through login):
+  BLACK throughout. No pattern, no flash, at any point — including the full 2 s
+  command-mode-only window.**
+- **Ordering hypothesis (2026-07-23 finding: video-before-init) is FALSIFIED as
+  the root cause of the black screen.** The panel does not produce any visible
+  self-test output even when driven exactly as the vendor's own fixture would
+  drive it — command-mode-only, no host video involvement whatsoever.
+- Known confound in THIS build's register reads (does not affect the kill test,
+  which is visual-only, not register-based): `GET_POWER_MODE(0x0A)=0x08`,
+  `DIAG15 ID=0x38 0x00 0x00` (vs the constant `0x93...` everywhere else),
+  `self-diag=0x11`, `scanline=0x28` (first-ever non-zero scanline). NOT reliable
+  evidence of anything: (a) these reads run in `enable()`, still unguarded, and
+  fire at t=5.85s — AFTER video mode was already switched back on at t=5.784,
+  so they're just as video-confounded as every previous capture; (b) BIST arm's
+  `E0,01` was never restored to `E0,00` before these reads — ID changing from the
+  constant `0x93` strongly suggests page-1 registers were read by mistake, not
+  page-0. Both are patch bugs in 0021/0022 (DIAG15 block never moved into the
+  command-mode window, no page restore after BIST arm). Flagged for a future fix
+  if further register-level BIST diagnostics are ever wanted; NOT chasing now —
+  the visual kill test already answered the question this build was built for.
+- Conclusion: video-ordering was a well-reasoned, well-evidenced hypothesis and
+  the correct next thing to test — now cleanly ruled out. Standing diagnosis
+  (panel/JD5001 boost/TCON hardware fault, both units) survives its most
+  rigorous challenge yet. No further firmware permutations planned.
+- Next: owner decision — (a) still run `init-in-prepare.wic` (video, no BIST,
+  same corrected ordering) for completeness, though it's not expected to add
+  diagnostic value beyond what BIST just answered; or (b) finalize and send
+  vendor email #4 (currently ON HOLD) with this new command-mode-isolated BIST
+  result added as the strongest evidence yet.
+
 ---
