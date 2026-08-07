@@ -1110,3 +1110,39 @@ panel-side defect independent of the (self-test-healthy) timing controller logic
   new evidence is ready either way).
 
 ---
+
+## 2026-08-07 (continued) — MASTER IMAGE built: BIST-then-video, every boot, production behavior
+
+- Action: owner requested (vendorless, forward-looking) a permanent boot flow: BIST
+  self-test first, then normal video operation, with the ability to "reboot the LCD"
+  without a full system reboot. Confirmed design via AskUserQuestion: trigger = every
+  boot, always (not on-demand, not temporary-until-vendor-resolves).
+- Design/implementation: patch 0024 refactors the reset pulse and full command
+  bring-up into reusable helpers (`jadard_xres_pulse()`, `jadard_send_bringup()`),
+  used twice per boot: once for the BIST self-test phase (command mode, zero video,
+  per 0021's ordering), once for a clean video-ready phase after a SECOND independent
+  XRES power-cycle. The second reset is architecturally the "reboot the LCD"
+  capability requested — real, software-triggered, no Linux reboot involved.
+- Technical rationale documented: E3,01 (BIST enable) soft-resets the display engine
+  (established earlier in the campaign — 0x0A read 0x08 immediately after E3,01
+  outside the dedicated BIST test), so BIST cannot be a soft mode-switch; the panel
+  needs a fresh hardware reset before video can safely resume. This is why the flow
+  is two full reset+init cycles per boot, not one with a mode toggle.
+  BIST observation dwell set to 300ms (down from the 2s used for visual-confirmation
+  testing) since this now runs on every boot with no automated pass/fail check
+  available — kept short since every dwell length tested this campaign (300ms-2000ms
+  equivalent) has shown identical (black) results regardless.
+  Reverted to vendor's original 10ms power delay (0023's 250ms was a falsified
+  hypothesis test, not a retained fix).
+- Supersedes 0022 (one-shot diagnostic BIST, no return-to-video path) and 0023
+  (250ms rail-settle, falsified) - both disabled in bbappend, kept in tree for
+  history, explicit "do not enable alongside 0024" comments added.
+- Build verified: WIC SHA `e479c2e4f3bffd46760978f9d2d82efa9cdafaf765ac4cec1f871c36617f0b6b`
+  (`images-archive/master-image.wic`), git HEAD `2e16a30`, clean tree. Confound check:
+  all four new MASTER-phase sentinels present; old 0022/0023 sentinels confirmed absent.
+- Next: owner flashes master-image.wic, reports dmesg (expect TWO full XRES assert/
+  release pairs per boot - this is correct, not a bug) + glass observation. This
+  becomes the standing boot behavior going forward, independent of vendor's response
+  on the underlying hardware question.
+
+---

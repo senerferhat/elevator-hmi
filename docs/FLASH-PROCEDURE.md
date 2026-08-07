@@ -36,6 +36,43 @@ below, to avoid a second stale pointer existing alongside the current one.)*
 
 ---
 
+## CURRENT TEST TARGET (2026-08-07, latest) — MASTER IMAGE: BIST self-test then video, every boot
+
+**Status: recommended for next flash.** Owner decision: production/master-image behavior,
+not a one-off test. Every boot runs a full BIST self-test pass in DSI command mode (zero
+video ever sent, per 0021's ordering fix), then performs a SECOND, fully independent XRES
+power-cycle and clean re-init before handing off to normal video — a genuine "reboot the
+LCD" done entirely in software. Necessary because `E3,01` (BIST enable) soft-resets the
+display engine; the panel cannot safely continue into video after BIST without a fresh
+hardware reset.
+
+**Not a kill test** — this is the intended long-term boot behavior, not a hypothesis. If/when
+the hardware issue is ever resolved (vendor fix, replacement panel), this same image already
+does the right thing at every boot with no further software changes.
+
+| Field | Value |
+|---|---|
+| **Archive file** | `~/Projects/elevator-hmi/images-archive/master-image.wic` |
+| **WIC SHA-256** | `e479c2e4f3bffd46760978f9d2d82efa9cdafaf765ac4cec1f871c36617f0b6b` |
+| **git HEAD** | `2e16a30` (clean tree) |
+| **Confound check** | Image strings: `MASTER self-test phase (cmd-mode, pre-video)`, `BIST armed (self-test phase)`, `MASTER video phase - second reset + clean init` all present; old 0022/0023 sentinels (`BIST armed (INIT-IN-PREPARE`, `BIST armed (FAE_CLOCK`) confirmed ABSENT |
+| **Expected dmesg** | `MASTER self-test phase` → init/SLPOUT/DISON → `BIST armed (self-test phase)` → ~300ms → `MASTER video phase - second reset + clean init` → **second** `XRES assert`/`XRES release` pair → init/SLPOUT/DISON again → then the normal `dsi mode_flags=...video=1` line and video-mode handoff. Two full XRES assert/release pairs per boot is the expected, correct signature — not a bug. |
+| **What to report back** | (a) full `dmesg \| grep -iE "jadard\|bandwidth"` — confirm the two-phase sequence and both XRES pairs, (b) glass — same black/pattern grid as prior BIST tests applies to phase 1; phase 2 (video) behavior is whatever the standing diagnosis predicts (currently: black, backlit) |
+
+### Flash commands (master-image) — from the permanent archive
+
+```bash
+cd ~/Projects/elevator-hmi/images-archive
+sha256sum master-image.wic   # expect e479c2e4f3bffd46760978f9d2d82efa9cdafaf765ac4cec1f871c36617f0b6b
+sudo rkdeveloptool db loader.bin
+sudo rkdeveloptool wl 0      master-image.wic
+sudo rkdeveloptool wl 64     idblock.img
+sudo rkdeveloptool wl 0x4000 uboot.img
+sudo rkdeveloptool rd
+```
+
+---
+
 ## ⚠️ ARCHIVE POLICY (added 2026-08-07 — read before flashing)
 
 **Never flash from `build/tmp/deploy/images/.../` by a symlink name.** Yocto's deploy step
