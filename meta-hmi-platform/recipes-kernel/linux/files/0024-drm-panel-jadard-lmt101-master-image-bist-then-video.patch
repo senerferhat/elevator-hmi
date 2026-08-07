@@ -1,0 +1,176 @@
+From: Elevator HMI meta-hmi-platform
+Subject: [PATCH] drm: panel: jadard - LMT101 MASTER IMAGE: BIST self-test then clean video re-init, every boot
+
+Production/master-image behavior (owner decision 2026-08-07): every boot
+runs BIST self-test (command mode, zero video ever sent - see 0021), then
+performs a SECOND, fully independent XRES power-cycle and clean re-init
+before handing off to normal video. Not cosmetic: E3,01 (BIST enable)
+soft-resets the display engine (confirmed earlier: 0x0A read 0x08
+immediately after E3,01 outside the dedicated BIST test), so normal video
+cannot safely resume in the same cycle without a fresh hardware reset.
+
+This makes the second reset a genuine "reboot the LCD" - a full panel
+power-cycle triggered entirely in software, independent of any Linux
+system reboot, using the same XRES pulse as cold boot.
+
+Refactors jadard_poweron_cmd_sequence() into three pieces:
+  - jadard_xres_pulse()   - the XRES pulse, now reusable (was inline in
+                             jadard_prepare(), used once at cold boot;
+                             now also used for the post-BIST reset)
+  - jadard_send_bringup() - full init table + page-4 fix + SLPOUT + DISON,
+                             reusable (was inline; now run twice per boot -
+                             once for the BIST-self-test pass, once for
+                             the clean video pass)
+  - jadard_poweron_cmd_sequence() - orchestrates: bringup -> BIST arm ->
+                             observe -> second reset -> clean bringup
+
+Also supersedes 0023 (falsified rail-settle-time hypothesis, 250ms) -
+this patch is built on the vendor's original 10ms power-on delay, since
+0023's 250ms was an experiment, not a retained fix.
+
+---
+--- a/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
++++ b/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
+@@ -107,18 +107,42 @@
+ 
+ 
+ /*
+- * INIT-IN-PREPARE (2026-07-23): send the full vendor command bring-up while
+- * the DSI host is still in COMMAND mode and no video is streaming. On this
+- * vendor kernel the dsi bridge switches to VIDEO mode at atomic_enable
+- * BEFORE drm_panel_enable() runs, so anything sent from jadard_enable() is
+- * transmitted during the blanking of a live video stream and the panel
+- * receives HS video packets before init/SLPOUT. drm_panel_prepare() is
+- * called from the bridge's pre_enable, where the host is explicitly in
+- * command mode ("Switch to cmd mode for panel-bridge pre_enable & panel
+- * prepare" in dw-mipi-dsi.c) - the fixture-equivalent place for the vendor
+- * sequence on this stack.
++ * MASTER IMAGE (2026-08-07): every boot runs a full BIST self-test pass in
++ * DSI command mode (zero video ever sent), then a SECOND, independent XRES
++ * power-cycle and clean re-init before handing off to normal video. This is
++ * not cosmetic: E3,01 (BIST enable) soft-resets the display engine
++ * (confirmed earlier - 0x0A read 0x08 immediately after E3,01 in a
++ * non-BIST sequence), so the panel cannot safely continue into normal
++ * operation after BIST without a fresh hardware reset. The second reset
++ * cycle below IS a full "reboot the LCD" - entirely in software, no Linux
++ * system reboot involved, using the exact same XRES pulse used at cold
++ * boot.
++ *
++ * Builds on INIT-IN-PREPARE (2026-07-23): both phases run in COMMAND mode,
++ * before drm_panel_enable()/video-mode switch, matching the vendor fixture.
+  */
+-static void jadard_poweron_cmd_sequence(struct jadard *jadard)
++
++/* Vendor Q1 (GPIO_ACTIVE_LOW): XRES high 5 ms -> low 20 ms -> high 120 ms. */
++static void jadard_xres_pulse(struct jadard *jadard)
++{
++	struct device *dev = &jadard->dsi->dev;
++
++	/* gpiod 0 = inactive = pad high; gpiod 1 = active = pad low. */
++	gpiod_set_value(jadard->reset, 0);
++	msleep(5);
++
++	dev_info(dev, "jadard: XRES assert\n");
++	gpiod_set_value(jadard->reset, 1);
++	msleep(20);
++
++	dev_info(dev, "jadard: XRES release\n");
++	gpiod_set_value(jadard->reset, 0);
++	msleep(jadard->desc->post_reset_delay ?
++	       jadard->desc->post_reset_delay : 5);
++}
++
++/* Full vendor init table + page-4 clock fix + Sleep Out + Display On. */
++static void jadard_send_bringup(struct jadard *jadard)
+ {
+ 	const struct jadard_panel_desc *desc = jadard->desc;
+ 	struct mipi_dsi_device *dsi = jadard->dsi;
+@@ -126,8 +150,6 @@
+ 	u8 e0_page0[JD9365DA_INIT_CMD_LEN] = { 0xE0, 0x00 };
+ 	int err;
+ 
+-	dev_info(dev, "jadard: INIT-IN-PREPARE (cmd-mode, pre-video)\n");
+-
+ 	jadard_init_sequence(jadard);
+ 
+ 	if (desc->enable_seq == JADARD_ENABLE_SEQ_LMT101_FAE_CLOCK) {
+@@ -169,6 +191,56 @@
+ 
+ 	if (desc->display_on_delay)
+ 		msleep(desc->display_on_delay);
++}
++
++/*
++ * Dwell after arming BIST before the second reset. Every capture in this
++ * campaign has shown BIST arms and stays black regardless of dwell length
++ * (2000 ms and shorter both tested); kept short since this now runs on
++ * every boot with no automated pass/fail check available (visual only, if
++ * anyone is watching - e.g. bench/factory test or a field service visit).
++ */
++#define JADARD_BIST_OBSERVE_MS 300
++
++static void jadard_poweron_cmd_sequence(struct jadard *jadard)
++{
++	struct mipi_dsi_device *dsi = jadard->dsi;
++	struct device *dev = &dsi->dev;
++
++	/* Phase 1: BIST self-test, command mode, zero video ever sent. */
++	dev_info(dev, "jadard: MASTER self-test phase (cmd-mode, pre-video)\n");
++	jadard_send_bringup(jadard);
++
++	{
++		static const u8 fae_bist[][JD9365DA_INIT_CMD_LEN] = {
++			{ 0xF0, 0x55 },
++			{ 0xF1, 0xAA },
++			{ 0xE0, 0x01 },
++			{ 0xE3, 0x01 },
++		};
++		unsigned int b;
++		bool armed = true;
++
++		for (b = 0; b < ARRAY_SIZE(fae_bist); b++) {
++			if (jadard_generic_reg_val(dsi, dev, fae_bist[b][0],
++						   fae_bist[b][1]) < 0) {
++				armed = false;
++				break;
++			}
++		}
++		if (armed) {
++			dev_info(dev, "jadard: BIST armed (self-test phase)\n");
++			msleep(JADARD_BIST_OBSERVE_MS);
++		}
++	}
++
++	/*
++	 * Phase 2: second full XRES power-cycle + clean re-init, no BIST -
++	 * required because BIST's E3,01 leaves the display engine reset.
++	 */
++	dev_info(dev, "jadard: MASTER video phase - second reset + clean init\n");
++	jadard_xres_pulse(jadard);
++	jadard_send_bringup(jadard);
+ 
+ 	jadard->init_sent = true;
+ }
+@@ -416,21 +488,7 @@
+ 	msleep(10);
+ 
+ 	if (jadard->reset) {
+-		/*
+-		 * Vendor Q1 (GPIO_ACTIVE_LOW): XRES high 5 ms → low 20 ms → high 120 ms.
+-		 * gpiod 0 = inactive = pad high; gpiod 1 = active = pad low.
+-		 */
+-		gpiod_set_value(jadard->reset, 0);
+-		msleep(5);
+-
+-		dev_info(panel->dev, "jadard: XRES assert\n");
+-		gpiod_set_value(jadard->reset, 1);
+-		msleep(20); /* vendor Q1: 20 ms XRES low pulse width */
+-
+-		dev_info(panel->dev, "jadard: XRES release\n");
+-		gpiod_set_value(jadard->reset, 0);
+-		msleep(jadard->desc->post_reset_delay ?
+-		       jadard->desc->post_reset_delay : 5);
++		jadard_xres_pulse(jadard);
+ 	} else {
+ 		/* Allow rail ramp when XRES is not under software control. */
+ 		msleep(135);
