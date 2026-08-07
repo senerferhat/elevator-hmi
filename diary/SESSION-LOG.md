@@ -1146,3 +1146,55 @@ panel-side defect independent of the (self-test-healthy) timing controller logic
   on the underlying hardware question.
 
 ---
+
+## 2026-08-07 (continued) — MASTER IMAGE first boot analyzed; result REPRODUCED on second boot
+
+- Result (artifact triple): WIC SHA `e479c2e4f3bffd46760978f9d2d82efa9cdafaf765ac4cec1f871c36617f0b6b`
+  (`images-archive/master-image.wic`), git HEAD `2e16a30`.
+- Structural verification: both phases executed exactly as designed. Phase 1
+  (self-test): XRES assert/release at 3.473/3.499 (cold boot), MASTER self-test
+  phase -> DCS-INIT -> SLPOUT -> DISON -> BIST armed, all correctly sequenced.
+  Phase 2 (video): MASTER video phase at 4.073, SECOND XRES assert/release at
+  4.086/4.113, DCS-INIT -> SLPOUT -> DISON -> normal video handoff at 4.380.
+  Two full reset+init cycles per boot, exactly as built.
+- **NEW FINDING, register reads after phase 2 differ from every prior clean/
+  non-BIST capture in this campaign:**
+    - `0x0A` (power mode): `0x08` (was `0x1C` in every non-BIST capture)
+    - `0x0F` (self-diagnostic): `0x00` = "both faults" per our own driver's
+      bit-mapping comment (was `0xC0` = healthy, in every non-BIST capture)
+    - `0x04` (ID): `0x93 00 00` -- MATCHES the historical constant, confirming
+      this read is NOT page-1-confounded like the earlier BIST-arm captures
+      (those showed ID=0x38, the tell that page selector was stuck on 1). A
+      real XRES hardware reset resets the whole chip including page-select,
+      so this read is genuinely page-0 and should be trustworthy.
+  **REPRODUCED IDENTICALLY on a second boot of the same image** (same WIC,
+  same git HEAD) -- 0x0A=0x08, ID=0x93 00 00, self-diag=0x00, scanline=0x00,
+  bit-for-bit identical to the first capture. Not a one-off glitch; a
+  deterministic consequence of this specific BIST-then-RESX-then-reinit
+  sequence.
+- Two competing, NOT YET disambiguated explanations recorded:
+  (a) BIST/E3,01 leaves the self-diagnostic circuit in a state that a
+      bare RESX pulse does not clear (many display ICs latch self-test/
+      fault status until a full VDD power-cycle, by design, for post-mortem
+      inspection) -- if true, master-image's phase-2 "reboot" needs a full
+      regulator power-cycle, not just XRES, between the BIST and video
+      phases.
+  (b) This is the first genuinely unconfounded (page-0-correct) self-
+      diagnostic read this campaign has ever captured, and it is reporting
+      something real and negative that earlier page-1-confounded or
+      never-run-BIST-in-same-session captures never surfaced.
+- Decisive, cheap next test proposed (not yet run by owner): flash the
+  ALREADY-ARCHIVED `init-in-prepare.wic` (SHA 0c947979..., 0021 only, zero
+  BIST ever touched in this boot) and check 0x0A/0x0F. 0x1C/0xC0 there would
+  support (a); 0x08/0x00 there would be surprising given every prior capture
+  on that exact image and would need re-examination.
+- Still missing: owner has not reported GLASS observation for either phase of
+  either master-image boot (BIST self-test pattern vs black; video phase
+  black vs anything). This remains the primary/decisive signal, asked for
+  twice, not yet answered.
+- No other new DSI/PHY-relevant lines found in either full unfiltered dmesg
+  capture -- camera (gc8034/ov5695, different PHY), PCIe link fail (no card),
+  ethernet DMA reset fail, gpio0-22/pwm7 pin race, rk808 PMIC read fail: all
+  previously logged, unrelated or already-known items, unchanged.
+
+---
