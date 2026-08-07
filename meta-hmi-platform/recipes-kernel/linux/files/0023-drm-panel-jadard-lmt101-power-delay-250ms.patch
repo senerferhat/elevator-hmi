@@ -1,0 +1,44 @@
+From: Elevator HMI meta-hmi-platform
+Subject: [PATCH] drm: panel: jadard - LMT101 extend power-to-reset delay 10ms -> 250ms (test)
+
+Vendor Q1 diagram states 10 ms between VCC3V3_LCD assertion and the RESX
+pulse; Q2 additionally requires the rail be stabilized at >=90% of rated
+value before any MIPI command, but never states how long that actually
+takes on OUR hardware. Our VCC3V3_LCD path has been through two hardware
+corrections this campaign (misdiagnosed load switch -> temporary bypass
+jumper -> corrected stock switch, GPIO0_B7 active-high) and its ramp
+characteristic has never been scoped. This tests whether 10 ms is
+sufficient settle time on our rail specifically, independent of the
+vendor's own fixture.
+
+Single-variable test on top of 0021 (command-mode init ordering,
+falsified as sole root cause) + 0022 (BIST-in-prepare, black on full
+2s command-mode window). Only this one msleep value changes.
+
+Kill test: pattern appears (even in the BIST window) => 10 ms was
+insufficient rail settle time on our hardware, real and fixable finding.
+Still black => further evidence against rail-timing as an explanation
+(not fully conclusive without a scope trace of the actual rail rise).
+
+---
+--- a/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
++++ b/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
+@@ -410,10 +410,15 @@
+ 		return ret;
+ 
+ 	/*
+-	 * Vendor power-on: wait ~10 ms after rails so internal LDO / OSC can
+-	 * stabilize before the RESX pulse (LMT101SX006C bring-up).
++	 * Vendor power-on: 10 ms per Q1 diagram. EXTENDED to 250 ms
++	 * (2026-08-07 test): vendor's 10 ms assumes their fixture's own
++	 * VCC3V3_LCD ramp; ours has never been scoped and the rail has gone
++	 * through two hardware corrections this campaign (misdiagnosed
++	 * switch -> jumper -> corrected stock switch). Vendor Q2 requires
++	 * the rail at >=90% before any MIPI command; testing whether our
++	 * rail genuinely needs more settle time than 10 ms before XRES.
+ 	 */
+-	msleep(10);
++	msleep(250);
+ 
+ 	if (jadard->reset) {
+ 		/*

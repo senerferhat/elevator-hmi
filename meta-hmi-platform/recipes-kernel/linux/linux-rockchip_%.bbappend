@@ -36,6 +36,16 @@ SRC_URI += "file://0019-drm-panel-jadard-lmt101-vendor-clock-match.patch"
 # mode before drm_panel_enable; enable()-time init rides live-video blanking). Kill test in
 # docs/FLASH-PROCEDURE.md.
 SRC_URI += "file://0021-drm-panel-jadard-lmt101-init-in-prepare.patch"
+# 0022 BIST-IN-PREPARE (2026-07-23): vendor TEST 2 arm inside the corrected cmd-mode
+# pre-video sequence + 2s observation dwell. RE-ENABLED 2026-08-07 (was accidentally
+# reverted out of git by a stray `git checkout f04ae58 -- bbappend` during a flash-order
+# recovery, then swept into an unrelated commit — the built/archived bist-inprep.wic
+# binary was never affected, only this file's git history). DIAGNOSTIC IMAGE ONLY.
+SRC_URI += "file://0022-drm-panel-jadard-lmt101-bist-in-prepare.patch"
+# 0023 POWER-DELAY test (2026-08-07): 10ms -> 250ms between VCC3V3_LCD enable and XRES,
+# on top of 0021+0022 (ordering fix + BIST, both kept). Tests rail settle-time as a new,
+# independent variable — single change only.
+SRC_URI += "file://0023-drm-panel-jadard-lmt101-power-delay-250ms.patch"
 # H4a test: ELIMINATED 2026-06-10 — E3,01 causes panel soft-reset (0x0A=0x08), not booster enable
 # SRC_URI += "file://0016-drm-panel-jadard-lmt101-h4a-e3-booster-enable.patch"
 # FAE BUILD A v2 (BIST + 500ms + no burst): comment 0013, enable 0012+0014
