@@ -1209,3 +1209,31 @@ panel-side defect independent of the (self-test-healthy) timing controller logic
   pending ask -- result not yet in.
 
 ---
+
+## 2026-08-07 (continued) — DIAG15 anomaly RESOLVED: BIST latches self-diag fault, RESX-only doesn't clear it
+
+- Comparison test result: init-in-prepare.wic (SHA 0c947979..., 0021 only, zero
+  BIST ever touched, single XRES pair confirmed in dmesg) reads `0x0A=0x1C`,
+  `0x0F=0xC0` (healthy) -- back to the historical baseline instantly, the moment
+  BIST is out of the picture entirely.
+- **Root cause identified**: `E3,01` (BIST enable) latches a fault status in the
+  JD9365D's self-diagnostic register that a bare RESX (hardware reset pin) pulse
+  does NOT clear -- a common, often intentional IC design pattern (self-test
+  circuits designed to hold their result across a logic reset, cleared only by
+  a genuine VDD power-cycle, precisely so the result survives for inspection).
+  Confirms hypothesis (a) from the prior entry; hypothesis (b) (first-ever
+  trustworthy negative reading) is ruled out.
+- Scope: this affects ONLY the self-diagnostic register's reportability after
+  BIST within the master-image's phase 2 -- it does NOT change the actual video
+  outcome. Glass has been black in both configurations (BIST-then-video and
+  BIST-free-video) throughout this entire campaign; the 0x0A/0x0F register
+  value has never once correlated with whether video actually appears.
+- Optional refinement, not yet implemented: if trustworthy post-BIST self-
+  diagnostic telemetry is wanted (e.g. for future logging/automated pass-fail),
+  master-image's phase 2 "reboot" would need to become a full regulator
+  power-cycle (disable/enable jadard->vdd + vccio, not just the XRES pulse) to
+  properly clear the latch. Not required for the master image's core purpose
+  (BIST self-test + return to video) since video behavior is unaffected either
+  way -- owner decision whether to pursue.
+
+---
