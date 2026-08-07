@@ -28,9 +28,14 @@ SRC_URI += "file://0019-drm-panel-jadard-lmt101-vendor-clock-match.patch"
 # Vendor TEST 2: arm BIST self-test on top of full FAE_CLOCK init (diagnostic image ONLY).
 # E3,01 soft-resets the display engine (our H4a test: 0x0A=0x08) — it sabotages the normal
 # video path. ENABLED 2026-07-22 per vendor 7/7 request: dedicated BIST image on the
-# clean-reads 468 Mbps base (DIAG15 reads land before BIST arm). Disable again for the
-# production video image after the BIST verdict is recorded.
-SRC_URI += "file://0020-drm-panel-jadard-lmt101-fae-clock-bist-arm.patch"
+# clean-reads 468 Mbps base (DIAG15 reads land before BIST arm). DISABLED again 2026-07-23:
+# BIST verdict recorded (black, both panels); current build is the INIT-IN-PREPARE video test.
+# SRC_URI += "file://0020-drm-panel-jadard-lmt101-fae-clock-bist-arm.patch"
+# 0021 INIT-IN-PREPARE (2026-07-23 root-cause candidate): vendor bring-up moved to prepare()
+# so it runs in DSI command mode BEFORE video starts (this vendor kernel switches to video
+# mode before drm_panel_enable; enable()-time init rides live-video blanking). Kill test in
+# docs/FLASH-PROCEDURE.md.
+SRC_URI += "file://0021-drm-panel-jadard-lmt101-init-in-prepare.patch"
 # H4a test: ELIMINATED 2026-06-10 — E3,01 causes panel soft-reset (0x0A=0x08), not booster enable
 # SRC_URI += "file://0016-drm-panel-jadard-lmt101-h4a-e3-booster-enable.patch"
 # FAE BUILD A v2 (BIST + 500ms + no burst): comment 0013, enable 0012+0014
