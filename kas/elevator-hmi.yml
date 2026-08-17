@@ -31,7 +31,10 @@ local_conf_header:
     # source and the resulting .config to verify panel patches and kernel
     # options (e.g. CONFIG_FRAMEBUFFER_CONSOLE). work-shared/kernel-source is
     # already exempt from rm_work, but the kernel WORKDIR holding .config is not.
-    RM_WORK_EXCLUDE += "linux-rockchip"
+    # Keep GPU/Qt workdirs too: this is the first ever build of the EGLFS stack,
+    # and diagnosing a libmali or qtbase EGL/GBM failure without its WORKDIR
+    # (config logs, meson/cmake output) is painful.
+    RM_WORK_EXCLUDE += "linux-rockchip rockchip-libmali qtbase"
     # Abort cleanly instead of corrupting TMPDIR if the disk fills mid-build.
     BB_DISKMON_DIRS = "\
         STOPTASKS,${TMPDIR},2G,100K \
