@@ -6,6 +6,33 @@
 > `diary/SESSION-LOG.md` (flat log, charter rev 2). This file now carries
 > milestone-level summaries only.
 
+
+## 2026-08-07 — ✅ DISPLAY WORKS: BLK-014 resolved, Phase 1 display gate PASSED
+
+**Agent:** lead (single-agent)
+
+- **Panel confirmed working on glass**: Tux boot logo + live console rendering,
+  unaided, from `images-archive/fbcon-display.wic`
+  (SHA `f13f3eb00d95a0465e3b7b265e800020ae55d4deb6d4e55e578f59b304410bab`).
+- **Root cause (two stacked bugs, both host-side software):**
+  1. **DSI init ordering** — this Rockchip kernel enters VIDEO mode in
+     `bridge_atomic_enable()` *before* `drm_panel_enable()`, so the vendor
+     bring-up was transmitted into a live video stream. Fixed by patch **0021
+     (INIT-IN-PREPARE)** — sequence moved to `prepare()`, command mode, pre-video.
+  2. **`CONFIG_FRAMEBUFFER_CONSOLE` unset** — `/dev/fb0` existed but nothing ever
+     rendered into it; a zero-filled framebuffer is a correctly-displayed black
+     screen. This hid fix (1) for ~2 weeks. Enabled with `CONFIG_LOGO`.
+- **Hardware fully exonerated**: panels (both), 3.3 V rail, XRES timing
+  (scope-verified), MIPI lanes, FPC wiring, load switch. Vendor's init file was
+  correct as supplied and never needed modification.
+- **Process lesson**: 0021's kill test was validated only via BIST — an
+  instrument that never produced a positive result on this panel and so could
+  not report a trustworthy negative. The framebuffer-content half of the same
+  kill test would have shown the fix immediately.
+- Vendor correction drafted (`docs/VENDOR-SUPPORT-LMT101-BRINGUP-EMAIL-6-RESOLVED.txt`)
+  — LCD Mall to be told to stop investigating; their panels and code are fine.
+- Next: Qt 6.8 / EGLFS application (Phase 1 deliverable), now unblocked.
+
 ## 2026-07-22/23 — Vendor BIST test: black on BOTH panels; state-dump reply ready; workspace cleaned
 
 **Agent:** lead (single-agent, charter rev 2)

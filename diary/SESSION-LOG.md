@@ -1319,3 +1319,21 @@ panel-side defect independent of the (self-test-healthy) timing controller logic
   no manual framebuffer writes.
 
 ---
+
+### ✅ CONFIRMED ON GLASS (2026-08-07) — boot logo + live console, unaided
+
+- Owner report, `fbcon-display.wic` (SHA `f13f3eb0…`): **Tux boot logo appeared,
+  then the console terminal rendered on the panel**, portrait orientation, with
+  no manual framebuffer writes. Full display path confirmed working end to end
+  from power-on through userspace.
+- This is the definitive close of BLK-014 and of the display bring-up campaign
+  (2026-06-02 → 2026-08-07). The panel, both units, were always healthy.
+- Orientation note (NOT a defect): console renders vertically/portrait, which is
+  the panel's native geometry (800x1280 portrait, per CLAUDE.md §1). Whether the
+  product wants portrait or landscape in the car is a product decision, not a
+  bring-up issue. If landscape is wanted later: `fbcon=rotate:1` on the kernel
+  cmdline (needs `CONFIG_FRAMEBUFFER_CONSOLE_ROTATION`), DRM plane rotation, or
+  `QT_QPA_EGLFS_ROTATION` for the Qt app — cheap either way, defer to Phase 2.
+- Phase 1 display gate: **PASSED**.
+
+---
