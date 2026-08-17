@@ -73,6 +73,41 @@ sudo rkdeveloptool rd
 
 ---
 
+## ✅ CURRENT IMAGE (2026-08-07) — fbcon-display.wic — PANEL WORKS
+
+**BLK-014 is RESOLVED. The display works.** This is the first image that shows content on
+the glass with no manual intervention.
+
+Configuration: patch **0021 only** (INIT-IN-PREPARE — vendor bring-up sent in DSI command
+mode before video starts; *this was the actual fix*) plus **`CONFIG_FRAMEBUFFER_CONSOLE`**
+and **`CONFIG_LOGO`** newly enabled. Patches 0022/0023/0024 (BIST variants, rail-delay test)
+are **disabled and must stay disabled** for any image meant to display — BIST leaves the
+panel degraded (`0x0A=0x08`, `0x0F=0x00`) and never produced a visible pattern here.
+
+| Field | Value |
+|---|---|
+| **Archive file** | `~/Projects/elevator-hmi/images-archive/fbcon-display.wic` |
+| **WIC SHA-256** | `f13f3eb00d95a0465e3b7b265e800020ae55d4deb6d4e55e578f59b304410bab` |
+| **Confound check** | Image strings: `INIT-IN-PREPARE (cmd-mode, pre-video)` present; `MASTER self-test phase` / `BIST armed (self-test phase)` **absent**. Kernel `.config`: `CONFIG_FRAMEBUFFER_CONSOLE=y`, `CONFIG_LOGO=y`. (`BIST armed (500ms post-unlock)` may still appear in `strings` — dead code from patch 0014, unreachable since `enable_seq = FAE_CLOCK`.) |
+| **Expected on glass** | **Tux boot logo**, then kernel boot messages rendering on the panel — automatically, no commands needed. |
+| **Expected dmesg** | `INIT-IN-PREPARE (cmd-mode, pre-video)` → DCS-INIT → page-4 fix → SLPOUT → DISON → `0x0A=0x1c`, `0x0F=0xc0` (healthy) → `final DSI-Link bandwidth: 468 x 4 Mbps` |
+
+```bash
+cd ~/Projects/elevator-hmi/images-archive
+sha256sum fbcon-display.wic   # expect f13f3eb00d95a0465e3b7b265e800020ae55d4deb6d4e55e578f59b304410bab
+sudo rkdeveloptool db loader.bin
+sudo rkdeveloptool wl 0      fbcon-display.wic
+sudo rkdeveloptool wl 64     idblock.img
+sudo rkdeveloptool wl 0x4000 uboot.img
+sudo rkdeveloptool rd
+```
+
+**Note:** once fbcon is active it owns `/dev/fb0` and repaints the console, so the manual
+`dd`-to-framebuffer demos will be overwritten. Use `/dev/tty1` for text, or stop the console
+first, if you want to drive the framebuffer directly on this image.
+
+---
+
 ## ⚠️ ARCHIVE POLICY (added 2026-08-07 — read before flashing)
 
 **Never flash from `build/tmp/deploy/images/.../` by a symlink name.** Yocto's deploy step

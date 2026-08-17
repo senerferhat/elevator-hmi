@@ -1291,3 +1291,31 @@ panel-side defect independent of the (self-test-healthy) timing controller logic
   CLAUDE.md phase status, BLOCKERS.md (close BLK-014), PROGRESS.md.
 
 ---
+
+### fbcon image built (2026-08-07) — first image that displays unaided
+
+- `CONFIG_FRAMEBUFFER_CONSOLE` was confirmed absent from the defconfig
+  (`# CONFIG_FRAMEBUFFER_CONSOLE is not set`) — the second half of the BLK-014
+  root cause. Added it (+ `DETECT_PRIMARY`, `CONFIG_LOGO`, `LOGO_LINUX_CLUT224`)
+  to `elevator-hmi.cfg`; all four verified present in the built kernel `.config`
+  with no dependency warnings.
+- **Near-miss caught before handover:** the first fbcon build was accidentally
+  stacked on patch 0024 (master/BIST two-phase flow), which was still enabled in
+  the bbappend. Sentinel check on the built Image caught it (`MASTER self-test
+  phase` / `BIST armed (self-test phase)` present). That image would very likely
+  have shown BLACK — a BIST pass leaves the panel at `0x0A=0x08`/`0x0F=0x00`
+  versus healthy `0x1C`/`0xC0`, and the white-fill proof was obtained on 0021
+  alone. Archive deleted, 0024 permanently disabled in the bbappend with an
+  explanatory comment, rebuilt clean.
+- Final image: `images-archive/fbcon-display.wic`, SHA
+  `f13f3eb00d95a0465e3b7b265e800020ae55d4deb6d4e55e578f59b304410bab`.
+  Sentinels verified: `INIT-IN-PREPARE (cmd-mode, pre-video)` present;
+  `MASTER self-test phase` / `BIST armed (self-test phase)` absent;
+  `CONFIG_FRAMEBUFFER_CONSOLE=y`, `CONFIG_LOGO=y`.
+  (`BIST armed (500ms post-unlock)` remains in `strings` — dead code from patch
+  0014, unreachable because `enable_seq = FAE_CLOCK`, present in every working
+  build including init-in-prepare.wic.)
+- Expected on flash: Tux boot logo + kernel messages rendering on the panel with
+  no manual framebuffer writes.
+
+---
