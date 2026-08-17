@@ -1337,3 +1337,36 @@ panel-side defect independent of the (self-test-healthy) timing controller logic
 - Phase 1 display gate: **PASSED**.
 
 ---
+
+## 2026-08-17 — Qt 6.8 first build BLOCKED: meta-qt6 LTS branches require a commercial Qt license
+
+- Steps 1/2/4 of the Qt bring-up plan completed; step 3 (first build of
+  `elevator-hmi-image`) **failed at fetch**.
+- **Root cause:** kas pins meta-qt6 to `443684a0`, which is branch **`lts-6.8.6`**
+  (the kas comment claims `lts-6.8.7` — doc drift). ALL meta-qt6 `lts-*` branches
+  fetch Qt modules from **`tqtc-`-prefixed repos** on
+  `git://codereview.qt-project.org/qt/tqtc-<module>.git`. Those are The Qt
+  Company's COMMERCIAL repositories: they need a Qt commercial license and
+  authenticated access. Qt LTS point releases are a commercial-only benefit.
+  Failed modules: tqtc-qtbase, tqtc-qtdeclarative, tqtc-qtshadertools,
+  tqtc-qtlanguageserver, tqtc-qtquicktimeline.
+- Public alternatives confirmed available on the same meta-qt6 remote:
+  branches `6.8`, `6.8.0`, `6.8.1`, `6.8.2`, `6.8.3` (public code.qt.io repos,
+  open source LGPLv3). LTS branches: `lts-6.8`, `lts-6.8.4` … `lts-6.8.7`.
+- **This is a product/licensing decision, not a bug.** ADR-001 (CLAUDE.md §3)
+  mandates "Qt 6.8 LTS", which is only obtainable commercially. Relevant to the
+  choice: LGPLv3 carries the anti-tivoization/installation-information
+  requirement, which interacts directly with this product's signed RAUC OTA and
+  locked-down field devices (24/7 unattended, 5-yr life, 500–1000 units/yr).
+- Everything non-Qt built fine (reached task 2846/7014 before the Qt fetches).
+  GPU/EGL resolution verified correct beforehand: virtual/egl -> rockchip-libmali,
+  MALI_PLATFORM=gbm, qtbase PACKAGECONFIG "kms gbm gles2 eglfs",
+  QT_QPA_DEFAULT_PLATFORM=eglfs.
+- **Process error (mine):** I reported "build finished exit 0". The command was
+  `kas build ... | tee ... | tail`, so the exit status came from `tail`, not kas.
+  Use `set -o pipefail` (or check PIPESTATUS) on every piped build command.
+- Disk: 75G free before, 56G after the failed build.
+- Next: owner decision on Qt licensing (commercial LTS vs public open-source
+  branch), then re-pin meta-qt6 and rebuild.
+
+---
