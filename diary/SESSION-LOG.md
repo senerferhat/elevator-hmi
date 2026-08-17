@@ -1536,3 +1536,41 @@ panel-side defect independent of the (self-test-healthy) timing controller logic
   `FILES:${PN} += "${datadir}/elevator-hmi"`.
 
 ---
+
+## 2026-08-18 (01:19) — elevator-hmi-image built; current flash target is qt-hmi.wic
+
+- Rebuild after FILES fix: **5939 tasks, all succeeded**, `KAS_EXIT=0`.
+  Log `build-logs/qt-image-qml-files-20260818.log`: **0** `ERROR: Task`.
+- WIC: `elevator-hmi-image-elevator-hmi-em3566.rootfs-20260817221725.wic`
+  (3 110 511 616 bytes). Hardlinked (same inode, not a symlink) to
+  `images-archive/qt-hmi.wic`.
+- **SHA-256:** `06a9f623c66239461bf8718b9d19390f8b3893b061aa903178308cd3ffe0a768`
+- Manifest contains all four required packages: `qtbase` 6.8.3,
+  `qtdeclarative` 6.8.3, `rockchip-libmali`, `elevator-hmi-app` 0.1.
+  Also `qtmultimedia`, `qtsvg`. `qtdeclarative` RPM is 11.6 MB (Quick
+  is in it; the empty-package era is over).
+- App payload verified from pkgdata: `/usr/bin/elevator-hmi` 67744 B,
+  `/usr/share/elevator-hmi/main.qml` 9721 B, `/etc/init.d/elevator-hmi`
+  2680 B, `update-rc.d` postinst `defaults 99 01`. Binary NEEDED
+  libQt6Gui / libQt6Qml / libQt6Core.
+- **current flash target:** `images-archive/qt-hmi.wic` (SHA above).
+  **kill test on glass:** boot → Qt mockup (floor number, direction
+  arrow, floor ladder). If fbcon fights Qt:
+  `echo 0 > /sys/class/vtconsole/vtcon1/bind`. Also
+  `/var/log/elevator-hmi.log` and `/etc/init.d/elevator-hmi status`.
+- Do **not** flash `master-image.wic` (0024/BIST). Fallback:
+  `fbcon-display.wic` SHA `f13f3eb0…`.
+
+### Flash commands
+
+```bash
+cd ~/Projects/elevator-hmi/images-archive
+sha256sum qt-hmi.wic   # expect 06a9f623c66239461bf8718b9d19390f8b3893b061aa903178308cd3ffe0a768
+sudo rkdeveloptool db loader.bin
+sudo rkdeveloptool wl 0      qt-hmi.wic
+sudo rkdeveloptool wl 64     idblock.img
+sudo rkdeveloptool wl 0x4000 uboot.img
+sudo rkdeveloptool rd
+```
+
+---

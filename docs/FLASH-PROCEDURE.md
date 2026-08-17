@@ -36,19 +36,46 @@ below, to avoid a second stale pointer existing alongside the current one.)*
 
 ---
 
-## CURRENT TEST TARGET (2026-08-07, latest) — MASTER IMAGE: BIST self-test then video, every boot
+## CURRENT TEST TARGET (2026-08-18) — qt-hmi.wic — first Qt 6.8.3 EGLFS image
 
-**Status: recommended for next flash.** Owner decision: production/master-image behavior,
-not a one-off test. Every boot runs a full BIST self-test pass in DSI command mode (zero
-video ever sent, per 0021's ordering fix), then performs a SECOND, fully independent XRES
-power-cycle and clean re-init before handing off to normal video — a genuine "reboot the
-LCD" done entirely in software. Necessary because `E3,01` (BIST enable) soft-resets the
-display engine; the panel cannot safely continue into video after BIST without a fresh
-hardware reset.
+**Status: recommended for next flash.** First `elevator-hmi-image` with public Qt 6.8.3,
+Mali-G52 EGLFS, and the QML mockup. Kernel is the proven **0021-only** panel config
+(same as `fbcon-display.wic`). Patches 0022/0023/0024 stay disabled.
 
-**Not a kill test** — this is the intended long-term boot behavior, not a hypothesis. If/when
-the hardware issue is ever resolved (vendor fix, replacement panel), this same image already
-does the right thing at every boot with no further software changes.
+| Field | Value |
+|---|---|
+| **Archive file** | `~/Projects/elevator-hmi/images-archive/qt-hmi.wic` |
+| **WIC SHA-256** | `06a9f623c66239461bf8718b9d19390f8b3893b061aa903178308cd3ffe0a768` |
+| **git HEAD** | `134332a` (recipes that produced this image) |
+| **Deploy name** | `elevator-hmi-image-elevator-hmi-em3566.rootfs-20260817221725.wic` |
+| **Manifest** | `qtbase` 6.8.3, `qtdeclarative` 6.8.3, `rockchip-libmali`, `elevator-hmi-app` 0.1 all present |
+| **App payload** | `/usr/bin/elevator-hmi` (67 KB), `/usr/share/elevator-hmi/main.qml` (9.7 KB), `/etc/init.d/elevator-hmi` (sysvinit `defaults 99 01`) |
+| **Expected on glass** | Tux/fbcon briefly, then the Qt HMI mockup (floor number, direction arrow, 12-floor ladder). |
+| **If fbcon paints over Qt** | `echo 0 > /sys/class/vtconsole/vtcon1/bind` |
+| **On-target checks** | `/var/log/elevator-hmi.log`, `/etc/init.d/elevator-hmi status`, or run `/usr/bin/elevator-hmi` with `QT_QPA_PLATFORM=eglfs` |
+
+```bash
+cd ~/Projects/elevator-hmi/images-archive
+sha256sum qt-hmi.wic   # expect 06a9f623c66239461bf8718b9d19390f8b3893b061aa903178308cd3ffe0a768
+sudo rkdeveloptool db loader.bin
+sudo rkdeveloptool wl 0      qt-hmi.wic
+sudo rkdeveloptool wl 64     idblock.img
+sudo rkdeveloptool wl 0x4000 uboot.img
+sudo rkdeveloptool rd
+```
+
+**Do not flash `master-image.wic`.** That image still carries patch 0024 (BIST-then-video).
+BIST never produced a visible pattern here and leaves the panel degraded
+(`0x0A=0x08`, `0x0F=0x00`). Fallback if this Qt image misbehaves on glass:
+`fbcon-display.wic` (SHA `f13f3eb0…`) — last proven unaided-display image.
+
+---
+
+## SUPERSEDED (2026-08-07) — MASTER IMAGE: BIST self-test then video — DO NOT FLASH
+
+**Status: do not flash.** Patch 0024. BIST is useless on this panel and degrades
+it. Kept only as a historical archive pointer. The 2026-08-07 text below is
+the original claim; it is no longer the recommended target.
 
 | Field | Value |
 |---|---|

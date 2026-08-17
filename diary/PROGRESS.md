@@ -7,6 +7,26 @@
 > milestone-level summaries only.
 
 
+## 2026-08-18 — first Qt 6.8.3 EGLFS image built (qt-hmi.wic)
+
+**Agent:** continuation (takeover mid-build)
+
+- Handoff public-6.8.3 image build had already failed (Mali EGL CMake).
+  Subsequent rebuilds got qtbase/EGLFS working, then died on empty
+  `qtshadertools` (no Qt Quick), Quick3D spatial audio, and unshipped
+  `main.qml`.
+- **Image built:** `images-archive/qt-hmi.wic`
+  SHA `06a9f623c66239461bf8718b9d19390f8b3893b061aa903178308cd3ffe0a768`,
+  git recipes `134332a`. Manifest has qtbase, qtdeclarative,
+  rockchip-libmali, elevator-hmi-app. App ships binary + QML + sysvinit
+  script. Kernel remains 0021-only (do not re-enable 0022/0023/0024).
+- **Owner:** flash `qt-hmi.wic` from `images-archive/` (commands in
+  `docs/FLASH-PROCEDURE.md` and the newest `diary/SESSION-LOG.md` entry).
+  Expected glass: Qt mockup. If fbcon overpaints:
+  `echo 0 > /sys/class/vtconsole/vtcon1/bind`.
+- Still open: vendor correction email #6 unsent; Qt LTS/LGPLv3 legal
+  item (ADR-001a); sysvinit vs systemd.
+
 ## 2026-08-07 — ✅ DISPLAY WORKS: BLK-014 resolved, Phase 1 display gate PASSED
 
 **Agent:** lead (single-agent)
