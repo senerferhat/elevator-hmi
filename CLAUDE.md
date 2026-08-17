@@ -95,13 +95,45 @@ These decisions are final. Do not propose alternatives without a new ADR entry.
 | ---------------- | -------------------------------- | ------------------------------------------------------ |
 | OS/Build         | Yocto Scarthgap 5.0 LTS          | Reproducible, minimal, RAUC-compatible, 5yr LTS        |
 | Kernel           | Linux 6.1.99 Rockchip fork       | VPU/GPU maturity; mainline deferred to Phase 2 review  |
-| Qt               | Qt 6.8 LTS                       | Qt 6.5 EOL April 2026; EGLFS, no Wayland/X11 overhead  |
+| Qt               | Qt 6.8 — **public branch, not LTS** (amended 2026-08-17, see ADR-001a) | Qt 6.5 EOL April 2026; EGLFS, no Wayland/X11 overhead  |
 | Media            | GStreamer + gst-plugins-rockchip | Zero-copy VPU decode mandatory for 24/7 thermal budget |
 | OTA              | RAUC A/B                         | Signed, rollback-capable, Yocto native                 |
 | Android 14       | REJECTED                         | Wrong model, slow boot, no RAUC, poor Qt integration   |
+| Qt 6.8 **LTS**   | **NOT AVAILABLE** — commercial-only | See ADR-001a below                                  |
 | Debian Buildroot | REJECTED                         | Non-reproducible, no A/B OTA, runtime apt is liability |
 | Kirkstone        | REJECTED                         | EOL April 2025                                         |
 | Qt 6.5           | REJECTED                         | EOL April 2026                                         |
+
+### ADR-001a — Qt LTS → public Qt 6.8.3 (amendment, 2026-08-17)
+
+**Status:** ACCEPTED for development. **⚠ OPEN LEGAL ITEM before production.**
+
+**Context.** ADR-001 specified "Qt 6.8 LTS". The first build of
+`elevator-hmi-image` failed: every `meta-qt6` `lts-*` branch fetches Qt modules
+from The Qt Company's **commercial** repositories
+(`git://codereview.qt-project.org/qt/tqtc-<module>.git`), which require a Qt
+commercial license and authenticated access. Qt **LTS point releases are a
+commercial-only benefit** — open source receives the public `6.8.x` branches.
+This was not knowable from the ADR; it surfaced only on first build.
+
+**Decision.** Re-pin `meta-qt6` to the public **`6.8.3`** branch
+(`00c3bd954341a2a755fdee6b978af952f51793e7`) so development can proceed.
+
+**Consequences — must be resolved before shipping:**
+- Public Qt is **LGPLv3**. Its anti-tivoization / "installation information"
+  clause requires that end users can **relink the application against a modified
+  Qt on the device**. This conflicts directly with the product's **signed RAUC
+  OTA** and locked-down field units (24/7 unattended, 5-year field life,
+  500–1000 units/yr) — see §5 partitioning and the RAUC key material rules.
+- **No LTS security patches.** The 5-year field-life target (§1) assumed an LTS
+  stream. Public 6.8.x stops receiving fixes far sooner; security maintenance
+  for a 5-year-deployed elevator HMI becomes the project's own problem.
+- Both consequences point the same way: a **Qt commercial license is likely
+  required for production**. This amendment unblocks engineering; it does not
+  settle the product decision.
+
+**Action:** legal review of LGPLv3 vs signed OTA, and a costed comparison against
+a Qt commercial license, before the first production image.
 
 
 ---

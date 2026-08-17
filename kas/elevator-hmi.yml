@@ -6,7 +6,7 @@
 #   poky                 yocto-5.0.16  (Scarthgap / Yocto 5.0 LTS)
 #   meta-openembedded    refs/heads/scarthgap  (required by meta-rockchip; not optional)
 #   meta-rockchip        refs/heads/scarthgap
-#   meta-qt6             refs/heads/lts-6.8.7  (Qt 6.8 LTS; LAYERSERIES includes scarthgap)
+#   meta-qt6             refs/heads/6.8.3      (PUBLIC open-source Qt 6.8.3 — see note below)
 #   meta-rauc            refs/heads/scarthgap
 
 header:
@@ -70,9 +70,27 @@ repos:
       .:
         prio: 85
 
+  # 2026-08-17: re-pinned from lts-6.8.6 (443684a0) to the PUBLIC 6.8.3 branch.
+  #
+  # WHY: every meta-qt6 `lts-*` branch fetches Qt modules from The Qt Company's
+  # COMMERCIAL repositories (git://codereview.qt-project.org/qt/tqtc-<module>.git),
+  # which require a Qt commercial license and authenticated access. The first
+  # build of elevator-hmi-image failed at do_fetch on tqtc-qtbase,
+  # tqtc-qtdeclarative, tqtc-qtshadertools, tqtc-qtlanguageserver and
+  # tqtc-qtquicktimeline. Qt LTS point releases are a commercial-only benefit;
+  # open source gets the public 6.8.x branches from code.qt.io.
+  #
+  # ⚠ LICENSING FOLLOW-UP REQUIRED BEFORE PRODUCTION (owner decision 2026-08-17,
+  # taken deliberately with this caveat): public Qt is LGPLv3, which carries the
+  # anti-tivoization / "installation information" requirement — end users must be
+  # able to relink the application against a modified Qt on the device. That
+  # interacts directly with this product's SIGNED RAUC OTA and locked-down field
+  # units (24/7 unattended, 5-year field life, 500–1000 units/yr). This needs
+  # legal review, and may still end in purchasing a commercial license.
+  # This deviates from ADR-001 ("Qt 6.8 LTS") — see CLAUDE.md §3.
   meta-qt6:
     url: https://code.qt.io/yocto/meta-qt6
-    commit: 443684a06b504b94cc85b51b5c70cdb0a87b7e5f
+    commit: 00c3bd954341a2a755fdee6b978af952f51793e7
     layers:
       .:
         prio: 80
