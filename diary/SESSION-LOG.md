@@ -1237,3 +1237,57 @@ panel-side defect independent of the (self-test-healthy) timing controller logic
   way -- owner decision whether to pursue.
 
 ---
+
+## 2026-08-07 — *** RESOLVED: PANEL WORKS. WHITE FRAMEBUFFER FILL DISPLAYED ON GLASS ***
+
+- **BLK-014 RESOLVED.** Owner wrote a full-screen white fill to /dev/fb0 on the
+  running board (init-in-prepare.wic flashed, patch 0021 active) and **the glass
+  displayed a plain white image**. 1000 x 4096 = 4,096,000 bytes = exactly
+  800 x 1280 x 4 (XR24) = the entire framebuffer. Backlight leakage cannot
+  produce this. Display path functional end-to-end: SoC -> VOP2/VP1 -> DSI0 ->
+  JD9365D -> pixels.
+- Supporting evidence from same session, `/sys/kernel/debug/dri/0/summary`:
+  `Video Port1: ACTIVE`, Connector DSI-1 / Encoder DSI-190, mode 800x1280p60,
+  `clk[70000] real_clk[70000]`, H: 800 840 860 880 / V: 1280 1310 1314 1324
+  (exactly the vendor's porches), `Smart1-win0: ACTIVE`, XR24, src/dst
+  800x1280. Every layer correct.
+- **ROOT CAUSE (actual): the command-mode init ordering bug, fixed by patch 0021
+  (INIT-IN-PREPARE).** This vendor kernel's dw-mipi-dsi switches the host to
+  VIDEO mode in bridge_atomic_enable BEFORE calling drm_panel_enable(), so the
+  mainline-style jadard driver was sending the entire vendor bring-up (196-cmd
+  table, page-4 fix, SLPOUT, DISON) as HS commands inside the blanking of an
+  already-running video stream -- the panel received video packets before it was
+  ever initialized. 0021 relocated the sequence into prepare() (command mode,
+  pre-video, fixture-equivalent). That fix worked immediately.
+- **Why the fix looked like a failure for ~2 weeks (process lesson):** 0021's
+  kill test was written as "pattern/fbcon visible OR 0x45 non-zero". It was then
+  validated using **BIST** (patches 0022/0024), which is an unreliable instrument
+  on this panel -- `E3,01` produces no visible pattern here under any condition
+  tested. The framebuffer-content test (the OTHER half of the kill test, and the
+  one that actually works) was never re-run after 0021 landed. A correct fix was
+  repeatedly graded by a broken measuring device.
+- Contributing factor: `console=ttyFIQ0` only, no `console=tty0`, so nothing ever
+  paints into /dev/fb0 during boot. A zero-filled framebuffer is a correctly
+  displayed BLACK screen. Every "still black" observation after 0021 was the
+  panel faithfully rendering black.
+- **Red herrings, now formally closed:**
+  - `0x45 scanline = 0x00` -- over-interpreted all campaign as "TCON not
+    running". Not a reliable liveness indicator on this part/read timing.
+  - `0x0A` bit7 "booster off" -- vendor's OWN healthy fixture reads 0x18, also
+    bit7 clear. Never indicated a fault. Vendor's 0x9C-means-faulty guidance is
+    inconsistent with the MIPI DCS spec and with their own healthy value.
+  - `0x0F = 0xC0` (register loading OK + functionality OK) was the panel
+    correctly reporting itself healthy for the entire campaign. It was right.
+  - Two-panel "both black" -- both panels are FINE. Identical symptom because
+    the cause was host-side firmware ordering, shared by both tests.
+  - Hardware (3.3V rail, XRES timing, MIPI lanes, FPC wiring, load switch) --
+    all exonerated. Owner's scope/DMM verification was correct.
+- Vendor status: LCD Mall has been pursuing a non-existent hardware fault on our
+  report. We owe them a correction (see next actions) -- panels are not
+  defective, no RMA/cross-test needed.
+- Next: (1) owner confirm half-screen fill (addressing/orientation proof);
+  (2) get real content on screen permanently -- fbcon/console or the Qt EGLFS
+  application (actual project goal); (3) send vendor correction; (4) update
+  CLAUDE.md phase status, BLOCKERS.md (close BLK-014), PROGRESS.md.
+
+---
