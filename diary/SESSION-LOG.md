@@ -1370,3 +1370,39 @@ panel-side defect independent of the (self-test-healthy) timing controller logic
   branch), then re-pin meta-qt6 and rebuild.
 
 ---
+
+## 2026-08-17 (23:04) — continuation agent takeover; Qt 6.8.3 image still building
+
+- Took over mid-build on `develop` (`ef6aa1a`). Read `docs/HANDOFF-2026-08-17.md`
+  and `CLAUDE.md`. BLK-014 stays closed; patches 0022/0023/0024 stay disabled.
+- `kas build kas/elevator-hmi.yml --target elevator-hmi-image` is still running
+  (started 22:54, log `build-logs/qt-image-public683-20260817.log`). At takeover:
+  task ~4506/7014, **0 ERROR**, 44 GB free. Load ~109 on 20 cores.
+- Public Qt 6.8.3 **fetch succeeded** for qtbase, qtdeclarative, qtshadertools,
+  qtlanguageserver, qtquicktimeline (native + target). Previous commercial
+  `tqtc-` blocker is gone. `qtbase-native` is in `do_compile` (started 23:00).
+- `librsvg` is retrying crates.io fetches via MIRRORS — WARNINGs only so far.
+- Next: wait for the build, then verify ERROR count / WIC / manifest, hardlink
+  into `images-archive/qt-hmi.wic`, record SHA-256, give the flash command.
+
+---
+
+## 2026-08-17 (23:30) — qtbase do_configure FAILED: Mali wrappers export no EGL symbols
+
+- Public Qt 6.8.3 fetch/native compile succeeded (`qtbase-native` compile
+  23:00–23:21). Target `qtbase do_configure` failed at 23:23:
+  `Feature "opengles2": Forcing to ON breaks its condition` /
+  `GLESv2_FOUND = FALSE`; same for `eglfs` (`QT_FEATURE_egl = OFF`).
+- Not a PACKAGECONFIG mistake. `virtual/egl` is rockchip-libmali, GBM blob
+  `libmali-bifrost-g52-g13p0-gbm.so` is in the sysroot, `egl.pc` is correct.
+- Root cause: JeffyCN mali-hook **wrappers** (`libEGL.so.1`, `libGLESv2.so.2`,
+  `libgbm.so.1`, each 67 KB) export **zero** dynamic symbols. Real
+  `eglGetDisplay` lives in `libmali.so.1.9.0` (43 MB). CMake FindEGL links
+  the wrapper; GNU ld `--as-needed` drops it; HAVE_EGL/HAVE_GLESv2 fail.
+  Headers compiled fine (step 1/2 of the try_compile succeeded).
+- Fix (in `meta-hmi-platform`, not community layers): qtbase bbappend sets
+  `-DEGL_LIBRARY/-DGLESv2_LIBRARY/-Dgbm_LIBRARY` to `${STAGING_LIBDIR}/libmali.so`.
+  Same idea as AGL's FindEGL `NAMES mali` hack. Waiting for the failed kas
+  run to exit, then rebuild.
+
+---
