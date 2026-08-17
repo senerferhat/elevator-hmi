@@ -1,0 +1,77 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          elevator-hmi
+# Required-Start:    $local_fs
+# Required-Stop:     $local_fs
+# Default-Start:     5
+# Default-Stop:      0 1 6
+# Short-Description: Elevator HMI Qt 6 / EGLFS application
+# Description:       Starts the single-application Qt Quick HMI on the DSI panel
+#                    via EGLFS/KMS. There is no window manager and no display
+#                    server by design (CLAUDE.md §8).
+### END INIT INFO
+#
+# sysvinit script: this distro runs sysvinit, not systemd (poky.conf default;
+# INIT_MANAGER is unset). /etc/environment.d is therefore inert and
+# /etc/profile.d only applies to login shells, so this script MUST export the
+# Qt environment itself.
+
+DAEMON=/usr/bin/elevator-hmi
+NAME=elevator-hmi
+PIDFILE=/var/run/${NAME}.pid
+LOGFILE=/var/log/${NAME}.log
+
+# EGLFS with the KMS/GBM backend, matching the qtbase PACKAGECONFIG
+# ("kms gbm gles2 eglfs") and rockchip-libmali's gbm blob variant. Qt would
+# normally auto-detect this, but pinning it makes boot behaviour deterministic
+# and failures easier to read.
+export QT_QPA_PLATFORM=eglfs
+export QT_QPA_EGLFS_INTEGRATION=eglfs_kms
+
+# Qt wants XDG_RUNTIME_DIR; without it Qt warns and falls back to /tmp.
+export XDG_RUNTIME_DIR=/run/user/0
+
+# The panel has no touch controller wired on this bring-up board, and there is
+# no cursor to show on a fixed-function HMI.
+export QT_QPA_EGLFS_HIDECURSOR=1
+
+case "$1" in
+    start)
+        echo -n "Starting ${NAME}: "
+        mkdir -p "${XDG_RUNTIME_DIR}"
+        chmod 0700 "${XDG_RUNTIME_DIR}"
+        # NOTE: the framebuffer console (CONFIG_FRAMEBUFFER_CONSOLE, enabled
+        # 2026-08-07) also owns the DRM device. Qt/EGLFS takes DRM master when
+        # it starts; if the console repaints over the UI, blank the console
+        # with: echo 0 > /sys/class/vtconsole/vtcon1/bind
+        start-stop-daemon --start --background --make-pidfile \
+            --pidfile "${PIDFILE}" --startas /bin/sh -- \
+            -c "exec ${DAEMON} >> ${LOGFILE} 2>&1"
+        echo "OK"
+        ;;
+    stop)
+        echo -n "Stopping ${NAME}: "
+        start-stop-daemon --stop --pidfile "${PIDFILE}" --retry 5 --oknodo
+        rm -f "${PIDFILE}"
+        echo "OK"
+        ;;
+    restart|force-reload)
+        "$0" stop
+        sleep 1
+        "$0" start
+        ;;
+    status)
+        if [ -f "${PIDFILE}" ] && kill -0 "$(cat "${PIDFILE}")" 2>/dev/null; then
+            echo "${NAME} is running (pid $(cat "${PIDFILE}"))"
+            exit 0
+        fi
+        echo "${NAME} is not running"
+        exit 3
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|force-reload|status}"
+        exit 1
+        ;;
+esac
+
+exit 0
