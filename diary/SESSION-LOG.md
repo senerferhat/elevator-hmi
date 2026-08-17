@@ -1525,3 +1525,14 @@ panel-side defect independent of the (self-test-healthy) timing controller logic
   qtmultimedia bbappend. Rebuild next.
 
 ---
+
+## 2026-08-18 (01:17) — qtmultimedia configures; app package misses main.qml
+
+- Rebuild with Quick3D spatial audio removed: `qtmultimedia do_configure`
+  **Succeeded**. Image still failed: `elevator-hmi-app do_package` QA
+  `installed-vs-shipped` for `/usr/share/elevator-hmi/main.qml`.
+  CMake installs that path; `main.cpp` loads it; poky default FILES is
+  only bindir/libdir/sysconfdir. Added
+  `FILES:${PN} += "${datadir}/elevator-hmi"`.
+
+---

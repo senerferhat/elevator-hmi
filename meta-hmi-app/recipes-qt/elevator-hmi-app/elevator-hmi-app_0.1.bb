@@ -49,6 +49,12 @@ do_install:append() {
     install -m 0755 ${WORKDIR}/elevator-hmi.init ${D}${sysconfdir}/init.d/elevator-hmi
 }
 
+# CMake installs main.qml to ${datadir}/elevator-hmi (see CMakeLists.txt and
+# main.cpp, which loads /usr/share/elevator-hmi/main.qml). Poky's default
+# FILES:${PN} is bindir/libdir/sysconfdir only, so do_package QA fails with
+# installed-vs-shipped unless this directory is listed.
+FILES:${PN} += "${datadir}/elevator-hmi"
+
 RDEPENDS:${PN} += " \
     qtdeclarative \
     qtdeclarative-qmlplugins \
