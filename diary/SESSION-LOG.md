@@ -1406,3 +1406,33 @@ panel-side defect independent of the (self-test-healthy) timing controller logic
   run to exit, then rebuild.
 
 ---
+
+## 2026-08-17 (23:35) — Mali EGL CMake fix confirmed: qtbase configure succeeds
+
+- Failed kas run finished: 6679 tasks, 1 failed (`qtbase do_configure`).
+  rust-llvm-native and gcc completed after the failure (sstate kept).
+- Fix committed `907e643` and pushed to `origin/develop`. Rebuild started
+  (`build-logs/qt-image-mali-egl-fix-20260817.log`).
+- `qtbase do_configure` now **Succeeded**. Confirmed in the configure log:
+  `HAVE_EGL - Success`, `HAVE_GLESv2 - Success`, `EGL yes`, `OpenGL ES 2.0 yes`,
+  `EGLFS yes`, `EGLFS GBM yes`. (`EGLFS Mali no` is expected — we want the
+  GBM/KMS plugin, not the Mali-specific QPA.)
+- Next: wait for qtbase/qtdeclarative compile + image, then archive/flash.
+
+---
+
+## 2026-08-18 (00:12) — qtsvg ptest failed; disabling on-target ptests
+
+- Mali EGL fix held: `qtbase do_configure/compile/install/package` all succeeded
+  (EGL/GLES2/EGLFS/GBM yes). Target `qtshadertools`/`qtsvg`/`qtlanguageserver`
+  configured; `qtlanguageserver` compiled.
+- New failure: `qtsvg do_install_ptest_base` — ptest cmake cannot find
+  `Qt6::Gui` (`tst_qicon_svg` / `tst_qsvgrenderer`). Poky enables `ptest` in
+  DISTRO_FEATURES; Qt 6.8 then rebuilds the whole unit-test tree as a second
+  cmake project. qtbase ptest alone was ~2800 objects / ~20 min. Not needed
+  on the HMI image.
+- Fix: `PTEST_ENABLED:forcevariable = "0"` in `elevator-hmi.conf` (beats
+  ptest.bbclass's hard assignment). Not removing `ptest` from DISTRO_FEATURES,
+  so we don't hash-bust the world. Rebuild next.
+
+---
