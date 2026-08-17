@@ -1436,3 +1436,17 @@ panel-side defect independent of the (self-test-healthy) timing controller logic
   so we don't hash-bust the world. Rebuild next.
 
 ---
+
+## 2026-08-18 (00:35) — elevator-hmi-app cmake cannot find Qt6 Gui (same Mali hole)
+
+- noptest rebuild: 5899 tasks, 1 failed. qtdeclarative compiled. App
+  `do_configure` failed: `HAVE_EGL/HAVE_GLESv2` false, so `find_package(Qt6 Gui)`
+  reports "dependency GLESv2 could not be found". Qt6GuiConfig.cmake is present;
+  CMake FindEGL still links the empty mali-hook wrappers. The qtbase bbappend
+  EXTRA_OECMAKE only covers qtbase itself.
+- Fix: same `-DEGL_LIBRARY=libmali.so` trio on `elevator-hmi-app`. Not changing
+  rockchip-libmali packaging this round (would invalidate qtbase/qtdeclarative
+  sysroots and cost another ~30 min). Follow-up: point unversioned libEGL.so at
+  libmali so every CMake consumer works.
+
+---

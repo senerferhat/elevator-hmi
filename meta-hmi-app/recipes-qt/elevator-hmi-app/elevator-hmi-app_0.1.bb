@@ -17,6 +17,16 @@ FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
 
 DEPENDS = "qtbase qtdeclarative"
 
+# Same Mali CMake hole as qtbase (see meta-hmi-platform qtbase_%.bbappend):
+# JeffyCN mali-hook wrappers export no EGL/GLES symbols, so find_package(Qt6 Gui)
+# fails ("dependency GLESv2 could not be found") even though Qt6GuiConfig.cmake
+# is in the sysroot. Point FindEGL/FindGLESv2 at libmali.
+EXTRA_OECMAKE:append = " \
+    -DEGL_LIBRARY=${STAGING_LIBDIR}/libmali.so \
+    -DGLESv2_LIBRARY=${STAGING_LIBDIR}/libmali.so \
+    -Dgbm_LIBRARY=${STAGING_LIBDIR}/libmali.so \
+"
+
 SRC_URI = "file://CMakeLists.txt \
            file://main.cpp \
            file://main.qml \
