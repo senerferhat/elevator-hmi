@@ -1494,3 +1494,34 @@ panel-side defect independent of the (self-test-healthy) timing controller logic
   configure must say `Qt Quick support ... yes`.
 
 ---
+
+## 2026-08-18 (01:04) — Mali flags work: Qt Quick is ON
+
+- Rebuild `kas build … --target elevator-hmi-image` started
+  (`build-logs/qt-image-mali-modules-20260818.log`, HEAD `760c71f`).
+- `qtshadertools` configure: `HAVE_EGL/HAVE_GLESv2 - Success`,
+  `Qt6::qsb` found, no more `Skipping the build`. Target sysroot now
+  has `Qt6ShaderToolsConfig.cmake`.
+- `qtsvg` RPM 5925 B → **233 KB** (real package).
+- `qtdeclarative` configure: `HAVE_EGL - Success`, found Qt6Svg +
+  Qt6ShaderTools, **Qt Quick items all yes** (AnimatedImage/ListView/
+  ShaderEffect/Controls 2 styles). `Qt6QuickConfig.cmake` exists in
+  the build tree. `do_compile` started 01:04. Waiting for the image.
+
+---
+
+## 2026-08-18 (01:16) — app compiled; qtmultimedia failed on Quick3D spatial audio
+
+- `qtdeclarative do_compile` succeeded (01:15). `elevator-hmi-app`
+  `do_configure` and `do_compile` both succeeded — `find_package(Qt6
+  Quick)` is fixed.
+- Image still failed (5918 tasks, 1 failed): `qtmultimedia do_configure`.
+  Mali flags worked (PulseAudio/GStreamer/V4L2 yes). New error:
+  `Feature "spatialaudio_quick3d": Forcing to ON breaks its condition`
+  (`TARGET Qt::Quick3D not found`). meta-qt6 default PACKAGECONFIG
+  includes `spatialaudio_quick3d` → `-DFEATURE_spatialaudio_quick3d=ON`
+  + DEPENDS qtquick3d. This HMI is 2D Qt Quick; we do not ship Quick3D.
+- Fix: `PACKAGECONFIG:remove = "spatialaudio_quick3d"` on the existing
+  qtmultimedia bbappend. Rebuild next.
+
+---
