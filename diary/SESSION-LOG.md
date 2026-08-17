@@ -1450,3 +1450,47 @@ panel-side defect independent of the (self-test-healthy) timing controller logic
   libmali so every CMake consumer works.
 
 ---
+
+## 2026-08-18 (00:36–00:40) — Qt6QmlTools then Qt Quick missing; rebuild killed
+
+- After the app Mali flags: `HAVE_EGL/HAVE_GLESv2` succeeded, then
+  `find_package(Qt6 Qml)` failed (`Qt6QmlTools_DIR` missing). Fixed by
+  adding `qtdeclarative-native` to the app DEPENDS (`9480ea1`).
+- Next failure: `Could NOT find Qt6Quick` — `Qt6QuickConfig.cmake` does
+  not exist on the **target** sysroot (native only). Target qtdeclarative
+  configured with `Qt Quick support ....................... no` /
+  `Qt Quick modules not built due to not finding the qtshadertools 'qsb' tool.`
+- `2226b7c` passed `-DQT_HOST_PATH_CMAKE_DIR` so cmake can see host `qsb`.
+  Rebuild started (`qt-image-quick-qsb-20260818.log`) and was **killed**
+  (SIGTERM, `KAS_EXIT=143`) during `qtdeclarative do_compile`. That
+  configure still had `HAVE_EGL - Failed` and still no Qt Quick — the
+  qsb-path flag alone was not enough. Uncommitted `mali-egl-cmake.inc`
+  work was left on disk and never actually used by that run.
+
+---
+
+## 2026-08-18 (01:00) — takeover: Qt Quick is off because target qtshadertools is empty
+
+- Handoff build `qt-image-public683-20260817.log` is long finished
+  (Mali EGL configure fail, already fixed). No kas/bitbake running, no
+  `elevator-hmi-image*.wic`. Disk 37 GB free. `develop` @ `2226b7c`.
+- Verified from workdir logs, not inference:
+  - `qtshadertools` configure: `HAVE_EGL - Failed`, then
+    `Skipping the build as the condition "TARGET Qt::Gui" is not met.`
+    Target RPMs are ~6 KB empty stubs. No `Qt6ShaderToolsConfig.cmake`
+    in the target sysroot.
+  - `qtsvg` same hole; also ~6 KB empty.
+  - `qtdeclarative` (killed rebuild, with `QT_HOST_PATH_CMAKE_DIR`):
+    `HAVE_EGL - Failed`, `Could NOT find Qt6ShaderTools`,
+    `Qt Quick support ... no`. `qsb` exists only as a **native** tool.
+- Root cause is still the mali-hook wrappers, now on every Qt module
+  that `find_package`s Gui, not just qtbase/the app. Extracted
+  `mali-egl-cmake.inc` and required it from qtbase, qtdeclarative,
+  qtshadertools, qtsvg, qtmultimedia (the last is in IMAGE_INSTALL).
+  Left rockchip-libmali packaging alone so qtbase sstate stays valid.
+- Next: rebuild `elevator-hmi-image`. Kill test on the build host
+  before flashing: target `qtshadertools` RPM ≫ 6 KB and
+  `Qt6QuickConfig.cmake` present under the target sysroot; qtdeclarative
+  configure must say `Qt Quick support ... yes`.
+
+---
