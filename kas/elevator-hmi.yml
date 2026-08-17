@@ -20,6 +20,25 @@ local_conf_header:
   distro: |
     DISTRO = "elevator-hmi"
 
+  diskspace: |
+    # 2026-08-07: this build host is disk-constrained and the Qt 6.8 image
+    # (qtbase + qtdeclarative + qtmultimedia + gstreamer) is far larger than
+    # core-image-minimal. rm_work deletes each recipe's WORKDIR once that recipe
+    # finishes, which cuts PEAK tmp/ usage dramatically at the cost of losing
+    # per-recipe build trees for debugging.
+    INHERIT += "rm_work"
+    # Keep the kernel WORKDIR: we routinely inspect the patched jadard driver
+    # source and the resulting .config to verify panel patches and kernel
+    # options (e.g. CONFIG_FRAMEBUFFER_CONSOLE). work-shared/kernel-source is
+    # already exempt from rm_work, but the kernel WORKDIR holding .config is not.
+    RM_WORK_EXCLUDE += "linux-rockchip"
+    # Abort cleanly instead of corrupting TMPDIR if the disk fills mid-build.
+    BB_DISKMON_DIRS = "\
+        STOPTASKS,${TMPDIR},2G,100K \
+        STOPTASKS,${DL_DIR},2G,100K \
+        ABORT,${TMPDIR},1G,10K \
+        ABORT,${DL_DIR},1G,10K"
+
 repos:
   poky:
     url: https://git.yoctoproject.org/poky
