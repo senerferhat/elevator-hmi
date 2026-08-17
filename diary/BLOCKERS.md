@@ -7,10 +7,67 @@
 
 ## Open Blockers
 
-### BLK-014 — LMT101 backlit black with full DRM scanout (software lab closed)
-**Opened:** 2026-06-02  
-**Severity:** **HIGH** — blocks Phase 1 display gate; no further userspace tests change diagnosis  
-**Owner:** A1 / vendor FAE  
+*(none blocking the display gate — BLK-014 closed 2026-08-07, see Resolved section.)*
+
+---
+
+## Resolved Blockers
+
+### BLK-014 — LMT101 backlit black with full DRM scanout — ✅ **RESOLVED 2026-08-07**
+**Opened:** 2026-06-02 — **Closed:** 2026-08-07
+**Severity was:** HIGH — blocked Phase 1 display gate
+**Owner:** lead (single-agent)
+
+> **RESOLUTION — THE PANEL WORKS. IT WAS NEVER A HARDWARE FAULT.**
+>
+> **Proof (2026-08-07):** a full-screen white fill of `/dev/fb0` on the running
+> board displayed **plain white on the glass**; a half-buffer fill displayed a
+> clean **white/black split** (correct addressing and orientation). 1000×4096 =
+> 4,096,000 B = exactly 800×1280×4 (XR24) = the whole framebuffer. Backlight
+> leakage cannot produce this. `/sys/kernel/debug/dri/0/summary` concurrently
+> showed `Video Port1: ACTIVE`, DSI-1, 800x1280p60, `clk[70000] real_clk[70000]`,
+> H 800/840/860/880 and V 1280/1310/1314/1324 (exactly the vendor porches),
+> `Smart1-win0: ACTIVE` XR24 800x1280.
+>
+> **Two causes, in sequence:**
+> 1. **Real bug — DSI init ordering (fixed by patch 0021, INIT-IN-PREPARE).**
+>    This vendor kernel's `dw-mipi-dsi` switches the host to VIDEO mode in
+>    `bridge_atomic_enable()` **before** calling `drm_panel_enable()`. Our
+>    mainline-style jadard driver sent the entire vendor bring-up (196-cmd table,
+>    page-4 clock fix, SLPOUT, DISON) from `enable()` — i.e. as HS commands
+>    inside the blanking of an already-running video stream, so the panel got
+>    video packets before it was ever initialised. Patch 0021 moved the whole
+>    sequence into `prepare()` (command mode, pre-video), matching the vendor
+>    fixture and Rockchip's own `simple-panel-dsi`.
+> 2. **Why the fix stayed invisible for ~2 weeks — `CONFIG_FRAMEBUFFER_CONSOLE`
+>    was not set.** `/dev/fb0` existed (DRM fbdev emulation) but nothing ever
+>    rendered into it; a zero-filled framebuffer is a correctly-displayed BLACK
+>    screen. Every "still black" observation after 0021 was the panel faithfully
+>    showing black. Enabled 2026-08-07 (+ `CONFIG_LOGO`).
+>
+> **Process lesson:** patch 0021's kill test was written as *"pattern/fbcon
+> visible OR 0x45 non-zero"*, then validated **only via BIST** (patches
+> 0022/0024) — an instrument that has never produced a positive result on this
+> panel and therefore could not be trusted to report a negative one. The
+> framebuffer-content half of the same kill test was never re-run after 0021
+> landed. A correct fix was repeatedly graded by a broken measuring device.
+>
+> **Red herrings, formally closed:** `0x45 scanline = 0x00` (not a reliable
+> liveness indicator here); `0x0A` bit7 "booster off" (the vendor's OWN healthy
+> fixture reads `0x18`, bit7 also clear — never indicated a fault); `0x0F=0xC0`
+> was the panel correctly reporting itself healthy the entire campaign — it was
+> right. "Both panels black" — both panels are **fine**; identical symptom
+> because the cause was host-side firmware, shared by both tests.
+>
+> **Hardware fully exonerated:** 3.3 V rail, XRES timing (scope-verified 20 ms),
+> MIPI lanes (all four + clock proven by working HS command traffic), FPC
+> wiring, VCC3V3_LCD load switch. Owner's measurements were correct throughout.
+>
+> **Vendor:** LCD Mall was pursuing a non-existent hardware fault on our report.
+> Correction owed — panels are not defective, no RMA or cross-test needed.
+
+**Historical record of the investigation is preserved below and in
+`diary/SESSION-LOG.md`.**
 
 **2026-07-22 — VENDOR BIST TEST EXECUTED: BLACK ON BOTH PANEL UNITS — hardware
 branch of vendor's own criterion.** Fresh BIST image (`bist-468.wic`, WIC SHA

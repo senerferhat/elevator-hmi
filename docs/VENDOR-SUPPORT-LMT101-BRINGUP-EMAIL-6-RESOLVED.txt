@@ -1,0 +1,115 @@
+To:      sales06@alltouchdisplay.com
+Cc:      sales@alltouchdisplay.com
+From:    senerferhat01@gmail.com
+Subject: RESOLVED — LMT101SX006C is working. Root cause was on our side (host
+         DSI init ordering). Please stop the investigation — your panels are fine.
+
+Thread: "Technical Support Request: JD9365D Initialization Array for LMT101SX006C"
+
+STATUS: DRAFT (owner review before sending). Send this as soon as convenient —
+it stops your engineering team spending further time on a non-existent fault.
+
+--------------------------------------------------------------------------------
+
+Dear Abby, and please pass this to your engineering team,
+
+Good news, and an apology: **the panel is working.** The problem was on our
+side, in our host software. Your panels are not defective, the initialisation
+code you supplied is correct, and there is no fault in your hardware. Please
+stop any ongoing investigation on your end.
+
+================================================================================
+1. RESULT
+================================================================================
+
+We now have a stable, correct image on the glass. Verified by writing directly
+to the framebuffer on our running system:
+
+  - Full-screen fill  -> panel displays plain WHITE across the entire glass
+  - Half-buffer fill  -> panel displays a clean WHITE (top) / BLACK (bottom)
+                         split, i.e. correct pixel addressing and orientation
+
+The byte count matches the panel exactly: 1000 x 4096 bytes = 4,096,000 bytes =
+800 x 1280 x 4 (XR24) = the complete framebuffer. Our display controller
+reports the link running at 800x1280p60 with a 70.000 MHz pixel clock and the
+exact porch values from your initialisation file (H: 800/840/860/880,
+V: 1280/1310/1314/1324).
+
+================================================================================
+2. ROOT CAUSE (entirely on our side)
+================================================================================
+
+Two independent problems in our Linux host software, in sequence:
+
+(a) **DSI initialisation was being sent at the wrong point in our display
+    pipeline.** The Rockchip kernel we use switches the DSI host into VIDEO
+    mode *before* it calls the panel driver's enable step. Our panel driver was
+    sending your entire 196-register initialisation sequence (plus the page-4
+    clock fix, Sleep Out and Display On) from that enable step -- meaning your
+    initialisation commands were being transmitted as high-speed packets inside
+    the blanking intervals of an already-running video stream, so the panel was
+    receiving video data before it had ever been initialised.
+
+    We moved the whole sequence earlier, into the "prepare" stage, where the
+    host is still in low-power command mode and no video is streaming. This is
+    the same order your fixture uses. **This was the actual fix.**
+
+(b) **Our kernel had the framebuffer console disabled**, so although the
+    display device existed, nothing was ever drawn into the framebuffer. An
+    all-zero framebuffer is a correctly displayed black screen. This is why the
+    panel still appeared "dead" to us for a further two weeks *after* fix (a)
+    had already solved the real problem -- we were looking at a working panel
+    faithfully displaying black. We have now enabled the framebuffer console.
+
+================================================================================
+3. CORRECTIONS TO WHAT WE REPORTED TO YOU
+================================================================================
+
+Several conclusions we sent you were wrong, and we want the record corrected:
+
+  - **"Hardware issue confirmed" (our 23 July email) was incorrect.** The BIST
+    test result should not have been read as a hardware verdict. Both of our
+    panel units are healthy and both now work.
+
+  - **The 0x45 (scanline) = 0x00 reading was a red herring.** We treated it as
+    proof that the timing controller never ran. It is not a reliable liveness
+    indicator in the way we were reading it.
+
+  - **The 0x0A booster bit was also a red herring.** We now note your own
+    healthy fixture reads 0x18, which likewise has bit 7 clear -- so that bit
+    never indicated a fault, and we should have caught that from your own data.
+
+  - **0x0F = 0xC0 was correct all along.** Your IC's self-diagnostic was
+    telling us "register loading OK, functionality OK" for three months. It was
+    right and we did not believe it.
+
+  - **The two-panel result was not evidence of a batch problem.** Both units
+    showed the same symptom because the cause was in our host software, which
+    was identical in both tests.
+
+================================================================================
+4. THANK YOU / NO FURTHER ACTION NEEDED
+================================================================================
+
+Your initialisation file was correct as supplied and never needed changing --
+we verified it byte-for-byte against our build several times and it matched.
+Your page-4 clock-fix block and your Q1 reset timing diagram are both in our
+final working configuration exactly as you specified them.
+
+We are sorry for the time your engineering team spent on this, especially the
+fixture re-tests and the VDDIN waveform capture. Those were requested by us in
+good faith but the fault was never on your side.
+
+No RMA, no replacement modules, and no cross-testing are needed. We consider
+this closed and we are proceeding to application development on this panel.
+
+We would still be glad to have your answer to one earlier question, purely for
+our documentation and not as a support request: for the LMT101SX006C, is the
+AVDD/VGH/VGL generation external (JD5001 on the module) or integrated in the
+JD9365D? Your 13 June email described it both ways in different answers.
+
+Thank you again for your patience and support throughout.
+
+Best regards,
+Ferhat Sener
+Freelancer Developer — Elevator HMI Project (RK3566)
