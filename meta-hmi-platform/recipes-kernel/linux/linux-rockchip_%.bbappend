@@ -50,7 +50,14 @@ SRC_URI += "file://0021-drm-panel-jadard-lmt101-init-in-prepare.patch"
 # LCD", entirely in software, no system reboot involved. Vendor's original 10ms
 # power-on delay retained (0023's 250ms was an experiment, not a fix). Supersedes
 # 0022 and 0023 — do not enable either alongside this patch.
-SRC_URI += "file://0024-drm-panel-jadard-lmt101-master-image-bist-then-video.patch"
+# DISABLED 2026-08-07 after BLK-014 was RESOLVED. The panel works with 0021 alone
+# (proven: white/half framebuffer fills displayed correctly on glass). 0024's BIST
+# phase arms E3,01, which leaves the panel degraded even after its second XRES
+# reset -- measured 0x0A=0x08 / 0x0F=0x00 vs the healthy 0x1C / 0xC0 seen with
+# 0021 alone. BIST also never produced a visible pattern on this panel under any
+# condition tested, so it has no diagnostic value here. Do not re-enable for any
+# image intended to actually display.
+# SRC_URI += "file://0024-drm-panel-jadard-lmt101-master-image-bist-then-video.patch"
 # H4a test: ELIMINATED 2026-06-10 — E3,01 causes panel soft-reset (0x0A=0x08), not booster enable
 # SRC_URI += "file://0016-drm-panel-jadard-lmt101-h4a-e3-booster-enable.patch"
 # FAE BUILD A v2 (BIST + 500ms + no burst): comment 0013, enable 0012+0014
