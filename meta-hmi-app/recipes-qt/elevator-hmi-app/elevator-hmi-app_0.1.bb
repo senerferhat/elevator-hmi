@@ -15,7 +15,7 @@ inherit qt6-cmake update-rc.d
 FILESEXTRAPATHS:prepend := "${ELEVATOR_HMI_QML_DIR}:"
 FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
 
-DEPENDS = "qtbase qtdeclarative"
+DEPENDS = "qtbase qtdeclarative qtdeclarative-native"
 
 # Same Mali CMake hole as qtbase (see meta-hmi-platform qtbase_%.bbappend):
 # JeffyCN mali-hook wrappers export no EGL/GLES symbols, so find_package(Qt6 Gui)
