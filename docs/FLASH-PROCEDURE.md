@@ -36,30 +36,42 @@ below, to avoid a second stale pointer existing alongside the current one.)*
 
 ---
 
-## CURRENT TEST TARGET (2026-08-18) — qt-hmi-daylight.wic — light colourful theme
+## CURRENT TEST TARGET (2026-08-18) — qt-hmi-daylight.wic — wrap 52 + SD chrome
 
-**Status: recommended for next flash** after the orientations load-fix image
-(or instead of it, if that one already showed the full GUI). Same four
-layouts and `hmi` CLI. Light “daylight cabin” theme: sky field, white
-cards with colour stripes, cobalt floor number, orange motion/DEMO.
+**Status: recommended for next flash.** Daylight theme, openFrac boot fix,
+**52 px** wrap (lab-fitted), and Stage 1 SD plumbing: udev mounts VFAT
+`mmcblk1` at `/media/sdcard`, QML video pane shows card/clip status.
+No frames yet (BLK-015). `hmi portrait-video` to see the pane.
 
 | Field | Value |
 |---|---|
 | **Archive file** | `~/Projects/elevator-hmi/images-archive/qt-hmi-daylight.wic` |
-| **WIC SHA-256** | `36e1aabe1f03594263442de2086ec8b21f18189e4fa3bef269185502869180e4` |
-| **Deploy name** | `elevator-hmi-image-elevator-hmi-em3566.rootfs-20260818200439.wic` |
-| **Expected on glass** | Light background (not black). Large **blue** floor number, orange DEMO chip, teal door card, white panels. |
-| **On-target** | same `hmi portrait` / `landscape` / `portrait-video` / `landscape-video` |
+| **WIC SHA-256** | `3d71c658bd44831cadfc63be9db73f6a4be5dbc8d61560ded451881a658639b3` |
+| **Deploy name** | `elevator-hmi-image-elevator-hmi-em3566.rootfs-20260818204839.wic` |
+| **Expected on glass** | Light GUI, borders inside the panel (wrap 52). Video layouts: `NO CARD` / `SD · EMPTY` / clip name. Hatch stays; no playback. |
+| **On-target** | `hmi wrap` (should be 52), insert VFAT TF card, `ls /media/sdcard`, `hmi portrait-video` |
 
 ```bash
 cd ~/Projects/elevator-hmi/images-archive
-sha256sum qt-hmi-daylight.wic   # expect 36e1aabe1f03594263442de2086ec8b21f18189e4fa3bef269185502869180e4
+sha256sum qt-hmi-daylight.wic   # expect 3d71c658bd44831cadfc63be9db73f6a4be5dbc8d61560ded451881a658639b3
 sudo rkdeveloptool db loader.bin
 sudo rkdeveloptool wl 0      qt-hmi-daylight.wic
 sudo rkdeveloptool wl 64     idblock.img
 sudo rkdeveloptool wl 0x4000 uboot.img
 sudo rkdeveloptool rd
 ```
+
+Wrap-16 SHA `99c4c268…` is `qt-hmi-daylight-wrap16.wic`.
+openFrac-only SHA `d074054a…` is `qt-hmi-daylight-openfrac.wic`.
+First daylight SHA `36e1aabe…` is `qt-hmi-daylight-qmlcrash.wic`.
+
+---
+
+## SUPERSEDED (2026-08-18) — qt-hmi-daylight.wic SHA `36e1aabe…` — QML crash
+
+**Status: do not flash.** Same daylight theme, but `Behavior on openFrac`
+with `readonly` — HMI never starts, splash stays. Archived as
+`qt-hmi-daylight-qmlcrash.wic`.
 
 ---
 

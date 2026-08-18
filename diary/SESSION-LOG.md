@@ -1920,3 +1920,111 @@ Rebuild `elevator-hmi-image` next; do not flash until SHA is in this log.
   orientations load-fix GUI is on glass, or instead of it).
 
 ---
+
+## 2026-08-18 (23:20) — splash stuck: QML `openFrac` is readonly
+
+Owner flashed `qt-hmi-orientations.wic` (`d45ed163…`). Panel stayed on
+“please wait booting”. UART at 1500000 `/dev/ttyACM0` (root, no password):
+kernel + sysvinit completed; `Starting elevator-hmi: FAILED`.
+
+```
+PortraitView.qml:387: Invalid property assignment: "openFrac" is a read-only property
+Type PortraitView unavailable
+```
+
+`Behavior on openFrac` cannot animate a `readonly property` (Qt 6). Init
+had already unbound `vtcon1`, so nothing replaced the splash.
+
+Fix: drop `readonly` on `openFrac` in `PortraitView.qml` and
+`LandscapeView.qml`. On HMI start failure, rebind `vtcon1` so the splash
+is not left up.
+
+Same crash is in the first daylight image (`36e1aabe…`) — do not flash it.
+Kept as `images-archive/qt-hmi-daylight-qmlcrash.wic`.
+
+### Live on the board (UART)
+
+Pushed the fixed QML tree over serial (`openssl enc -d -base64`).
+`elevator-hmi` is running (pid 584, `portrait` / rot 90). Glass should
+show the daylight GUI without a reflash. Survives reboot of this eMMC;
+lost on the next `rkdeveloptool wl`.
+
+### Image (survives the next flash)
+
+- Hardlinked `images-archive/qt-hmi-daylight.wic`
+  SHA `d074054a925ef54d171384defbf47eed7d8fe311ac4114e2b94472307a4c002b`
+- Deploy: `elevator-hmi-image-elevator-hmi-em3566.rootfs-20260818201539.wic`
+- **current flash target:** that file (hash above). `KAS_EXIT=0`.
+
+---
+
+## 2026-08-18 (23:29) — right-edge wrap on daylight (`cursor` → `orcurs`)
+
+Owner: light theme and demo run, but the image is shifted right a bit;
+the right border (and text on that seam) wraps onto the left edge.
+Dark theme hid the same wrap (black-on-black). Not a kernel/porch change
+(BLK-014 stays closed). BLK-015 still means we cannot retarget the VOP
+plane, so compensate in the linuxfb buffer: circular-shift the 800-wide
+scene left by N pixels (two copies, clip to the window). Default **16 px**.
+
+On glass after flash: left and right borders should sit inside the panel.
+If 16 is short or long:
+
+```bash
+hmi wrap 8
+hmi wrap 24
+hmi wrap 32
+hmi wrap 0    # disable
+```
+
+Persists in `/etc/elevator-hmi.wrap`.
+
+### Image
+
+- Hardlinked `images-archive/qt-hmi-daylight.wic`
+  SHA `99c4c268234679c65d682d0d22119eef2a191142618934ebd49dce5273ea6cb4`
+- Deploy: `elevator-hmi-image-elevator-hmi-em3566.rootfs-20260818202832.wic`
+- Previous openFrac-only image kept as `qt-hmi-daylight-openfrac.wic`
+  (`d074054a…`).
+- **current flash target:** `qt-hmi-daylight.wic` (hash above). `KAS_EXIT=0`.
+
+---
+
+## 2026-08-18 (23:49) — wrap default 52 + SD-card Stage 1 plumbing
+
+Owner: `hmi wrap 52` fitted the glass. That is now the image default
+(`/etc/elevator-hmi.wrap` / `--wrap=52`).
+
+SD-card env (Stage 1, no frames — BLK-015):
+
+- udev `99-sdcard.rules` + `/usr/sbin/sdcard-mount`: VFAT `mmcblk[1-9]`
+  → `/media/sdcard` (eMMC stays `mmcblk0`).
+- `dosfstools` in the image.
+- C++ `MediaBackend` (`media` in QML): mounted / clipCount / clipName /
+  status (`NO CARD` / `EMPTY` / `READY`). Scans `.mp4 .mkv .mov .m4v
+  .avi .webm .ts .m2ts` two directories deep.
+- `VideoPane` chrome binds those properties. Hatch + `NO SOURCE` stay
+  until Stage 2 (Qt Multimedia / VPU after KMS works).
+
+Lab check after flash:
+
+```bash
+hmi wrap          # 52
+hmi portrait-video
+# insert VFAT TF card
+ls /media/sdcard
+# pane: NO CARD → SD · EMPTY or READY · N CLIPS + filename
+```
+
+If the slot is silent (`no mmcblk1`), that is a DTS/kernel follow-up —
+do not reopen 0022/0023/0024.
+
+### Image
+
+- Hardlinked `images-archive/qt-hmi-daylight.wic`
+  SHA `3d71c658bd44831cadfc63be9db73f6a4be5dbc8d61560ded451881a658639b3`
+- Deploy: `elevator-hmi-image-elevator-hmi-em3566.rootfs-20260818204839.wic`
+- Previous wrap-16 image: `qt-hmi-daylight-wrap16.wic` (`99c4c268…`).
+- **current flash target:** `qt-hmi-daylight.wic` (hash above). `KAS_EXIT=0`.
+
+---

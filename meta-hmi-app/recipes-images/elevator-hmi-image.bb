@@ -79,6 +79,7 @@ IMAGE_INSTALL += " \
     fontconfig \
     fontconfig-utils \
     liberation-fonts \
+    dosfstools \
 "
 
 # No X11, no Wayland, no display manager — EGLFS only.

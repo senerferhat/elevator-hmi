@@ -381,9 +381,9 @@ Item {
                         width: 120
                         height: 74
 
-                        readonly property real openFrac: view.car.doorPhase === "OPEN" ? 1.0
-                                                       : view.car.doorPhase === "OPENING" ? 0.6
-                                                       : view.car.doorPhase === "CLOSING" ? 0.35 : 0.0
+                        property real openFrac: view.car.doorPhase === "OPEN" ? 1.0
+                                              : view.car.doorPhase === "OPENING" ? 0.6
+                                              : view.car.doorPhase === "CLOSING" ? 0.35 : 0.0
                         Behavior on openFrac { NumberAnimation { duration: 500; easing.type: Easing.InOutQuad } }
 
                         Rectangle {

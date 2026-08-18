@@ -1,0 +1,51 @@
+#!/bin/sh
+# Mount/unmount the TF/microSD card at /media/sdcard.
+# Called from udev (99-sdcard.rules). eMMC is mmcblk0; the slot is mmcblk1.
+#
+# Usage: sdcard-mount add|remove /dev/mmcblk1p1
+
+set -eu
+
+MNT=/media/sdcard
+STAMP=/run/sdcard.dev
+ACTION=${1:-}
+NODE=${2:-}
+
+log() { logger -t sdcard-mount "$*" 2>/dev/null || echo "sdcard-mount: $*" >&2; }
+
+is_mounted() {
+    grep -q " ${MNT} " /proc/mounts 2>/dev/null
+}
+
+case "$ACTION" in
+    add)
+        case "$NODE" in
+            /dev/mmcblk[1-9]*) ;;
+            *) log "refuse $NODE"; exit 1 ;;
+        esac
+        mkdir -p "$MNT"
+        if is_mounted; then
+            exit 0
+        fi
+        if mount -t vfat -o flush,noatime,umask=000 "$NODE" "$MNT" 2>/dev/null \
+            || mount -o noatime,umask=000 "$NODE" "$MNT" 2>/dev/null; then
+            echo "$NODE" > "$STAMP"
+            log "mounted $NODE on $MNT"
+            exit 0
+        fi
+        log "mount failed for $NODE"
+        exit 1
+        ;;
+    remove)
+        if is_mounted; then
+            umount -l "$MNT" 2>/dev/null || true
+            log "unmounted $MNT"
+        fi
+        rm -f "$STAMP"
+        exit 0
+        ;;
+    *)
+        echo "Usage: sdcard-mount add|remove /dev/mmcblkNpM" >&2
+        exit 2
+        ;;
+esac

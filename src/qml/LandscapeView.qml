@@ -712,9 +712,9 @@ Item {
                             height: parent.height - 28
                             clip: true
 
-                            readonly property real openFrac: view.car.doorPhase === "OPEN" ? 0.95
-                                                           : view.car.doorPhase === "OPENING" ? 0.55
-                                                           : view.car.doorPhase === "CLOSING" ? 0.30 : 0.0
+                            property real openFrac: view.car.doorPhase === "OPEN" ? 0.95
+                                                  : view.car.doorPhase === "OPENING" ? 0.55
+                                                  : view.car.doorPhase === "CLOSING" ? 0.30 : 0.0
                             Behavior on openFrac { NumberAnimation { duration: 500; easing.type: Easing.InOutQuad } }
 
                             Rectangle {

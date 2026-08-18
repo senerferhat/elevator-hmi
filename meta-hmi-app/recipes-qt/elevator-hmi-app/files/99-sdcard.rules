@@ -1,0 +1,8 @@
+# TF / microSD slot is mmcblk1 (eMMC is mmcblk0). Automount VFAT at /media/sdcard.
+# Partition first; whole-disk (superfloppy) as fallback.
+
+ACTION=="add", SUBSYSTEM=="block", KERNEL=="mmcblk[1-9]p[0-9]*", ENV{ID_FS_TYPE}=="vfat", RUN+="/usr/sbin/sdcard-mount add $env{DEVNAME}"
+ACTION=="remove", SUBSYSTEM=="block", KERNEL=="mmcblk[1-9]p[0-9]*", RUN+="/usr/sbin/sdcard-mount remove $env{DEVNAME}"
+
+ACTION=="add", SUBSYSTEM=="block", KERNEL=="mmcblk[1-9]", ENV{DEVTYPE}=="disk", ENV{ID_FS_TYPE}=="vfat", RUN+="/usr/sbin/sdcard-mount add $env{DEVNAME}"
+ACTION=="remove", SUBSYSTEM=="block", KERNEL=="mmcblk[1-9]", ENV{DEVTYPE}=="disk", RUN+="/usr/sbin/sdcard-mount remove $env{DEVNAME}"

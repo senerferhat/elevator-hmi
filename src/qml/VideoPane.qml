@@ -1,7 +1,8 @@
 import QtQuick
 
-// Empty video placeholder (design: Vertical Video / Landscape Video).
-// SD-card playback is a later task; BLK-015 also blocks GStreamer/DRM video.
+// Video pane chrome (design: Vertical Video / Landscape Video).
+// Stage 1: SD mount + clip scan via the C++ `media` context property.
+// Stage 2 (after BLK-015): put Qt Multimedia VideoOutput in this well.
 // Software-renderer safe: hatch is rotated Rectangles, not a shader.
 
 Item {
@@ -9,14 +10,36 @@ Item {
     property var hmi
     clip: true
 
+    readonly property var src: media
+    readonly property bool haveCard: src && src.mounted
+    readonly property int clipCount: src ? src.clipCount : 0
+    readonly property string clipName: src ? src.clipName : ""
+    readonly property string cardStatus: src ? src.status : "NO CARD"
+
     readonly property color ink: hmi ? hmi.ink : "#142033"
     readonly property color inkMute: hmi ? hmi.inkMute : "#6A8198"
     readonly property color inkDim: hmi ? hmi.inkDim : "#3A5168"
     readonly property color red: hmi ? hmi.red : "#E11D48"
+    readonly property color green: hmi ? hmi.green : "#059669"
+    readonly property color amber: hmi ? hmi.amber : "#F97316"
     readonly property color line: hmi ? hmi.line : "#B7C9DC"
     readonly property color well: hmi ? hmi.bgElev2 : "#DCE8F4"
     readonly property color hatch: hmi ? hmi.lineSoft : "#D0DCEC"
     readonly property string monoFont: hmi ? hmi.monoFont : "Liberation Mono"
+
+    readonly property color statusDot: pane.cardStatus === "READY" ? pane.green
+                                       : pane.cardStatus === "EMPTY" ? pane.amber
+                                       : pane.red
+    readonly property string statusLabel: pane.cardStatus === "READY"
+        ? ("READY · " + pane.clipCount + (pane.clipCount === 1 ? " CLIP" : " CLIPS"))
+        : pane.cardStatus === "EMPTY" ? "SD · EMPTY"
+        : "NO CARD"
+    readonly property string subLabel: !pane.haveCard ? "NO CARD"
+        : pane.clipCount > 0 ? pane.clipName.toUpperCase()
+        : "SD CARD · EMPTY"
+    readonly property string footerLabel: pane.clipCount > 0
+        ? ("—  " + pane.clipName.toUpperCase() + "  —")
+        : "—  NO CLIP LOADED  —"
 
     Rectangle {
         anchors.fill: parent
@@ -46,11 +69,11 @@ Item {
             spacing: 8
             Rectangle {
                 width: 8; height: 8; radius: 4
-                color: pane.red
+                color: pane.statusDot
                 anchors.verticalCenter: parent.verticalCenter
             }
             Text {
-                text: "LIVE  ·  CH 04"
+                text: pane.statusLabel
                 color: pane.ink
                 font.family: pane.monoFont
                 font.pixelSize: 12
@@ -105,7 +128,7 @@ Item {
                 anchors.horizontalCenter: parent.horizontalCenter
             }
             Text {
-                text: "SD CARD · EMPTY"
+                text: pane.subLabel
                 color: pane.inkMute
                 font.family: pane.monoFont
                 font.pixelSize: 11
@@ -146,7 +169,7 @@ Item {
             anchors.rightMargin: 20
             anchors.bottom: parent.bottom
             anchors.bottomMargin: 30
-            text: "—  NO CLIP LOADED  —"
+            text: pane.footerLabel
             color: pane.inkMute
             font.family: pane.monoFont
             font.pixelSize: 11

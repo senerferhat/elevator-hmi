@@ -103,6 +103,36 @@ Window {
         return rot;
     }
 
+    // Horizontal circular shift of the 800-wide framebuffer, in pixels.
+    // The panel (or the boot-latched VOP plane, BLK-015) shows the image
+    // shifted right; the right-hand strip wraps onto the left edge, so a
+    // word on that seam reads like "cursor" → "orcurs". Dark theme hid it
+    // (black-on-black). Compensate by rotating the scene LEFT by this many
+    // pixels. Lab value that fitted the glass: 52. `hmi wrap N` persists it.
+    // 0 disables. Negative = other way.
+    property int wrapX: {
+        var args = Qt.application.arguments;
+        var found = 52;
+        for (var i = 1; i < args.length; ++i) {
+            var a = args[i];
+            if (a.indexOf("--wrap=") === 0) {
+                var n = parseInt(a.substring(7), 10);
+                if (!isNaN(n))
+                    found = n;
+            }
+        }
+        return found;
+    }
+    readonly property int wrapMod: {
+        var w = root.width;
+        if (w <= 0)
+            return 0;
+        var n = root.wrapX % w;
+        if (n < 0)
+            n += w;
+        return n;
+    }
+
     property string demoPhase: "IDLE"
     readonly property var floorNames: ["B1", "L", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
 
@@ -221,67 +251,85 @@ Window {
         logEvent(floorNames[car.currentIndex], "SYSTEM READY");
     }
 
-    Rectangle {
-        anchors.fill: parent
-        gradient: Gradient {
-            GradientStop { position: 0.0; color: "#D6E8F8" }
-            GradientStop { position: 0.45; color: "#EAF2FA" }
-            GradientStop { position: 1.0; color: "#F7F3EA" }
-        }
-    }
-
-    // Landscape content is 1280×800, centered then rotated so it fills the
-    // native 800×1280 window. Portrait content is 800×1280 unrotated.
-    //
-    // Do NOT Loader.setSource("PortraitView.qml"): the daemon's cwd is /, so a
-    // relative URL looks for /PortraitView.qml, the Loader stays empty, and
-    // the only thing on glass is this file's DEMO chip (seen 2026-08-18).
-    // Sibling types in /usr/share/elevator-hmi/ are implicit imports of
-    // main.qml — instantiate them directly.
+    // Clip to 800×1280 so a child that paints past the right edge cannot
+    // spill into the next scanline (that looks like a wrap on the left).
+    // When wrapMod != 0, draw two copies side by side and slide them so the
+    // 800-wide window shows a circular shift — that is what the panel wrap
+    // needs; a plain x offset would clip instead of wrapping.
     Item {
-        id: stageHost
-        // Portrait: same size as the window (native 800×1280).
-        // Landscape: 1280×800 centered, then rotated onto that window.
-        // Do not mix anchors.fill with these sizes — that fights the
-        // landscape geometry.
-        width: root.landscape ? 1280 : parent.width
-        height: root.landscape ? 800 : parent.height
-        anchors.centerIn: parent
-        rotation: root.landscape ? root.stageRotation : 0
-        transformOrigin: Item.Center
+        id: clipper
+        anchors.fill: parent
+        clip: true
 
-        PortraitView {
-            anchors.fill: parent
-            visible: !root.landscape
-            hmi: root
-        }
-        LandscapeView {
-            anchors.fill: parent
-            visible: root.landscape
-            hmi: root
-        }
+        Row {
+            x: -root.wrapMod
+            height: parent.height
+            spacing: 0
 
-        Rectangle {
-            anchors.right: parent.right
-            anchors.rightMargin: 24
-            anchors.bottom: parent.bottom
-            anchors.bottomMargin: 16
-            width: demoLabel.implicitWidth + 28
-            height: 36
-            radius: 4
-            z: 50
-            color: root.amber
-            border.color: root.amber
-            border.width: 1
+            Repeater {
+                model: root.wrapMod === 0 ? 1 : 2
+                Item {
+                    width: root.width
+                    height: root.height
 
-            Text {
-                id: demoLabel
-                anchors.centerIn: parent
-                text: "DEMO  ·  " + root.demoPhase
-                color: "#FFFFFF"
-                font.family: root.monoFont
-                font.pixelSize: 11
-                font.letterSpacing: 2
+                    Rectangle {
+                        anchors.fill: parent
+                        gradient: Gradient {
+                            GradientStop { position: 0.0; color: "#D6E8F8" }
+                            GradientStop { position: 0.45; color: "#EAF2FA" }
+                            GradientStop { position: 1.0; color: "#F7F3EA" }
+                        }
+                    }
+
+                    // Landscape content is 1280×800, centered then rotated so
+                    // it fills the native 800×1280 window. Portrait is 800×1280
+                    // unrotated.
+                    //
+                    // Do NOT Loader.setSource("PortraitView.qml"): the daemon's
+                    // cwd is /, so a relative URL looks for /PortraitView.qml.
+                    Item {
+                        width: root.landscape ? 1280 : parent.width
+                        height: root.landscape ? 800 : parent.height
+                        anchors.centerIn: parent
+                        rotation: root.landscape ? root.stageRotation : 0
+                        transformOrigin: Item.Center
+
+                        PortraitView {
+                            anchors.fill: parent
+                            visible: !root.landscape
+                            hmi: root
+                        }
+                        LandscapeView {
+                            anchors.fill: parent
+                            visible: root.landscape
+                            hmi: root
+                        }
+
+                        Rectangle {
+                            anchors.right: parent.right
+                            anchors.rightMargin: 24
+                            anchors.bottom: parent.bottom
+                            anchors.bottomMargin: 16
+                            width: demoChipLabel.implicitWidth + 28
+                            height: 36
+                            radius: 4
+                            z: 50
+                            color: root.amber
+                            border.color: root.amber
+                            border.width: 1
+
+                            Text {
+                                id: demoChipLabel
+                                anchors.centerIn: parent
+                                text: "DEMO  ·  " + root.demoPhase
+                                color: "#FFFFFF"
+                                font.family: root.monoFont
+                                font.pixelSize: 11
+                                font.letterSpacing: 2
+                            }
+                        }
+                    }
+                }
             }
         }
     }

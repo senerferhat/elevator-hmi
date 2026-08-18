@@ -1,6 +1,9 @@
+#include "MediaBackend.h"
+
 #include <QGuiApplication>
 #include <QList>
 #include <QQmlApplicationEngine>
+#include <QQmlContext>
 #include <QQmlError>
 #include <QStringList>
 #include <QUrl>
@@ -13,16 +16,18 @@
 //   landscape-video    1280×800 split, rotated onto the portrait panel
 // Aliases: car/vertical → portrait; video/vertical-video → portrait-video
 static const char kUsage[] =
-    "Usage: elevator-hmi [LAYOUT] [--rot=90|270]\n"
+    "Usage: elevator-hmi [LAYOUT] [--rot=90|270] [--wrap=N]\n"
     "  portrait           full portrait HMI 800×1280 (default)\n"
     "  portrait-video     portrait HMI + empty video pane\n"
     "  landscape          full landscape HMI 1280×800 (rotated)\n"
     "  landscape-video    landscape HMI + empty video pane (rotated)\n"
     "  --rot=90|270       landscape rotation onto the native 800×1280 panel\n"
+    "  --wrap=N           circular horizontal shift in pixels (default 52;\n"
+    "                     0 disables). Compensates a right-shift wrap on glass.\n"
     "\n"
     "Aliases: car, vertical = portrait; video, vertical-video = portrait-video\n"
     "On the board, `hmi` restarts the service and remembers the choice in\n"
-    "/etc/elevator-hmi.layout (and /etc/elevator-hmi.rotation).\n";
+    "/etc/elevator-hmi.layout (and /etc/elevator-hmi.rotation / .wrap).\n";
 
 static QString canonicalLayout(const QString &s)
 {
@@ -50,6 +55,7 @@ int main(int argc, char *argv[])
 
     QString layout = QStringLiteral("portrait");
     int rot = 90;
+    int wrap = 52;
     const QStringList args = app.arguments();
     for (int i = 1; i < args.size(); ++i) {
         const QString a = args.at(i);
@@ -77,6 +83,17 @@ int main(int argc, char *argv[])
             rot = n;
             continue;
         }
+        if (a.startsWith(QLatin1String("--wrap="))) {
+            bool ok = false;
+            const int n = a.mid(7).toInt(&ok);
+            if (!ok) {
+                std::fprintf(stderr, "unknown wrap: %s (pixels, signed integer)\n%s",
+                             qPrintable(a.mid(7)), kUsage);
+                return 2;
+            }
+            wrap = n;
+            continue;
+        }
         const QString c = canonicalLayout(a);
         if (!c.isEmpty()) {
             layout = c;
@@ -87,11 +104,14 @@ int main(int argc, char *argv[])
     }
     Q_UNUSED(layout);
     Q_UNUSED(rot);
-    // QML re-parses argv for layout and --rot. C++ only validates so a bad
-    // argument fails before the engine starts.
+    Q_UNUSED(wrap);
+    // QML re-parses argv for layout, --rot and --wrap. C++ only validates so a
+    // bad argument fails before the engine starts.
 
     QQmlApplicationEngine engine;
     engine.addImportPath(QStringLiteral("/usr/share/elevator-hmi"));
+    MediaBackend media;
+    engine.rootContext()->setContextProperty(QStringLiteral("media"), &media);
     QObject::connect(&engine, &QQmlApplicationEngine::warnings,
                      [](const QList<QQmlError> &warnings) {
                          for (const QQmlError &e : warnings)

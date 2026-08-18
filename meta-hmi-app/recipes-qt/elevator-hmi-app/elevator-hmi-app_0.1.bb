@@ -29,6 +29,8 @@ EXTRA_OECMAKE:append = " \
 
 SRC_URI = "file://CMakeLists.txt \
            file://main.cpp \
+           file://MediaBackend.h \
+           file://MediaBackend.cpp \
            file://main.qml \
            file://PortraitView.qml \
            file://LandscapeView.qml \
@@ -40,6 +42,8 @@ SRC_URI = "file://CMakeLists.txt \
            file://InfoRow.qml \
            file://elevator-hmi.init \
            file://hmi \
+           file://sdcard-mount \
+           file://99-sdcard.rules \
            file://COPYING \
            "
 
@@ -56,8 +60,11 @@ INITSCRIPT_PARAMS = "defaults 99 01"
 do_install:append() {
     install -d ${D}${sysconfdir}/init.d
     install -m 0755 ${WORKDIR}/elevator-hmi.init ${D}${sysconfdir}/init.d/elevator-hmi
-    install -d ${D}${bindir}
+    install -d ${D}${bindir} ${D}${sbindir}
     install -m 0755 ${WORKDIR}/hmi ${D}${bindir}/hmi
+    install -m 0755 ${WORKDIR}/sdcard-mount ${D}${sbindir}/sdcard-mount
+    install -d ${D}${sysconfdir}/udev/rules.d
+    install -m 0644 ${WORKDIR}/99-sdcard.rules ${D}${sysconfdir}/udev/rules.d/99-sdcard.rules
 }
 
 # CMake installs the QML tree to ${datadir}/elevator-hmi (see CMakeLists.txt
@@ -71,4 +78,6 @@ RDEPENDS:${PN} += " \
     qtdeclarative-qmlplugins \
     qtbase-plugins \
     initscripts \
+    udev \
+    dosfstools \
 "

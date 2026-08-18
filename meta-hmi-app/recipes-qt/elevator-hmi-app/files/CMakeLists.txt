@@ -5,7 +5,11 @@ find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml Quick)
 
 qt_standard_project_setup()
 
-add_executable(elevator-hmi main.cpp)
+add_executable(elevator-hmi
+    main.cpp
+    MediaBackend.cpp
+    MediaBackend.h
+)
 target_link_libraries(elevator-hmi PRIVATE
     Qt6::Core
     Qt6::Gui
