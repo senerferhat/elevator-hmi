@@ -1574,3 +1574,77 @@ sudo rkdeveloptool rd
 ```
 
 ---
+## 2026-08-18 — Qt image runs; the HMI was invisible because the image had no fonts
+
+**Symptom.** Flashed `qt-hmi.wic`. Boot showed Tux, then the fbcon login
+prompt, then the cursor stopped blinking and the panel appeared frozen. No HMI.
+`Starting elevator-hmi: OK` in the boot log.
+
+**Two false leads, both retired here.**
+
+1. *"`Starting elevator-hmi: OK` means the app is running."* It does not.
+   `start-stop-daemon --background` returns success as soon as the child is
+   spawned, whether or not it survives. Fixed: the init script now waits, checks
+   the pid is alive, and prints `FAILED` plus the log tail on the console.
+
+2. *"The QML is missing `import QtQuick.Window`, so `Window` is unknown and the
+   engine returns no root object."* **Wrong — this was my error.** `QtQuick`'s
+   own `plugins.qmltypes` exports `QtQuick/Window` (2.0 … 6.7), so the single
+   `import QtQuick` resolved fine on 6.8.3.
+   Caught before it cost a build by proving the instrument first: `qmllint`
+   flagged a deliberately bogus type (`TotallyBogusType was not found`) but
+   passed `Window` with only `import QtQuick`. Same discipline that was missing
+   when patch 0021 was "validated" through BIST.
+
+**The frozen console is expected and uninformative.** Qt's KMS backend saves the
+original CRTC (`QKmsOutput::saved_crtc`) and restores it on exit, so as soon as
+the app stops the panel returns to fbcon's last frame. Any judgement about
+whether Qt rendered must be made **while the process is alive**.
+
+**What the UART log actually proves — the display stack works.**
+`Successfully loaded Qt platform plugin "eglfs"` → `Using EGL device integration
+"eglfs_kms"` → `arm_release_ver: g13p0-01eac0` (Mali blob loaded) →
+`Selected mode 0 : 800 x 1280 @ 60 hz` for `DSI1` → `Chose plane 96 for output
+DSI1 (crtc id 112)` (the same plane 96 that displayed white on glass) →
+`Creating gbm_surface` → `Setting mode for screen DSI1` → three FBs added,
+`stride 3200` (= 800x4). `Creating gbm_surface` only happens once a window is
+created and shown, which independently confirms the QML loaded.
+
+**Root cause — no fonts.** The image manifest listed `libfontconfig1` and
+`libfreetype6` (qtbase *library* dependencies) and **not one font file**. Qt
+resolves QML `Text` through fontconfig, so the floor number, `IN SERVICE`, the
+ladder digits and the footer all rendered blank over `#0d1117`. On glass that is
+indistinguishable from a dead panel — the same failure shape as BLK-014.
+`/etc/fonts` was **not** missing: `PKG:fontconfig` is renamed to
+`libfontconfig1`, which already carried `fonts.conf` + `conf.d`.
+
+**Fix.** `liberation-fonts` (ships Regular/Bold, so `font.bold` resolves) +
+`fontconfig-utils` (`fc-list`/`fc-match`, and the `fc-cache` the fontcache class
+postinst runs). Footer corrected to `Qt 6.8.3` — it claimed "Qt 6.8 LTS", which
+ADR-001a says we do not have.
+
+**Build verified as artifact, not as config.** 0 errors, `BUILD_EXIT=0` under
+`set -o pipefail`. Extracted the built RPM and confirmed the shipped
+`main.qml` carries the 6.8.3 footer and the shipped init script carries the
+`FAILED` branch; manifest lists `liberation-fonts` and `fontconfig-utils`.
+
+- **New flash target:** `images-archive/qt-hmi-fonts.wic`
+- **SHA-256:** `2177329d75a5021206a99056176bd2a007a0b7205b316d21a3a7c3a68ef5200a`
+- **git HEAD:** `7c82fe3`
+- Hardlink caution: `ls -t` returned the deploy *symlink* first and the initial
+  `ln -f` produced a symlink in `images-archive/`. Re-done via `readlink -f`;
+  `stat` now shows `links=2` on the real 3.1 GB file.
+
+**Open — the one thing not yet observed.** Nobody has looked at the glass while
+the app is running. Kill test with a guaranteed-visible positive and no font
+dependency (`qtdeclarative-tools` ships `/usr/bin/qml`):
+
+```bash
+printf 'import QtQuick\nWindow { visible: true; color: "red"\n  Rectangle { anchors.centerIn: parent; width: 400; height: 400; color: "lime" } }\n' > /tmp/t.qml
+```
+
+Red screen + green square while it runs = whole stack good, fonts were the only
+gap. Otherwise: `cat /sys/kernel/debug/dri/0/summary` during the run to see
+which plane the VOP is scanning out.
+
+---

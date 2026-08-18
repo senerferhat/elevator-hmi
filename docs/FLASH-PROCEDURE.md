@@ -36,11 +36,47 @@ below, to avoid a second stale pointer existing alongside the current one.)*
 
 ---
 
-## CURRENT TEST TARGET (2026-08-18) — qt-hmi.wic — first Qt 6.8.3 EGLFS image
+## CURRENT TEST TARGET (2026-08-18) — qt-hmi-fonts.wic — Qt image **with fonts**
 
-**Status: recommended for next flash.** First `elevator-hmi-image` with public Qt 6.8.3,
-Mali-G52 EGLFS, and the QML mockup. Kernel is the proven **0021-only** panel config
-(same as `fbcon-display.wic`). Patches 0022/0023/0024 stay disabled.
+**Status: recommended for next flash.** Identical to `qt-hmi.wic` plus the fonts that
+image was missing entirely, and an init script that reports real start failures.
+Kernel unchanged — proven **0021-only** panel config. 0022/0023/0024 stay disabled.
+
+| Field | Value |
+|---|---|
+| **Archive file** | `~/Projects/elevator-hmi/images-archive/qt-hmi-fonts.wic` |
+| **WIC SHA-256** | `2177329d75a5021206a99056176bd2a007a0b7205b316d21a3a7c3a68ef5200a` |
+| **git HEAD** | `7c82fe3` |
+| **Deploy name** | `elevator-hmi-image-elevator-hmi-em3566.rootfs-20260818165008.wic` |
+| **What changed** | `liberation-fonts` + `fontconfig-utils` installed; init script verifies the pid is alive before printing `OK` and dumps the log tail on failure |
+| **Why** | The 2026-08-17 image shipped **no font files at all** — only libfontconfig1/libfreetype6. Every QML `Text` rendered blank over a `#0d1117` background, which on glass is indistinguishable from a dead panel. |
+| **Expected on glass** | Tux/fbcon briefly, then the Qt HMI: large floor number, direction arrow, 12-floor ladder, `IN SERVICE` |
+| **If fbcon paints over Qt** | `echo 0 > /sys/class/vtconsole/vtcon1/bind` |
+| **On-target checks** | `/var/log/elevator-hmi.log`, `fc-list \| head`, `/etc/init.d/elevator-hmi status` |
+
+```bash
+cd ~/Projects/elevator-hmi/images-archive
+sha256sum qt-hmi-fonts.wic   # expect 2177329d75a5021206a99056176bd2a007a0b7205b316d21a3a7c3a68ef5200a
+sudo rkdeveloptool db loader.bin
+sudo rkdeveloptool wl 0      qt-hmi-fonts.wic
+sudo rkdeveloptool wl 64     idblock.img
+sudo rkdeveloptool wl 0x4000 uboot.img
+sudo rkdeveloptool rd
+```
+
+Fallbacks: `qt-hmi.wic` (previous Qt image, no fonts), then `fbcon-display.wic`
+(last proven unaided-display image).
+
+---
+
+## SUPERSEDED (2026-08-18) — qt-hmi.wic — first Qt 6.8.3 EGLFS image (no fonts)
+
+**Status: superseded by `qt-hmi-fonts.wic`.** Boots and runs Qt/EGLFS correctly —
+the UART log shows the Mali blob loading, DSI1 mode set at 800x1280@60, plane 96
+chosen and framebuffers flipping — but it contains **no fonts**, so the HMI's text
+is invisible. Kept as a rollback point. First `elevator-hmi-image` with public
+Qt 6.8.3, Mali-G52 EGLFS, and the QML mockup. Kernel is the proven **0021-only**
+panel config (same as `fbcon-display.wic`). Patches 0022/0023/0024 stay disabled.
 
 | Field | Value |
 |---|---|
