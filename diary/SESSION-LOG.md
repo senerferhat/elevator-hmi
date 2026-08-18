@@ -2164,3 +2164,68 @@ FAT32 only (no exFAT tools). Playlist order is filename sort. `hmi media` lists
 what the backend found and now states the MJPEG constraint.
 
 ---
+## 2026-08-19 — SD slot was never enabled: vmmc chained to the dead RK809
+
+**Root cause found and fixed.** The TF/SD slot has never worked on this board,
+and it is not the card, the filesystem or the clip.
+
+`rk3568-evb.dtsi` wires `sdmmc0` `vmmc-supply` to **`vcc3v3_sd` = RK809
+`SWITCH_REG2`**. This board has **no functioning RK809 at 0x20** — the top of
+`elevator-hmi-boardcon-em3566-v3.dts` already deletes several of its rails for
+exactly that reason. So the controller waited forever on a regulator that never
+appears:
+
+```
+platform fe2b0000.mmc: deferred probe pending
+```
+
+Owner evidence, which is what closed it:
+```
+ls /dev/mmcblk*   -> only mmcblk0 (eMMC) + partitions, no mmcblk1
+dmesg | grep -iE "mmc1|mmcblk1|sdmmc"  -> completely empty
+hmi media         -> mounted: NO, slot devices: (none)
+```
+A silent dmesg is the tell: the controller never probed at all, so nothing about
+the card could ever matter.
+
+**Correction to an earlier handoff:** it recorded `fe2c0000` as the SD slot and
+`fe2b0000` as SDIO/Wi-Fi. It is the other way round. On RK3566 **`fe2b0000` is
+sdmmc0 = the SD slot** (`no-sdio`, `cap-sd-highspeed`, has vmmc/vqmmc) and
+`fe2c0000` is sdmmc1 = SDIO (`no-sd`, `cap-sdio-irq`, no supplies). Confirmed by
+decompiling the built DTB, not by reading the vendor dtsi.
+
+**Fix** (board DTS only — no panel patches touched, still 0021-only):
+```
+&sdmmc0 {
+	vmmc-supply = <&vcc_3v3_fixed>;
+	vqmmc-supply = <&vccio_sd>;
+	/delete-property/ sd-uhs-sdr104;
+};
+```
+`sd-uhs-sdr104` goes because UHS SDR104 requires switching vqmmc from 3.3 V to
+1.8 V and `vccio_sd` is a **fixed** 3.3 V regulator that cannot. High-speed
+(50 MHz, ~25 MB/s) remains — about 20x what a ~1.2 MB/s MJPEG clip needs.
+
+**Verified in the rebuilt DTB**, not in the source: `vmmc-supply` now resolves to
+`regulator-vcc3v3` (`vcc_3v3_fixed`), `vqmmc-supply` to `regulator-vccio-sd`,
+and `sd-uhs-sdr104` is absent.
+
+### Demo clip prepared
+
+Owner's `demo-video/demo_media.mp4` is H.264 1280x720 16:9, AAC, 5:32, 39.5 MB.
+Converted on the host with GStreamer (no ffmpeg installed) to MJPEG, since the
+target has jpegdec but no H.264 decoder:
+centre-crop 160 px per side (16:9 -> 4:3), scale to **800x600**, 25 fps, no
+audio -> `01-demo.avi`, 367 MB. Copied to the card, md5 verified, and proven to
+decode back through `avidemux ! jpegdec` — the exact chain the board uses.
+
+Card was already FAT32 with 15 GB free; no reformat needed and the label is
+irrelevant (udev mounts by device node).
+
+- **New flash target:** `images-archive/qt-hmi-sdvideo.wic`
+- **SHA-256:** `aa041ca8925f5ba760d3ba0008c65df101e23816e7280d4995be93a9250b8da3`
+
+**Still unverified on glass** — minicom held the serial port for this entire
+session, so nothing here has been run on the board.
+
+---

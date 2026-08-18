@@ -148,8 +148,28 @@
 	center-supply = <&vdd_logic>;
 };
 
+/*
+ * SD / TF card slot — sdmmc0 is fe2b0000 on RK3566 (fe2c0000 is sdmmc1/SDIO).
+ *
+ * rk3568-evb.dtsi wires vmmc-supply to the RK809 PMIC rail vcc3v3_sd
+ * (SWITCH_REG2). This board has NO functioning RK809 at 0x20 (see the &rk809
+ * deletions at the top of this file), so that regulator never appears and the
+ * controller sits in "deferred probe pending" forever:
+ *     platform fe2b0000.mmc: deferred probe pending
+ * The slot is silent, /dev/mmcblk1 never appears, and the HMI video pane shows
+ * NO CARD no matter what is inserted. Point vmmc at the board's fixed 3.3 V
+ * rail instead. (vqmmc/vccio_sd is already a board regulator-fixed.)
+ *
+ * sd-uhs-sdr104 is deleted with it: UHS SDR104 requires switching vqmmc from
+ * 3.3 V down to 1.8 V, and vccio_sd here is a FIXED 3.3 V supply that cannot.
+ * Leaving it advertised makes the core attempt a voltage switch that cannot
+ * succeed. High-speed (50 MHz, ~25 MB/s) remains, which is ~20x what the
+ * ~1.2 MB/s MJPEG demo clip needs.
+ */
 &sdmmc0 {
+	vmmc-supply = <&vcc_3v3_fixed>;
 	vqmmc-supply = <&vccio_sd>;
+	/delete-property/ sd-uhs-sdr104;
 };
 
 &saradc {

@@ -36,7 +36,51 @@ below, to avoid a second stale pointer existing alongside the current one.)*
 
 ---
 
-## CURRENT TEST TARGET (2026-08-19) — qt-hmi-video.wic — SD **video plays**
+## CURRENT TEST TARGET (2026-08-19) — qt-hmi-sdvideo.wic — **SD slot fixed** + video
+
+**Status: recommended for next flash.** Fixes the reason the SD slot was dead,
+and carries the software video decode.
+
+**The SD slot never worked on this board.** `rk3568-evb.dtsi` wires `sdmmc0`
+(fe2b0000) `vmmc-supply` to the RK809 PMIC rail `vcc3v3_sd` (SWITCH_REG2), and
+this board has **no functioning RK809 at 0x20**. The controller therefore sat in
+`deferred probe pending` forever: no `/dev/mmcblk1`, `dmesg | grep sdmmc`
+completely silent, pane stuck on `NO CARD` regardless of the card. Now pointed at
+the board's fixed 3.3 V rail. `sd-uhs-sdr104` removed with it — UHS SDR104 needs
+vqmmc switched to 1.8 V and `vccio_sd` is a fixed 3.3 V supply.
+
+Note fe2b0000 is **sdmmc0 / the SD slot**; fe2c0000 is sdmmc1 / SDIO. An earlier
+handoff had these the wrong way round.
+
+| Field | Value |
+|---|---|
+| **Archive file** | `~/Projects/elevator-hmi/images-archive/qt-hmi-sdvideo.wic` |
+| **WIC SHA-256** | `aa041ca8925f5ba760d3ba0008c65df101e23816e7280d4995be93a9250b8da3` |
+| **Deploy name** | `elevator-hmi-image-elevator-hmi-em3566.rootfs-20260818220345.wic` |
+| **Contains** | SD slot DTS fix, software MJPEG playback, ad slideshow, `hmi media` |
+| **Kernel** | still **0021-only** for the panel; this touches only `&sdmmc0` |
+| **Expected on glass** | insert FAT32 card → `/dev/mmcblk1`, mounts at `/media/sdcard`, `hmi portrait-video` plays the MJPEG clip looping |
+
+```bash
+cd ~/Projects/elevator-hmi/images-archive
+sha256sum qt-hmi-sdvideo.wic   # expect aa041ca8925f5ba760d3ba0008c65df101e23816e7280d4995be93a9250b8da3
+sudo rkdeveloptool db loader.bin      # skip if the board is in Loader mode
+sudo rkdeveloptool wl 0      qt-hmi-sdvideo.wic
+sudo rkdeveloptool wl 64     idblock.img
+sudo rkdeveloptool wl 0x4000 uboot.img
+sudo rkdeveloptool rd
+```
+
+Verify the slot first, before blaming the card or the clip:
+
+```bash
+ls /dev/mmcblk1*        # must exist now
+hmi media               # mounted: yes, and the clip listed
+```
+
+---
+
+## SUPERSEDED (2026-08-19) — qt-hmi-video.wic — SD **video plays**
 
 **Status: recommended for next flash.** Video from the SD card now plays on the
 panel, software-decoded. Stills still play as an ad slideshow.
