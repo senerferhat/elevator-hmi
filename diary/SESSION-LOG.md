@@ -1776,3 +1776,16 @@ EGLFS/Mali; this is a documented deviation, not a new decision.
 and finally gives a working reference to diff against.
 
 ---
+
+## 2026-08-18 (21:55) — Cursor synced Claude Code session 866c06a9
+
+Read `~/.claude/projects/-home-sener-Projects-elevator-hmi/866c06a9-….jsonl`
+(today's Claude Code run after the Qt image). Caught this Cursor chat up to
+that session. Leftover on disk that Claude Code did not commit before the
+session-limit stop: rewritten `src/qml/main.qml` (vertical HTML design,
+software-renderer safe) and the `design/elevator-hmi/` HTML sources.
+
+Pushed the five local commits that were still ahead of `origin/develop`
+(`7c82fe3` fonts → `1ec4831` serial-mcp gitignore).
+
+---

@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Elevator HMI — Variants</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0E1013; --bg-elev:#15181D;
+    --line:#262B33; --line-soft:#1E232B;
+    --ink:#E8ECF2; --ink-dim:#9AA3B2; --ink-mute:#5C6573;
+    --accent:#E8C84A;
+  }
+  html,body{ margin:0; padding:0; background:#05060a; color:var(--ink); font-family:'Inter',sans-serif; min-height:100vh; }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 56px 32px; }
+  h1 { font-family:'JetBrains Mono', monospace; font-size: 22px; letter-spacing:0.32em; text-transform:uppercase; margin:0 0 8px; }
+  h1 .accent { color: var(--accent); }
+  .sub { font-family:'JetBrains Mono', monospace; font-size:11px; letter-spacing:0.28em; text-transform:uppercase; color:var(--ink-dim); margin-bottom: 40px; }
+  .grid { display:grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .card {
+    background: var(--bg-elev); border: 1px solid var(--line);
+    padding: 20px; text-decoration:none; color: var(--ink);
+    display:flex; flex-direction:column; gap:14px;
+    transition: border-color .15s ease, transform .12s ease;
+  }
+  .card:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .preview {
+    aspect-ratio: 16/9;
+    background: #07090c; border:1px solid var(--line-soft);
+    position:relative; overflow:hidden;
+    display:flex; align-items:center; justify-content:center;
+    font-family:'JetBrains Mono',monospace; color: var(--ink-mute);
+    font-size: 11px; letter-spacing:0.28em; text-transform:uppercase;
+  }
+  .card.portrait .preview { aspect-ratio: 5/8; }
+  .preview .badge {
+    position:absolute; top:10px; right:10px;
+    font-family:'JetBrains Mono',monospace; font-size:10px;
+    letter-spacing:0.24em; padding: 4px 8px;
+    border:1px solid var(--line); color: var(--ink-dim);
+    background: rgba(0,0,0,0.4); text-transform:uppercase;
+  }
+  .preview .frame {
+    position:absolute; inset: 16px;
+    background:
+      radial-gradient(ellipse at 50% 110%, rgba(232,200,74,0.12), transparent 55%),
+      linear-gradient(180deg, #0E1013, #07090c);
+    border:1px solid var(--line);
+    display:flex; align-items:center; justify-content:center;
+    color: var(--accent); font-size: 56px; letter-spacing:-0.04em;
+    font-weight:500;
+  }
+  .card.portrait .preview .frame { font-size: 88px; }
+  .preview .videoHalf {
+    position:absolute; inset: 16px;
+    background: #000;
+    border:1px solid var(--line);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .card.with-video.landscape .videoHalf { right:50%; }
+  .card.with-video.landscape .frame { left:50%; }
+  .card.with-video.portrait .videoHalf { bottom:50%; }
+  .card.with-video.portrait .frame { top:50%; }
+  .preview .videoHalf::after {
+    content:"▶"; color:var(--ink-mute); font-size:32px;
+  }
+  .meta {
+    display:flex; justify-content:space-between; align-items:baseline;
+  }
+  .title { font-family:'JetBrains Mono', monospace; font-size:14px; letter-spacing:0.2em; text-transform:uppercase; color: var(--ink); }
+  .dim { font-family:'JetBrains Mono', monospace; font-size:10px; letter-spacing:0.24em; color: var(--ink-mute); text-transform:uppercase; }
+  .desc { font-size:13px; color: var(--ink-dim); line-height:1.5; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Elevator <span class="accent">HMI</span></h1>
+  <div class="sub">Four layout variants · Tower North · Car A-04</div>
+
+  <div class="grid">
+    <a class="card landscape" href="Elevator HMI.html">
+      <div class="preview">
+        <span class="badge">Landscape</span>
+        <div class="frame">5</div>
+      </div>
+      <div class="meta"><span class="title">Landscape</span><span class="dim">1280 × 800</span></div>
+      <div class="desc">Original wide HMI — full rail, hero, door &amp; load panels, car-call grid.</div>
+    </a>
+
+    <a class="card portrait" href="Elevator HMI Vertical.html">
+      <div class="preview">
+        <span class="badge">Vertical</span>
+        <div class="frame">5</div>
+      </div>
+      <div class="meta"><span class="title">Vertical</span><span class="dim">800 × 1280</span></div>
+      <div class="desc">Portrait HMI for tall in-car displays. Same controls, restacked vertically.</div>
+    </a>
+
+    <a class="card landscape with-video" href="Elevator HMI Landscape Video.html">
+      <div class="preview">
+        <span class="badge">Landscape · Video</span>
+        <div class="videoHalf"></div>
+        <div class="frame">5</div>
+      </div>
+      <div class="meta"><span class="title">Landscape + Video</span><span class="dim">1280 × 800</span></div>
+      <div class="desc">Half video panel, half HMI. Load any clip from Tweaks.</div>
+    </a>
+
+    <a class="card portrait with-video" href="Elevator HMI Vertical Video.html">
+      <div class="preview">
+        <span class="badge">Vertical · Video</span>
+        <div class="videoHalf"></div>
+        <div class="frame">5</div>
+      </div>
+      <div class="meta"><span class="title">Vertical + Video</span><span class="dim">800 × 1280</span></div>
+      <div class="desc">Video on top, HMI below. Same Tweaks panel video loader.</div>
+    </a>
+  </div>
+</div>
+</body>
+</html>

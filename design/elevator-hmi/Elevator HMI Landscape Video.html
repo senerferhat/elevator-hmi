@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="en" style="--accent: #E8C84A; --accent-glow: rgba(232,200,74,0.22);">
+<head>
+<meta charset="utf-8">
+<title>Elevator HMI — Landscape with Video 1280×800</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0E1013; --bg-elev:#15181D; --bg-elev2:#1C2028;
+    --line:#262B33; --line-soft:#1E232B;
+    --ink:#E8ECF2; --ink-dim:#9AA3B2; --ink-mute:#5C6573;
+    --accent:#E8C84A; --accent-dim:#6B5A1F;
+    --accent-glow:rgba(232,200,74,0.22);
+    --red:#E85A4A; --green:#5AE89A;
+  }
+  html, body { margin:0; padding:0; background:#05060a; color:var(--ink); font-family:'Inter',sans-serif; overflow:hidden; }
+  body { display:grid; place-items:center; min-height:100vh; }
+  body.demo .btn, body.demo .op-btn, body.demo .tw-ctrl { cursor:pointer; }
+
+  .stage {
+    width:1280px; height:800px;
+    background:var(--bg);
+    position:relative; overflow:hidden;
+    box-shadow:0 30px 80px rgba(0,0,0,0.6), 0 0 0 1px #000 inset;
+    display:grid; grid-template-columns: 1fr 1fr;
+  }
+  .stage.scan .hmi::after{
+    content:""; position:absolute; inset:0; pointer-events:none;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,0.10) 0 2px, transparent 2px 4px);
+    mix-blend-mode: multiply;
+  }
+
+  /* ===== Video panel ===== */
+  .video-panel {
+    position:relative; background:#000;
+    border-right:1px solid var(--line-soft);
+    overflow:hidden;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .video-panel video {
+    width:100%; height:100%; object-fit:cover; display:block;
+  }
+  .video-empty {
+    position:absolute; inset:0;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px;
+    color:var(--ink-dim); pointer-events:none;
+    background:
+      repeating-linear-gradient(45deg, rgba(255,255,255,0.015) 0 14px, transparent 14px 28px),
+      radial-gradient(ellipse at 50% 50%, rgba(232,200,74,0.04), transparent 60%),
+      #0a0c10;
+  }
+  .video-empty .glyph {
+    width:88px; height:88px; border:1px solid var(--line); border-radius:50%;
+    display:grid; place-items:center;
+  }
+  .video-empty .glyph svg { width:36px; height:36px; }
+  .video-empty .glyph svg path { fill: var(--ink-dim); }
+  .video-empty .label {
+    font-family:'JetBrains Mono', monospace; font-size:12px;
+    letter-spacing:0.32em; text-transform:uppercase;
+  }
+  .video-empty .hint {
+    font-family:'JetBrains Mono', monospace; font-size:10px;
+    letter-spacing:0.24em; color:var(--ink-mute); text-transform:uppercase;
+  }
+  .video-overlay {
+    position:absolute; inset:0; pointer-events:none;
+    background:
+      linear-gradient(180deg, rgba(0,0,0,0.55) 0%, transparent 18%, transparent 82%, rgba(0,0,0,0.55) 100%);
+  }
+  .video-corner {
+    position:absolute; top:14px; left:14px;
+    font-family:'JetBrains Mono', monospace; font-size:11px;
+    letter-spacing:0.28em; color:var(--accent); text-transform:uppercase;
+    display:flex; align-items:center; gap:8px;
+  }
+  .video-corner .rec {
+    width:8px; height:8px; border-radius:50%;
+    background:var(--red); box-shadow:0 0 10px var(--red);
+    animation:pulse 1.6s ease-in-out infinite;
+  }
+  .video-channel {
+    position:absolute; top:14px; right:14px;
+    font-family:'JetBrains Mono', monospace; font-size:11px;
+    letter-spacing:0.24em; color:var(--ink-dim); text-transform:uppercase;
+  }
+  .video-controls {
+    position:absolute; bottom:14px; left:14px; right:14px;
+    display:flex; align-items:center; gap:10px;
+    pointer-events:auto;
+    font-family:'JetBrains Mono', monospace; font-size:11px;
+    color:var(--ink-dim); letter-spacing:0.18em;
+  }
+  .video-controls button {
+    background:rgba(15,18,22,0.72); color:var(--ink);
+    border:1px solid #2a2f38; border-radius:4px;
+    padding:6px 10px; font-family:'JetBrains Mono',monospace; font-size:10px;
+    letter-spacing:0.2em; text-transform:uppercase; cursor:pointer;
+    backdrop-filter: blur(6px);
+  }
+  .video-controls button:hover { color:var(--accent); border-color:var(--accent); }
+  .video-controls .filename { flex:1; text-align:right; color:var(--ink-mute); text-transform:uppercase; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.45} }
+
+  /* ===== HMI panel ===== */
+  .hmi {
+    position:relative; overflow:hidden; background:var(--bg);
+    background-image:
+      radial-gradient(ellipse at 50% 110%, rgba(232,200,74,0.05), transparent 55%),
+      radial-gradient(ellipse at 50% -20%, rgba(90,110,140,0.04), transparent 60%);
+  }
+
+  /* Top bar */
+  .topbar {
+    position:absolute; top:0; left:0; right:0; height:56px;
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 0 22px;
+    border-bottom:1px solid var(--line-soft);
+  }
+  .brand { display:flex; align-items:center; gap:10px;
+    font-family:'JetBrains Mono', monospace; font-size:11px; letter-spacing:0.18em;
+    color:var(--ink-dim); text-transform:uppercase; }
+  .brand .dot { width:7px; height:7px; border-radius:50%; background:var(--green); box-shadow:0 0 8px var(--green); }
+  .brand .id { color:var(--ink); letter-spacing:0.22em; }
+  .clock { display:flex; align-items:baseline; gap:8px; font-family:'JetBrains Mono', monospace; }
+  .clock .time { font-size:22px; font-weight:500; color:var(--ink); font-variant-numeric:tabular-nums; letter-spacing:0.04em; }
+  .clock .time .sec { color:var(--ink-dim); font-size:14px; margin-left:2px; }
+  .clock .date { font-size:10px; letter-spacing:0.22em; color:var(--ink-dim); text-transform:uppercase; }
+
+  /* Hero */
+  .hero {
+    position:absolute; top:56px; left:0; right:0; height:330px;
+    display:flex; padding:14px 22px;
+    border-bottom:1px solid var(--line-soft);
+    gap:18px;
+  }
+  .rail {
+    width:120px;
+    display:flex; flex-direction:column;
+    border-right:1px solid var(--line-soft);
+    padding-right:8px;
+  }
+  .rail-header {
+    font-family:'JetBrains Mono', monospace; font-size:10px;
+    letter-spacing:0.28em; color:var(--ink-dim); text-transform:uppercase;
+    padding: 0 0 8px 6px;
+  }
+  .rail-track {
+    display:flex; flex-direction:column;
+    position:relative; flex:1 1 auto;
+    padding-left:6px; padding-right:8px;
+  }
+  .floor-item { flex:1 1 0; min-height:0;
+    display:flex; align-items:center;
+    font-family:'JetBrains Mono', monospace; font-size:13px;
+    color:var(--ink-mute); position:relative;
+  }
+  .floor-item .num { width:36px; text-align:right; font-variant-numeric:tabular-nums; padding-right:10px; }
+  .floor-item .tick { width:10px; height:2px; background:var(--ink-mute); }
+  .floor-item.active { color:var(--accent); font-weight:700; }
+  .floor-item.active .tick { background:var(--accent); box-shadow:0 0 10px var(--accent); height:3px; width:14px; }
+  .floor-item.call { color:var(--ink); }
+  .floor-item.call .tick { background:var(--ink); width:13px; }
+  .rail-line {
+    position:absolute; left:64px; top:0; bottom:0; width:2px;
+    background:var(--line);
+  }
+  .rail-line .fill {
+    position:absolute; left:-3px; right:-3px; top:0; height:50%;
+    width:8px;
+    background: linear-gradient(180deg, transparent, var(--accent));
+    box-shadow:0 0 12px var(--accent-glow);
+    transition: height .45s cubic-bezier(.4,0,.2,1);
+  }
+  .rail-line .car-marker {
+    position:absolute; left:50%; transform:translate(-50%,-50%);
+    width:14px; height:14px; border-radius:50%;
+    background:var(--accent);
+    box-shadow:0 0 14px var(--accent), 0 0 0 3px rgba(232,200,74,0.18);
+    transition: top .45s cubic-bezier(.4,0,.2,1);
+    z-index:2;
+  }
+
+  .hero-main { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  .hero-label { font-family:'JetBrains Mono', monospace; font-size:11px; letter-spacing:0.32em; color:var(--ink-dim); text-transform:uppercase; margin-bottom:4px; }
+  .hero-num {
+    font-family:'JetBrains Mono', monospace;
+    font-size:170px; line-height:0.82; font-weight:500;
+    color:var(--accent); font-variant-numeric:tabular-nums;
+    letter-spacing:-0.04em;
+    text-shadow: 0 0 50px rgba(232,200,74,0.28);
+    position:relative; text-align:center;
+  }
+  .hero-num::after{
+    content:""; position:absolute; inset:0;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,0.08) 0 2px, transparent 2px 4px);
+    pointer-events:none; mix-blend-mode: multiply;
+  }
+  .hero-arrows { display:flex; align-items:center; justify-content:center; gap:24px; margin-top:8px; }
+  .arrow { width:100px; height:100px; display:grid; place-items:center; }
+  .arrow svg { width:100%; height:100%; display:block; }
+  .arrow.active path { fill:var(--accent); filter: drop-shadow(0 0 18px rgba(232,200,74,0.6)); }
+  .arrow.inactive path { fill:var(--ink-mute); opacity:0.25; }
+
+  .hero-sub {
+    position:absolute; top:386px; left:0; right:0; height:38px;
+    display:flex; align-items:center; justify-content:center; gap:22px;
+    border-bottom:1px solid var(--line-soft);
+    font-family:'JetBrains Mono', monospace; font-size:11px;
+    letter-spacing:0.22em; color:var(--ink-dim); text-transform:uppercase;
+  }
+  .hero-sub .k { color:var(--ink-mute); margin-right:6px; }
+  .hero-sub .v { color:var(--ink); }
+  .hero-sub .v.accent { color:var(--accent); }
+
+  /* Door + Load */
+  .midrow {
+    position:absolute; top:424px; left:0; right:0; height:140px;
+    display:grid; grid-template-columns: 1fr 1fr;
+    border-bottom:1px solid var(--line-soft);
+  }
+  .midcard {
+    padding:12px 18px;
+    display:flex; flex-direction:column; gap:8px;
+    border-right:1px solid var(--line-soft);
+  }
+  .midcard:last-child { border-right:none; }
+  .panel-title {
+    font-family:'JetBrains Mono', monospace; font-size:10px;
+    letter-spacing:0.3em; color:var(--ink-dim); text-transform:uppercase;
+    display:flex; justify-content:space-between;
+  }
+  .panel-title .state { color:var(--accent); letter-spacing:0.26em; }
+  .door-compact { display:flex; gap:8px; align-items:center; justify-content:center; height:50px; }
+  .door-compact .leaf { width:20px; height:42px; background:var(--accent-dim); border-radius:3px; transition: width .5s ease; }
+  .door-compact .frame { width:22px; height:42px; border:1px dashed var(--line); border-radius:3px; display:flex; align-items:center; justify-content:center; }
+  .door-compact .frame::after { content:""; width:2px; height:20px; background:var(--line); }
+  body.door-open .door-compact .leaf { width:6px; background:#2a2820; }
+  .door-status { display:flex; gap:8px; align-items:center;
+    font-family:'JetBrains Mono', monospace; font-size:11px;
+    letter-spacing:0.18em; text-transform:uppercase; }
+  .door-status .led { width:8px; height:8px; border-radius:50%; background:var(--accent); box-shadow:0 0 10px var(--accent); animation: pulse 1.6s ease-in-out infinite; }
+  .door-status .label { color:var(--ink); }
+  .door-status .remaining { margin-left:auto; color:var(--ink-dim); }
+  .load-readout { display:flex; align-items:baseline; justify-content:space-between; font-family:'JetBrains Mono', monospace; }
+  .load-readout .pct { font-size:24px; font-weight:500; color:var(--ink); }
+  .load-readout .pct .unit { font-size:12px; color:var(--ink-dim); margin-left:4px; }
+  .load-readout .weight { font-size:10px; color:var(--ink-dim); letter-spacing:0.18em; text-transform:uppercase; }
+  .load-bar { position:relative; height:14px; background:var(--bg-elev2); border:1px solid var(--line); overflow:hidden; }
+  .load-bar .fill { position:absolute; top:0; bottom:0; left:0; width:42%; background:var(--accent); transition: width .4s ease; box-shadow:0 0 12px var(--accent-glow); }
+  .load-bar .ticks { position:absolute; inset:0; background: repeating-linear-gradient(90deg, transparent 0 calc(10% - 1px), rgba(0,0,0,0.55) calc(10% - 1px) 10%); }
+  .load-scale { display:flex; justify-content:space-between; font-family:'JetBrains Mono', monospace; font-size:9px; letter-spacing:0.2em; color:var(--ink-dim); }
+  .load-scale .max { color:var(--red); }
+
+  /* Buttons */
+  .dock { position:absolute; top:564px; left:0; right:0; bottom:80px; padding:12px 22px; border-bottom:1px solid var(--line-soft); }
+  .dock-head { font-family:'JetBrains Mono', monospace; font-size:10px;
+    letter-spacing:0.3em; color:var(--ink-dim); text-transform:uppercase;
+    margin-bottom:8px; display:flex; justify-content:space-between; }
+  .btn-row { display:grid; grid-template-columns: repeat(6, 1fr); grid-auto-rows: 1fr; gap:6px; height: calc(100% - 18px); }
+  .btn {
+    background:var(--bg-elev); border:1px solid var(--line);
+    display:grid; place-items:center;
+    font-family:'JetBrains Mono', monospace; font-size:14px; font-weight:500;
+    color:var(--ink); position:relative; user-select:none;
+    transition: background .15s, border-color .15s, color .15s, transform .05s;
+  }
+  .btn .floor-num { font-size:18px; }
+  .btn.special { font-size:10px; letter-spacing:0.16em; color:var(--ink-dim); }
+  .btn:hover { border-color:var(--ink-dim); }
+  .btn:active { transform:scale(0.98); }
+  .btn.lit { color:var(--accent); border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset, 0 0 14px rgba(232,200,74,0.25); background:#1B1A10; }
+  .btn.lit::before { content:""; position:absolute; top:4px; right:4px; width:5px; height:5px; border-radius:50%; background:var(--accent); box-shadow:0 0 6px var(--accent); }
+  .btn.current { outline:2px solid var(--accent); outline-offset:-2px; }
+
+  /* Bottom diagnostics dock */
+  .dock {
+    position:absolute; top:564px; left:0; right:0; bottom:0;
+    border-top:1px solid var(--line-soft);
+    padding: 16px 22px 18px;
+    display:grid; grid-template-columns: 1.1fr 1fr 0.9fr; gap: 14px;
+  }
+  .dock-card {
+    background:var(--bg-elev); border:1px solid var(--line);
+    padding: 12px 14px; display:flex; flex-direction:column; gap: 8px;
+    min-width:0;
+  }
+  .dock-card .panel-title { margin-bottom:2px; font-size:10px; letter-spacing:0.3em; }
+  .diag-grid { display:grid; grid-template-columns: 1fr 1fr; gap:6px 14px; }
+  .diag-cell { display:flex; flex-direction:column; gap:1px; }
+  .diag-cell .k { font-family:'JetBrains Mono',monospace; font-size:9px; letter-spacing:0.22em; color:var(--ink-dim); text-transform:uppercase; }
+  .diag-cell .v { font-family:'JetBrains Mono',monospace; font-size:14px; color:var(--ink); font-variant-numeric: tabular-nums; letter-spacing:0.04em; }
+  .diag-cell .v.ok { color:var(--accent); }
+  .diag-cell .v small { font-size:10px; color:var(--ink-dim); margin-left:3px; letter-spacing:0.12em; }
+
+  .log-row { display:grid; grid-template-columns: 60px 24px 1fr; gap:8px; align-items:baseline;
+    font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.05em; }
+  .log-row .t { color:var(--ink-dim); }
+  .log-row .f { color:var(--accent); text-align:center; }
+  .log-row .e { color:var(--ink); text-transform:uppercase; letter-spacing:0.14em; font-size:9px; }
+  .log-list { display:flex; flex-direction:column; gap:4px; }
+
+  .sched-row { display:flex; justify-content:space-between; align-items:baseline;
+    font-family:'JetBrains Mono',monospace; padding-bottom:5px;
+    border-bottom:1px dashed var(--line-soft); }
+  .sched-row:last-child { border-bottom:none; padding-bottom:0; }
+  .sched-row .lbl { font-size:9px; letter-spacing:0.2em; color:var(--ink-dim); text-transform:uppercase; }
+  .sched-row .val { font-size:12px; color:var(--ink); letter-spacing:0.04em; }
+  .sched-row .val.accent { color:var(--accent); }
+
+  /* (legacy ops styles removed — buttons are now physical) */
+
+  /* Tweaks */
+  .tweaks { position:fixed; right:20px; bottom:20px; width:300px;
+    background:#0f1216; color:var(--ink); border:1px solid #2a2f38; border-radius:10px;
+    font-family:'Inter', sans-serif; font-size:13px; z-index:9999;
+    box-shadow:0 20px 60px rgba(0,0,0,0.6); display:none; }
+  .tweaks.on { display:block; }
+  .tweaks header { display:flex; justify-content:space-between; align-items:center; padding:10px 14px; border-bottom:1px solid #22262e;
+    font-family:'JetBrains Mono', monospace; font-size:11px; letter-spacing:0.24em; text-transform:uppercase; color:var(--ink-dim); }
+  .tweaks header .title { color:var(--ink); }
+  .tweaks header .close { width:22px; height:22px; display:grid; place-items:center; border-radius:4px; color:var(--ink-dim); background:transparent; border:1px solid #22262e; cursor:pointer; font-size:14px; }
+  .tweaks .body { padding:12px 14px; display:flex; flex-direction:column; gap:12px; }
+  .tw-row { display:flex; flex-direction:column; gap:6px; }
+  .tw-row label { font-family:'JetBrains Mono', monospace; font-size:10px; letter-spacing:0.22em; text-transform:uppercase; color:var(--ink-dim); display:flex; justify-content:space-between; }
+  .tw-row label .val { color:var(--ink); }
+  .tw-row input[type="range"] { width:100%; accent-color:var(--accent); }
+  .tw-row input[type="color"] { width:100%; height:30px; background:transparent; border:1px solid #22262e; border-radius:4px; }
+  .tw-row input[type="file"] { font-family:'JetBrains Mono', monospace; font-size:10px; color:var(--ink-dim); }
+  .tw-seg { display:flex; gap:4px; }
+  .tw-seg button { flex:1; padding:6px 8px; background:#14171c; color:var(--ink-dim); border:1px solid #22262e; border-radius:4px; cursor:pointer;
+    font-family:'JetBrains Mono', monospace; font-size:11px; letter-spacing:0.12em; text-transform:uppercase; }
+  .tw-seg button.active { background:var(--accent); color:#000; border-color:var(--accent); }
+  .tweaks-toggle { position:fixed; right:20px; bottom:20px; background:#0f1216; color:var(--ink-dim); border:1px solid #2a2f38; border-radius:999px;
+    padding:10px 14px; font-family:'JetBrains Mono', monospace; font-size:11px; letter-spacing:0.24em; text-transform:uppercase; cursor:pointer; z-index:9998; }
+  .tweaks-toggle:hover { color:var(--accent); border-color:var(--accent); }
+  .tweaks.on ~ .tweaks-toggle { display:none; }
+
+  .tw-act { padding:8px 10px; background:#14171c; color:var(--ink); border:1px solid #22262e; border-radius:4px; cursor:pointer; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; flex:1; min-width:60px; }
+  .tw-act:hover { border-color:var(--accent); color:var(--accent); }
+  .tw-act.alarm { color:var(--red); border-color:rgba(232,90,74,0.4); }
+  .tw-act.alarm:hover { color:var(--red); border-color:var(--red); }
+</style>
+</head>
+<body class="demo">
+
+<div class="stage scan" id="stage">
+
+  <!-- VIDEO PANEL (left half) -->
+  <div class="video-panel" id="videoPanel">
+    <video id="videoEl" muted loop playsinline></video>
+    <div class="video-empty" id="videoEmpty">
+      <div class="glyph">
+        <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+      </div>
+      <div class="label">No source</div>
+      <div class="hint">use Tweaks → Load video</div>
+    </div>
+    <div class="video-overlay"></div>
+    <div class="video-corner"><span class="rec"></span><span>LIVE · CH 04</span></div>
+    <div class="video-channel" id="videoChannel">SAFETY · 720P</div>
+    <div class="video-controls">
+      <button id="vidPlay">Play</button>
+      <button id="vidMute">Unmute</button>
+      <span class="filename" id="vidName">— no clip loaded —</span>
+    </div>
+  </div>
+
+  <!-- HMI PANEL (right half) -->
+  <div class="hmi" id="hmi">
+    <div class="topbar">
+      <div class="brand">
+        <span class="dot"></span><span>CAR</span>
+        <span class="id">A-04</span>
+      </div>
+      <div class="clock">
+        <div class="time" id="time">11:16<span class="sec">:47</span></div>
+        <div class="date" id="date">TUE · 28 APR 2026</div>
+      </div>
+    </div>
+
+    <div class="hero">
+      <div class="rail">
+        <div class="rail-header">Floors</div>
+        <div class="rail-track" id="rail">
+          <div class="rail-line">
+            <div class="fill" id="railFill" style="height:50%;"></div>
+            <div class="car-marker" id="carMarker" style="top:50%;"></div>
+          </div>
+        </div>
+      </div>
+      <div class="hero-main">
+        <div class="hero-label">Current Floor</div>
+        <div class="hero-num" id="heroNum">5</div>
+        <div class="hero-arrows">
+          <div class="arrow inactive" id="arrowUp"><svg viewBox="0 0 64 64"><path d="M32 8 L56 40 L44 40 L44 56 L20 56 L20 40 L8 40 Z"/></svg></div>
+          <div class="arrow inactive" id="arrowDown"><svg viewBox="0 0 64 64"><path d="M32 56 L8 24 L20 24 L20 8 L44 8 L44 24 L56 24 Z"/></svg></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="hero-sub">
+      <div><span class="k">Dest</span><span class="v accent" id="destVal">—</span></div>
+      <div><span class="k">Speed</span><span class="v" id="speedVal">0.0 m/s</span></div>
+      <div><span class="k">ETA</span><span class="v" id="etaVal">00:00</span></div>
+    </div>
+
+    <div class="midrow">
+      <div class="midcard">
+        <div class="panel-title"><span>Door</span><span class="state" id="doorState">LATCHED</span></div>
+        <div class="door-compact">
+          <div class="leaf left"></div><div class="frame"></div><div class="leaf right"></div>
+        </div>
+        <div class="door-status">
+          <span class="led"></span><span class="label" id="doorLabel">Closed</span>
+          <span class="remaining" id="doorRemain">—</span>
+        </div>
+      </div>
+      <div class="midcard">
+        <div class="panel-title"><span>Load</span><span class="state" id="loadState">NOMINAL</span></div>
+        <div class="load-readout">
+          <div class="pct"><span id="loadPct">42</span><span class="unit">%</span></div>
+          <div class="weight" id="loadWeight">672 / 1600 kg</div>
+        </div>
+        <div class="load-bar">
+          <div class="fill" id="loadFill" style="width:42%;"></div>
+          <div class="ticks"></div>
+        </div>
+        <div class="load-scale"><span>0</span><span>50</span><span>75</span><span class="max">100%</span></div>
+      </div>
+    </div>
+
+    <!-- Bottom diagnostics dock -->
+    <div class="dock">
+      <div class="dock-card">
+        <div class="panel-title"><span>Diagnostics</span><span class="state">SYS</span></div>
+        <div class="diag-grid">
+          <div class="diag-cell"><span class="k">Motor</span><span class="v ok">42°C</span></div>
+          <div class="diag-cell"><span class="k">Brake</span><span class="v ok">RELEASED</span></div>
+          <div class="diag-cell"><span class="k">Hoist</span><span class="v">8.4<small>kN</small></span></div>
+          <div class="diag-cell"><span class="k">Drive</span><span class="v">0.0<small>Hz</small></span></div>
+          <div class="diag-cell"><span class="k">Pos</span><span class="v">+14.2<small>m</small></span></div>
+          <div class="diag-cell"><span class="k">Encoder</span><span class="v ok">SYNC</span></div>
+        </div>
+      </div>
+      <div class="dock-card">
+        <div class="panel-title"><span>Activity</span><span class="state">LOG</span></div>
+        <div class="log-list">
+          <div class="log-row"><span class="t">08:14:22</span><span class="f">5</span><span class="e">arrived · idle</span></div>
+          <div class="log-row"><span class="t">08:13:48</span><span class="f">5</span><span class="e">door cycle</span></div>
+          <div class="log-row"><span class="t">08:13:11</span><span class="f">L</span><span class="e">car call</span></div>
+          <div class="log-row"><span class="t">08:11:55</span><span class="f">3</span><span class="e">arrived</span></div>
+          <div class="log-row"><span class="t">08:10:02</span><span class="f">8</span><span class="e">hall call</span></div>
+        </div>
+      </div>
+      <div class="dock-card">
+        <div class="panel-title"><span>Service</span><span class="state">OK</span></div>
+        <div style="display:flex; flex-direction:column; gap:6px;">
+          <div class="sched-row"><span class="lbl">Trips today</span><span class="val">247</span></div>
+          <div class="sched-row"><span class="lbl">Last svc</span><span class="val">14 Apr</span></div>
+          <div class="sched-row"><span class="lbl">Next insp</span><span class="val accent">12 May</span></div>
+          <div class="sched-row"><span class="lbl">Cycles</span><span class="val">1.84M</span></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<button class="tweaks-toggle" id="tweaksToggle">Tweaks ▲</button>
+<aside class="tweaks" id="tweaks">
+  <header><span class="title">Tweaks</span><button class="close" id="tweaksClose">×</button></header>
+  <div class="body">
+    <div class="tw-row">
+      <label>Load video file</label>
+      <input type="file" id="videoFile" accept="video/*">
+    </div>
+    <div class="tw-row">
+      <label>Accent <span class="val" id="accentVal">#E8C84A</span></label>
+      <input type="color" id="accentInput" value="#E8C84A">
+    </div>
+    <div class="tw-row">
+      <label>Load % <span class="val" id="loadValLbl">42%</span></label>
+      <input type="range" id="loadSlider" min="0" max="100" value="42">
+    </div>
+    <div class="tw-row">
+      <label>Direction</label>
+      <div class="tw-seg" id="segDir">
+        <button data-dir="up">Up ▲</button>
+        <button data-dir="idle" class="active">Idle</button>
+        <button data-dir="down">Down ▼</button>
+      </div>
+    </div>
+    <div class="tw-row">
+      <label>Scan-lines <span class="val" id="scanVal">On</span></label>
+      <div class="tw-seg" id="segScan">
+        <button data-scan="on" class="active">On</button>
+        <button data-scan="off">Off</button>
+      </div>
+    </div>
+  
+    <div class="tw-row">
+      <label>Hardware buttons (simulator)</label>
+      <div style="display:flex; gap:6px; flex-wrap:wrap;">
+        <button class="tw-act" data-act="open">Open</button>
+        <button class="tw-act" data-act="close">Close</button>
+        <button class="tw-act" data-act="hold">Hold</button>
+        <button class="tw-act alarm" data-act="alarm">Alarm</button>
+      </div>
+    </div>
+    <div class="tw-row">
+      <label>Car call</label>
+      <div style="display:flex; gap:6px;">
+        <select id="simFloor" style="flex:1;background:#14171c;color:var(--ink);border:1px solid #22262e;border-radius:4px;padding:6px 8px;font-family:'JetBrains Mono',monospace;font-size:12px;">
+          <option value="10">10</option><option value="9">9</option><option value="8">8</option>
+          <option value="7">7</option><option value="6">6</option><option value="5">5</option>
+          <option value="4">4</option><option value="3">3</option><option value="2">2</option>
+          <option value="1">1</option><option value="0">LOBBY</option><option value="-1">B1</option>
+        </select>
+        <button id="simCallBtn" style="padding:6px 12px;background:var(--accent);color:#000;border:1px solid var(--accent);border-radius:4px;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.16em;text-transform:uppercase;">Call</button>
+      </div>
+    </div>
+</div>
+</aside>
+
+<script>
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "accent": "#E8C84A",
+  "loadPct": 42,
+  "scanLines": true,
+  "direction": "idle"
+}/*EDITMODE-END*/;
+</script>
+<script>
+(() => {
+  const ALL_FLOORS = [10,9,8,7,6,5,4,3,2,1,0,-1];
+  const BTNS = [
+    {label:'1',v:1},{label:'2',v:2},{label:'3',v:3},{label:'4',v:4},
+    {label:'5',v:5},{label:'6',v:6},{label:'7',v:7},{label:'8',v:8},
+    {label:'9',v:9},{label:'10',v:10},
+    {label:'L',v:0,special:true},{label:'B1',v:-1,special:true}
+  ];
+  const state = {
+    current:5, destQueue:[], calls:new Set(), moving:false,
+    direction:TWEAK_DEFAULTS.direction, load:TWEAK_DEFAULTS.loadPct,
+    accent:TWEAK_DEFAULTS.accent, scan:TWEAK_DEFAULTS.scanLines
+  };
+  const $ = id => document.getElementById(id);
+  const pad = n => String(n).padStart(2,'0');
+  const floorLabel = n => n===0?'L':(n<0?'B'+Math.abs(n):String(n));
+
+  function tick(){
+    const d=new Date();
+    $('time').innerHTML = pad(d.getHours())+':'+pad(d.getMinutes())+'<span class="sec">:'+pad(d.getSeconds())+'</span>';
+    const days=['SUN','MON','TUE','WED','THU','FRI','SAT'];
+    const mons=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+    $('date').textContent = days[d.getDay()]+' · '+pad(d.getDate())+' '+mons[d.getMonth()]+' '+d.getFullYear();
+  }
+  tick(); setInterval(tick,1000);
+
+  function renderRail(){
+    const rail = $('rail');
+    [...rail.querySelectorAll('.floor-item')].forEach(el => el.remove());
+    ALL_FLOORS.forEach(n => {
+      const row = document.createElement('div');
+      let cls = 'floor-item';
+      if (n === state.current) cls += ' active';
+      else if (state.calls.has(n)) cls += ' call';
+      row.className = cls;
+      row.innerHTML = `<span class="num">${floorLabel(n)}</span><span class="tick"></span>`;
+      rail.appendChild(row);
+    });
+    const idx = ALL_FLOORS.indexOf(state.current);
+    const pct = idx===-1 ? 0 : ((idx+0.5)/ALL_FLOORS.length)*100;
+    $('railFill').style.height = pct+'%';
+    $('carMarker').style.top = pct+'%';
+  }
+
+  function renderHero(){
+    $('heroNum').textContent = floorLabel(state.current);
+    const dir = state.direction;
+    $('arrowUp').classList.toggle('active', dir==='up');
+    $('arrowUp').classList.toggle('inactive', dir!=='up');
+    $('arrowDown').classList.toggle('active', dir==='down');
+    $('arrowDown').classList.toggle('inactive', dir!=='down');
+    const next = state.destQueue[0];
+    $('destVal').textContent = next===undefined?'—':floorLabel(next);
+    if (state.moving && next!==undefined){
+      $('speedVal').textContent='1.8 m/s';
+      $('etaVal').textContent='00:'+pad(Math.max(1, Math.round(Math.abs(next-state.current)*1.8)));
+    } else { $('speedVal').textContent='0.0 m/s'; $('etaVal').textContent='00:00'; }
+  }
+
+  function renderLoad(){
+    $('loadPct').textContent = state.load;
+    $('loadFill').style.width = state.load+'%';
+    $('loadWeight').textContent = Math.round(16*state.load)+' / 1600 kg';
+    $('loadState').textContent = state.load>=90?'OVERLOAD':(state.load>=75?'WARNING':'NOMINAL');
+    $('loadState').style.color = state.load>=90?'var(--red)':'var(--accent)';
+    let c = '#5AE89A';
+    if (state.load > 85) c = '#E85A4A';
+    else if (state.load > 60) c = '#E8A84A';
+    $('loadFill').style.background = c;
+  }
+
+  function renderButtons(){
+    const row = $('btnRow'); if (!row) return;
+    row.innerHTML = '';
+    BTNS.forEach(b => {
+      const el = document.createElement('div');
+      el.className = 'btn'+(b.special?' special':'')+(state.calls.has(b.v)?' lit':'')+(b.v===state.current?' current':'');
+      el.innerHTML = b.special ? b.label : `<span class="floor-num">${b.label}</span>`;
+      el.addEventListener('click', () => pressCall(b.v));
+      row.appendChild(el);
+    });
+    $('callsActive').textContent = state.calls.size + ' ACTIVE';
+  }
+
+  function pressCall(v){
+    if (v===state.current && !state.moving){ runDoorCycle(); return; }
+    if (state.calls.has(v)) return;
+    state.calls.add(v);
+    if (!state.destQueue.includes(v)) state.destQueue.push(v);
+    renderButtons();
+    if (!state.moving) processQueue();
+  }
+
+  async function processQueue(){
+    while (state.destQueue.length){
+      const target = state.destQueue[0];
+      await travelTo(target);
+      state.calls.delete(target);
+      state.destQueue.shift();
+      renderButtons();
+      await runDoorCycle();
+    }
+    state.direction='idle'; state.moving=false; renderHero();
+  }
+
+  function travelTo(target){
+    return new Promise(resolve => {
+      if (target===state.current){ resolve(); return; }
+      state.moving=true;
+      state.direction = target>state.current ? 'up':'down';
+      renderHero();
+      const order = ALL_FLOORS.slice().sort((a,b)=> state.direction==='up'?a-b:b-a);
+      const sIdx = order.indexOf(state.current), eIdx = order.indexOf(target);
+      const path = (sIdx===-1||eIdx===-1)?[target]:order.slice(sIdx+1, eIdx+1);
+      let i = 0;
+      const iv = setInterval(() => {
+        state.current = path[i++];
+        renderHero(); renderRail(); renderButtons();
+        if (i >= path.length){ clearInterval(iv); state.moving=false; renderHero(); resolve(); }
+      }, 500);
+    });
+  }
+
+  function runDoorCycle(){
+    return new Promise(resolve => {
+      const cycle = 5000, openMs=cycle*0.2, holdMs=cycle*0.4, closeMs=cycle*0.2;
+      $('doorState').textContent='OPENING'; $('doorLabel').textContent='Opening'; $('doorRemain').textContent='—';
+      document.body.classList.add('door-open');
+      setTimeout(()=>{ $('doorState').textContent='OPEN'; $('doorLabel').textContent='Open'; $('doorRemain').textContent='hold '+Math.round(holdMs/1000)+'s'; }, openMs);
+      setTimeout(()=>{ $('doorState').textContent='CLOSING'; $('doorLabel').textContent='Closing'; $('doorRemain').textContent='—'; document.body.classList.remove('door-open'); }, openMs+holdMs);
+      setTimeout(()=>{ $('doorState').textContent='LATCHED'; $('doorLabel').textContent='Closed'; resolve(); }, openMs+holdMs+closeMs);
+    });
+  }
+
+  document.querySelectorAll('.op-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      const op = b.dataset.op;
+      if (op==='open'){ if (!state.moving) runDoorCycle(); }
+      else if (op==='close'){ document.body.classList.remove('door-open'); $('doorState').textContent='LATCHED'; $('doorLabel').textContent='Closed'; $('doorRemain').textContent='—'; }
+      else if (op==='hold'){ $('doorRemain').textContent='HOLD'; }
+      else if (op==='alarm'){
+        $('doorState').textContent='ALARM'; $('doorState').style.color='var(--red)';
+        setTimeout(()=>{ $('doorState').textContent='LATCHED'; $('doorState').style.color=''; }, 2000);
+      }
+    });
+  });
+
+  // Video controls
+  const videoEl = $('videoEl'), videoEmpty = $('videoEmpty');
+  $('videoFile').addEventListener('change', e => {
+    const f = e.target.files[0]; if (!f) return;
+    const url = URL.createObjectURL(f);
+    videoEl.src = url;
+    videoEl.play().catch(()=>{});
+    videoEmpty.style.display = 'none';
+    $('vidName').textContent = f.name.toUpperCase();
+    $('videoChannel').textContent = (f.name.split('.').pop()||'MP4').toUpperCase()+' · LIVE';
+  });
+  $('vidPlay').addEventListener('click', () => {
+    if (!videoEl.src) return;
+    if (videoEl.paused) { videoEl.play(); $('vidPlay').textContent='Pause'; }
+    else { videoEl.pause(); $('vidPlay').textContent='Play'; }
+  });
+  $('vidMute').addEventListener('click', () => {
+    videoEl.muted = !videoEl.muted;
+    $('vidMute').textContent = videoEl.muted ? 'Unmute' : 'Mute';
+  });
+
+  // Tweaks
+  const tweaks = $('tweaks'), toggle = $('tweaksToggle');
+  toggle.addEventListener('click', () => { tweaks.classList.add('on'); toggle.style.display='none'; });
+  $('tweaksClose').addEventListener('click', () => { tweaks.classList.remove('on'); toggle.style.display=''; });
+  function postEdit(edits){ try{ window.parent.postMessage({type:'__edit_mode_set_keys',edits},'*'); }catch(_){} }
+  function hexToRgba(hex,a){ const h=hex.replace('#',''); const r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16); return `rgba(${r},${g},${b},${a})`; }
+  function applyAccent(c){
+    state.accent=c;
+    document.documentElement.style.setProperty('--accent',c);
+    document.documentElement.style.setProperty('--accent-glow',hexToRgba(c,0.22));
+    $('accentVal').textContent = c.toUpperCase();
+    postEdit({accent:c});
+  }
+  $('accentInput').addEventListener('input', e => applyAccent(e.target.value));
+  $('loadSlider').addEventListener('input', e => {
+    state.load = parseInt(e.target.value,10);
+    $('loadValLbl').textContent = state.load+'%';
+    renderLoad(); postEdit({loadPct:state.load});
+  });
+  function setDir(d){ state.direction=d; [...$('segDir').children].forEach(b=>b.classList.toggle('active',b.dataset.dir===d)); renderHero(); postEdit({direction:d}); }
+  $('segDir').addEventListener('click', e=>{ const b=e.target.closest('button'); if(!b) return; setDir(b.dataset.dir); });
+  function setScan(on){ state.scan=!!on; $('stage').classList.toggle('scan',state.scan); $('scanVal').textContent=state.scan?'On':'Off'; [...$('segScan').children].forEach(b=>b.classList.toggle('active',(b.dataset.scan==='on')===state.scan)); postEdit({scanLines:state.scan}); }
+  $('segScan').addEventListener('click', e=>{ const b=e.target.closest('button'); if(!b) return; setScan(b.dataset.scan==='on'); });
+
+  window.addEventListener('message', e=>{
+    const d=e.data||{};
+    if (d.type==='__activate_edit_mode') tweaks.classList.add('on');
+    if (d.type==='__deactivate_edit_mode') tweaks.classList.remove('on');
+  });
+  try{ window.parent.postMessage({type:'__edit_mode_available'},'*'); }catch(_){}
+
+  applyAccent(state.accent); setScan(state.scan); setDir(state.direction);
+  $('loadSlider').value = state.load; $('loadValLbl').textContent = state.load+'%';
+  renderRail(); renderHero(); renderLoad(); renderButtons();
+
+  // ---- Hardware-button simulator ----
+  document.querySelectorAll('.tw-act').forEach(b => {
+    b.addEventListener('click', () => {
+      const op = b.dataset.act;
+      if (op === 'open')  { if (!state.moving) runDoorCycle(); }
+      else if (op === 'close') {
+        document.body.classList.remove('door-open');
+        const ds = document.getElementById('doorState'); if (ds) ds.textContent = 'LATCHED';
+        const dl = document.getElementById('doorLabel'); if (dl) dl.textContent = 'Closed';
+        const dr = document.getElementById('doorRemain'); if (dr) dr.textContent = '—';
+      }
+      else if (op === 'hold') {
+        const dr = document.getElementById('doorRemain'); if (dr) dr.textContent = 'HOLD';
+      }
+      else if (op === 'alarm') {
+        const mp = document.getElementById('modePill') || document.getElementById('doorState');
+        if (mp) { mp.textContent = 'ALARM'; mp.style.color = 'var(--red)';
+          setTimeout(() => { mp.textContent = mp.id === 'modePill' ? 'NORMAL SERVICE' : 'LATCHED'; mp.style.color = ''; }, 2000);
+        }
+      }
+    });
+  });
+  const _simBtn = document.getElementById('simCallBtn');
+  const _simSel = document.getElementById('simFloor');
+  if (_simBtn && _simSel) {
+    _simBtn.addEventListener('click', () => {
+      const v = parseInt(_simSel.value, 10);
+      if (typeof pressCall === 'function') pressCall(v);
+    });
+  }
+
+})();
+</script>
+</body>
+</html>
