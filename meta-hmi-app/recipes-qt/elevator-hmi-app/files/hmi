@@ -1,27 +1,64 @@
 #!/bin/sh
 # Switch the on-glass HMI layout without rebuilding.
 #
-#   hmi              show the current layout
-#   hmi car          full portrait elevator GUI (800×1280)
-#   hmi video        same GUI with empty video pane on top (SD playback later)
+#   hmi                         show current layout + rotation
+#   hmi portrait                full portrait elevator GUI (800×1280)
+#   hmi portrait-video          same GUI with empty video pane on top
+#   hmi landscape               full landscape GUI (1280×800, rotated)
+#   hmi landscape-video         landscape GUI + empty video pane (rotated)
+#   hmi rot 90|270              which way landscape maps onto the portrait panel
 #
-# Persists in /etc/elevator-hmi.layout so the sysvinit script starts the
-# same variant after reboot. Restarts /etc/init.d/elevator-hmi.
+# Aliases (kept from the first demo image):
+#   car / vertical              → portrait
+#   video / vertical-video      → portrait-video
+#
+# Persists in /etc/elevator-hmi.layout and /etc/elevator-hmi.rotation so the
+# sysvinit script starts the same variant after reboot.
 
 LAYOUT_FILE=/etc/elevator-hmi.layout
+ROT_FILE=/etc/elevator-hmi.rotation
 INIT=/etc/init.d/elevator-hmi
 
-current() {
+current_layout() {
     if [ -r "$LAYOUT_FILE" ]; then
         cat "$LAYOUT_FILE"
     else
-        echo car
+        echo portrait
     fi
 }
 
+current_rot() {
+    if [ -r "$ROT_FILE" ]; then
+        cat "$ROT_FILE"
+    else
+        echo 90
+    fi
+}
+
+canonical_layout() {
+    case "$1" in
+        car|vertical|portrait) echo portrait ;;
+        video|vertical-video|portrait-video) echo portrait-video ;;
+        landscape|landscape-car) echo landscape ;;
+        landscape-video) echo landscape-video ;;
+        *) echo "" ;;
+    esac
+}
+
 usage() {
-    echo "Usage: hmi [car|video]"
-    echo "Current: $(current)"
+    echo "Usage: hmi [portrait|portrait-video|landscape|landscape-video]"
+    echo "       hmi rot [90|270]"
+    echo "Aliases: car, vertical, video, vertical-video"
+    echo "Current: $(current_layout)  rot=$(current_rot)"
+}
+
+restart_hmi() {
+    if [ -x "$INIT" ]; then
+        "$INIT" restart
+    else
+        echo "init script missing; start manually: elevator-hmi $(current_layout) --rot=$(current_rot)"
+        exit 1
+    fi
 }
 
 case "${1:-}" in
@@ -33,19 +70,31 @@ case "${1:-}" in
         usage
         exit 0
         ;;
-    car|video)
-        echo "$1" > "$LAYOUT_FILE"
-        echo "layout $1 (saved $LAYOUT_FILE)"
-        if [ -x "$INIT" ]; then
-            "$INIT" restart
-        else
-            echo "init script missing; start manually: elevator-hmi $1"
-            exit 1
-        fi
+    rot|rotation)
+        case "${2:-}" in
+            90|270)
+                echo "$2" > "$ROT_FILE"
+                echo "rotation $2 (saved $ROT_FILE)"
+                restart_hmi
+                ;;
+            "")
+                echo "rotation $(current_rot) (file $ROT_FILE)"
+                ;;
+            *)
+                echo "unknown rotation: $2 (use 90 or 270)"
+                exit 2
+                ;;
+        esac
         ;;
     *)
-        echo "unknown layout: $1"
-        usage
-        exit 2
+        CANON=$(canonical_layout "$1")
+        if [ -z "$CANON" ]; then
+            echo "unknown layout: $1"
+            usage
+            exit 2
+        fi
+        echo "$CANON" > "$LAYOUT_FILE"
+        echo "layout $CANON (saved $LAYOUT_FILE) rot=$(current_rot)"
+        restart_hmi
         ;;
 esac

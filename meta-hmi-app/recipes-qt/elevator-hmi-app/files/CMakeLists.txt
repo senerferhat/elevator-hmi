@@ -14,4 +14,14 @@ target_link_libraries(elevator-hmi PRIVATE
 )
 
 install(TARGETS elevator-hmi RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-install(FILES main.qml DESTINATION ${CMAKE_INSTALL_DATADIR}/elevator-hmi)
+install(FILES
+    main.qml
+    PortraitView.qml
+    LandscapeView.qml
+    FloorRail.qml
+    VideoPane.qml
+    DirectionArrows.qml
+    Card.qml
+    Stat.qml
+    InfoRow.qml
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/elevator-hmi)

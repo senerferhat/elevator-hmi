@@ -30,6 +30,14 @@ EXTRA_OECMAKE:append = " \
 SRC_URI = "file://CMakeLists.txt \
            file://main.cpp \
            file://main.qml \
+           file://PortraitView.qml \
+           file://LandscapeView.qml \
+           file://FloorRail.qml \
+           file://VideoPane.qml \
+           file://DirectionArrows.qml \
+           file://Card.qml \
+           file://Stat.qml \
+           file://InfoRow.qml \
            file://elevator-hmi.init \
            file://hmi \
            file://COPYING \
@@ -52,8 +60,8 @@ do_install:append() {
     install -m 0755 ${WORKDIR}/hmi ${D}${bindir}/hmi
 }
 
-# CMake installs main.qml to ${datadir}/elevator-hmi (see CMakeLists.txt and
-# main.cpp, which loads /usr/share/elevator-hmi/main.qml). Poky's default
+# CMake installs the QML tree to ${datadir}/elevator-hmi (see CMakeLists.txt
+# and main.cpp, which loads /usr/share/elevator-hmi/main.qml). Poky's default
 # FILES:${PN} is bindir/libdir/sysconfdir only, so do_package QA fails with
 # installed-vs-shipped unless this directory is listed.
 FILES:${PN} += "${datadir}/elevator-hmi"
