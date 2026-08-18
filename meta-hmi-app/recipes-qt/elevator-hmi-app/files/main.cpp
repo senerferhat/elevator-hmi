@@ -1,9 +1,11 @@
 #include "MediaBackend.h"
+#include "VideoSurface.h"
 
 #include <QGuiApplication>
 #include <QList>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
+#include <QtQml>
 #include <QQmlError>
 #include <QStringList>
 #include <QUrl>
@@ -107,6 +109,11 @@ int main(int argc, char *argv[])
     Q_UNUSED(wrap);
     // QML re-parses argv for layout, --rot and --wrap. C++ only validates so a
     // bad argument fails before the engine starts.
+
+    // Software-decoded video surface. Registered from C++ because Qt Quick's
+    // VideoOutput needs a scene-graph video node the SOFTWARE backend does not
+    // implement — and we cannot leave software rendering while BLK-015 stands.
+    qmlRegisterType<VideoSurface>("ElevatorHmi", 1, 0, "VideoSurface");
 
     QQmlApplicationEngine engine;
     engine.addImportPath(QStringLiteral("/usr/share/elevator-hmi"));

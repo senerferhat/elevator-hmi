@@ -1,11 +1,14 @@
 #pragma once
 
 #include <QFileSystemWatcher>
+#include <QImage>
+#include <QMediaPlayer>
 #include <QObject>
 #include <QString>
 #include <QStringList>
 #include <QTimer>
 #include <QUrl>
+#include <QVideoSink>
 
 // SD-card media inventory for the HMI video/ad pane.
 //
@@ -40,6 +43,11 @@ class MediaBackend : public QObject
     Q_PROPERTY(QString clipName READ clipName NOTIFY mediaChanged)
     Q_PROPERTY(QStringList clips READ clips NOTIFY mediaChanged)
     Q_PROPERTY(bool hasClips READ hasClips NOTIFY mediaChanged)
+    // Software-decoded playback. DEMO ONLY — see VideoSurface.h for why this
+    // exists at all and why it must go once BLK-015 is fixed.
+    Q_PROPERTY(bool videoPlaying READ videoPlaying NOTIFY videoStateChanged)
+    Q_PROPERTY(bool videoShowing READ videoShowing NOTIFY frameChanged)
+    Q_PROPERTY(QString videoError READ videoError NOTIFY videoStateChanged)
 
     // Still images — the live slideshow path.
     Q_PROPERTY(int imageCount READ imageCount NOTIFY mediaChanged)
@@ -62,6 +70,13 @@ public:
     QStringList clips() const { return m_clips; }
     bool hasClips() const { return !m_clips.isEmpty(); }
 
+    bool videoPlaying() const { return m_videoPlaying; }
+    // True only once a frame has actually been decoded, so the pane never hides
+    // its chrome for a clip that turns out to be undecodable.
+    bool videoShowing() const { return !m_frame.isNull(); }
+    QString videoError() const { return m_videoError; }
+    const QImage &frame() const { return m_frame; }
+
     int imageCount() const { return m_images.size(); }
     QStringList images() const { return m_images; }
     bool hasImages() const { return !m_images.isEmpty(); }
@@ -76,11 +91,15 @@ public slots:
     // Manual advance, so the slideshow can be driven from QML or a diagnostic.
     void nextImage();
     void refresh() { rescan(); }
+    void playClip(int index = 0);
+    void stopVideo();
 
 signals:
     void mediaChanged();
     void slideChanged();
     void slideIntervalChanged();
+    void frameChanged();
+    void videoStateChanged();
 
 private slots:
     void rescan();
@@ -98,4 +117,10 @@ private:
     QFileSystemWatcher m_watcher;
     QTimer m_poll;
     QTimer m_slide;
+
+    QMediaPlayer m_player;
+    QVideoSink m_sink;
+    QImage m_frame;
+    bool m_videoPlaying = false;
+    QString m_videoError;
 };

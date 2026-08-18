@@ -15,7 +15,7 @@ inherit qt6-cmake update-rc.d
 FILESEXTRAPATHS:prepend := "${ELEVATOR_HMI_QML_DIR}:"
 FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
 
-DEPENDS = "qtbase qtdeclarative qtdeclarative-native"
+DEPENDS = "qtbase qtdeclarative qtdeclarative-native qtmultimedia"
 
 # Same Mali CMake hole as qtbase (see meta-hmi-platform qtbase_%.bbappend):
 # JeffyCN mali-hook wrappers export no EGL/GLES symbols, so find_package(Qt6 Gui)
@@ -31,6 +31,8 @@ SRC_URI = "file://CMakeLists.txt \
            file://main.cpp \
            file://MediaBackend.h \
            file://MediaBackend.cpp \
+           file://VideoSurface.h \
+           file://VideoSurface.cpp \
            file://main.qml \
            file://PortraitView.qml \
            file://LandscapeView.qml \
@@ -80,4 +82,19 @@ RDEPENDS:${PN} += " \
     initscripts \
     udev \
     dosfstools \
+    qtmultimedia \
+    qtmultimedia-plugins \
+"
+
+# Runtime decode path for the SD video demo. There is NO H.264 decoder in this
+# image: gstreamer1.0-libav is LICENSE_FLAGS="commercial" and installing it is a
+# licensing decision for the product owner, not a build detail. jpegdec is in
+# plugins-good and is already here, so demo clips must be MJPEG. See
+# docs/FLASH-PROCEDURE.md for the exact ffmpeg command.
+RDEPENDS:${PN} += " \
+    gstreamer1.0-plugins-good-jpeg \
+    gstreamer1.0-plugins-good-isomp4 \
+    gstreamer1.0-plugins-good-avi \
+    gstreamer1.0-plugins-good-matroska \
+    gstreamer1.0-plugins-base-videoconvertscale \
 "

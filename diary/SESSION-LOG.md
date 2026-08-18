@@ -2096,3 +2096,71 @@ Without a card, the same path can be exercised with a tmpfs:
 `mount -t tmpfs tmpfs /media/sdcard` then copy an image in.
 
 ---
+## 2026-08-19 — SD video plays (software-decoded); ads unchanged
+
+**Shipped:** a clip on the SD card now plays on the panel. Owner asked for a
+video on a card to be detected and displayed, so this implements the software
+decode path rather than waiting on BLK-015.
+
+### How it gets on glass
+
+`VideoOutput` is not usable here: it builds a `QSGVideoNode`, which the
+**software** scene-graph adaptation does not implement — it renders nothing. And
+we cannot leave software rendering while BLK-015 stands. So:
+
+`QMediaPlayer` → `QVideoSink` → `QVideoFrame::toImage()` → **`VideoSurface`**
+(a `QQuickPaintedItem`) → `QPainter::drawImage` into the same `/dev/fb0` the
+rest of the HMI paints into. That is the one path proven to display on this
+board. PreserveAspectCrop, matching the slideshow.
+
+`MediaBackend` now owns the player: auto-plays clip 1 when a card appears
+(nobody presses play in a lift car), `setLoops(Infinite)`, tears playback down
+on card removal so a stale frame cannot sit on the panel, and attaches **no
+`QAudioOutput`** — `rk809-sound` does not probe on this board and an unsatisfied
+audio sink can stall the pipeline.
+
+### ⚠ MJPEG only — and why
+
+The image has `gstreamer1.0-plugins-good-jpeg` (jpegdec) plus isomp4/avi/
+matroska demuxers, but **no H.264 decoder**. `gstreamer1.0-libav` carries
+`LICENSE_FLAGS = "commercial"` in poky; installing it changes the licensing
+posture of a product that ships 500–1000 units/yr, which is the owner's call,
+not a build detail. So demo clips must be MJPEG.
+
+An H.264 file is still listed, then fails to decode, and the pane reports
+`CANNOT DECODE` / `MJPEG ONLY — NO H.264 DECODER` instead of sitting blank —
+`videoShowing` only goes true once a frame actually exists.
+
+### Still true, do not lose it
+
+This is **demo only**. CPU decode does not meet the 24/7 thermal budget; the
+product path remains GStreamer + gst-plugins-rockchip zero-copy VPU on a DRM
+plane (ADR-001, CLAUDE.md §1) and still needs **BLK-015** fixed. When it is,
+drop `VideoSurface` and use `VideoOutput` inside the same pane so it inherits
+the landscape rotation — not a kmssink overlay, which lives in physical
+800×1280 coords and would not follow QML `rotation`.
+
+### Verified
+
+Build 0 errors, `BUILD_EXIT=0` under `set -o pipefail`. From the built RPM, not
+the recipe: binary registers `VideoSurface` under `ElevatorHmi`, `NEEDED
+libQt6Multimedia.so.6`, shipped `VideoPane.qml` instantiates `VideoSurface`,
+manifest has qtmultimedia + the jpeg/isomp4/avi/matroska plugins.
+
+**Not verified on glass** — minicom held the serial port for this whole session,
+so nothing was run on the board.
+
+- **New flash target:** `images-archive/qt-hmi-video.wic`
+- **SHA-256:** `c74e86f65087a75a8f834c815fbac9c578064606634f2823e498436574e1aa37`
+
+### Card prep
+
+```bash
+sudo mkfs.vfat -F 32 -n HMIMEDIA /dev/sdX1
+ffmpeg -i source.mp4 -vf "scale=800:600:force_original_aspect_ratio=increase,crop=800:600" -c:v mjpeg -q:v 5 -r 25 -an ad.avi
+```
+
+FAT32 only (no exFAT tools). Playlist order is filename sort. `hmi media` lists
+what the backend found and now states the MJPEG constraint.
+
+---

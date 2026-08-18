@@ -1,4 +1,5 @@
 import QtQuick
+import ElevatorHmi
 
 // Video / advertising pane (design: Vertical Video / Landscape Video).
 //
@@ -7,9 +8,11 @@ import QtQuick
 //   IMAGES — LIVE. `Image` is a raster blit, so stills decode and display fine
 //     under the software renderer on linuxfb. This is the ad slideshow.
 //
-//   CLIPS — LISTED, NOT PLAYED. BLK-015: KMS never latches, so Qt Multimedia
-//     would decode and still show nothing. The pane names the clip and keeps
-//     the NO SOURCE plate rather than faking playback.
+//   CLIPS — SOFTWARE-DECODED (DEMO ONLY). BLK-015 blocks the VPU/DRM-plane path,
+//     so frames are decoded on the CPU and blitted through VideoSurface into the
+//     same framebuffer. There is no H.264 decoder in this image (libav is
+//     LICENSE_FLAGS=commercial), so demo clips must be MJPEG. If a clip cannot be
+//     decoded the pane says so instead of sitting blank.
 //
 // Stage 2 (after BLK-015): put VideoOutput in this same well so it inherits the
 // landscape rotation. Do NOT use a separate kmssink overlay — a DRM plane lives
@@ -46,7 +49,12 @@ Item {
 
     // True once a still is actually decoded — only then do we hide the chrome
     // underneath. A file that fails to decode must NOT leave a blank pane.
+    readonly property bool showingVideo: src ? src.videoShowing : false
+    readonly property string videoError: src ? src.videoError : ""
+    // Video wins the well when it is decoding; stills are the fallback.
     readonly property bool showingImage: slide.status === Image.Ready && pane.haveImages
+                                         && !pane.showingVideo
+    readonly property bool showingMedia: pane.showingVideo || pane.showingImage
 
     readonly property color statusDot: pane.cardStatus === "READY" ? pane.green
                                        : pane.cardStatus === "EMPTY" ? pane.amber
@@ -64,14 +72,27 @@ Item {
     }
 
     // Centre plate text, shown only when there is no still on screen.
-    readonly property string subLabel: !pane.haveCard ? "NO CARD"
-        : pane.clipCount > 0 ? pane.clipName.toUpperCase()
-        : "SD CARD · EMPTY"
+    readonly property string subLabel: {
+        if (!pane.haveCard)
+            return "NO CARD";
+        if (pane.clipCount > 0 && pane.videoError !== "")
+            return "MJPEG ONLY — NO H.264 DECODER";
+        if (pane.clipCount > 0)
+            return pane.clipName.toUpperCase();
+        return "SD CARD · EMPTY";
+    }
 
-    readonly property string footerLabel: pane.showingImage
-        ? ("—  " + pane.imageName.toUpperCase() + "  —")
-        : pane.clipCount > 0 ? ("—  " + pane.clipName.toUpperCase() + "  ·  VIDEO BLOCKED (BLK-015)  —")
-        : "—  NO CLIP LOADED  —"
+    readonly property string footerLabel: {
+        if (pane.showingVideo)
+            return "—  " + pane.clipName.toUpperCase() + "  —";
+        if (pane.showingImage)
+            return "—  " + pane.imageName.toUpperCase() + "  —";
+        if (pane.clipCount > 0 && pane.videoError !== "")
+            return "—  " + pane.clipName.toUpperCase() + "  ·  CANNOT DECODE  —";
+        if (pane.clipCount > 0)
+            return "—  " + pane.clipName.toUpperCase() + "  ·  DECODING…  —";
+        return "—  NO CLIP LOADED  —";
+    }
 
     Rectangle {
         anchors.fill: parent
@@ -81,7 +102,7 @@ Item {
         Item {
             anchors.fill: parent
             clip: true
-            visible: !pane.showingImage
+            visible: !pane.showingMedia
             Repeater {
                 model: 46
                 delegate: Rectangle {
@@ -95,6 +116,13 @@ Item {
                     transformOrigin: Item.TopLeft
                 }
             }
+        }
+
+        // ---- Video (software-decoded, demo only) --------------------------
+        VideoSurface {
+            anchors.fill: parent
+            backend: pane.src
+            visible: pane.showingVideo
         }
 
         // ---- Ad slideshow (LIVE path) ------------------------------------
@@ -139,7 +167,7 @@ Item {
             }
             Text {
                 text: pane.statusLabel
-                color: pane.showingImage ? "white" : pane.ink
+                color: pane.showingMedia ? "white" : pane.ink
                 font.family: pane.monoFont
                 font.pixelSize: 12
                 font.letterSpacing: 2
@@ -150,10 +178,10 @@ Item {
             anchors.right: parent.right
             anchors.rightMargin: 20
             y: 18
-            text: pane.showingImage
-                  ? ((pane.imageIndex + 1) + " / " + pane.imageCount)
+            text: pane.showingVideo ? "PLAYING · SOFTWARE DECODE"
+                  : pane.showingImage ? ((pane.imageIndex + 1) + " / " + pane.imageCount)
                   : "SAFETY · 720P"
-            color: pane.showingImage ? "white" : pane.inkMute
+            color: pane.showingMedia ? "white" : pane.inkMute
             font.family: pane.monoFont
             font.pixelSize: 11
             font.letterSpacing: 2
@@ -163,7 +191,7 @@ Item {
         Column {
             anchors.centerIn: parent
             spacing: 16
-            visible: !pane.showingImage
+            visible: !pane.showingMedia
 
             Rectangle {
                 width: 96; height: 96; radius: 48
@@ -212,7 +240,7 @@ Item {
             anchors.bottom: parent.bottom
             anchors.bottomMargin: 18
             spacing: 12
-            visible: !pane.showingImage
+            visible: !pane.showingMedia
 
             Repeater {
                 model: ["PLAY", "UNMUTE"]
@@ -246,13 +274,13 @@ Item {
             width: footer.implicitWidth + 20
             height: footer.implicitHeight + 12
             radius: 2
-            color: pane.showingImage ? Qt.rgba(0, 0, 0, 0.45) : "transparent"
+            color: pane.showingMedia ? Qt.rgba(0, 0, 0, 0.45) : "transparent"
 
             Text {
                 id: footer
                 anchors.centerIn: parent
                 text: pane.footerLabel
-                color: pane.showingImage ? "white" : pane.inkMute
+                color: pane.showingMedia ? "white" : pane.inkMute
                 font.family: pane.monoFont
                 font.pixelSize: 11
                 font.letterSpacing: 2

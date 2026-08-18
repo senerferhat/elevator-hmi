@@ -36,7 +36,59 @@ below, to avoid a second stale pointer existing alongside the current one.)*
 
 ---
 
-## CURRENT TEST TARGET (2026-08-19) — qt-hmi-ads.wic — SD ad slideshow LIVE
+## CURRENT TEST TARGET (2026-08-19) — qt-hmi-video.wic — SD **video plays**
+
+**Status: recommended for next flash.** Video from the SD card now plays on the
+panel, software-decoded. Stills still play as an ad slideshow.
+
+**The clip MUST be MJPEG.** This image has `jpegdec` (plugins-good) but **no
+H.264 decoder** — `gstreamer1.0-libav` is `LICENSE_FLAGS = "commercial"` and
+installing it is a licensing decision for the product owner, not a build detail.
+An H.264 file will be listed and then fail to decode; the pane says
+`CANNOT DECODE` / `MJPEG ONLY — NO H.264 DECODER` rather than sitting blank.
+
+| Field | Value |
+|---|---|
+| **Archive file** | `~/Projects/elevator-hmi/images-archive/qt-hmi-video.wic` |
+| **WIC SHA-256** | `c74e86f65087a75a8f834c815fbac9c578064606634f2823e498436574e1aa37` |
+| **Deploy name** | `elevator-hmi-image-elevator-hmi-em3566.rootfs-20260818213224.wic` |
+| **What changed** | `VideoSurface` (QQuickPaintedItem) blits decoded frames; `MediaBackend` drives `QMediaPlayer` + `QVideoSink`, auto-plays clip 1, loops forever, no audio sink; pane shows the video, or the slideshow, or an honest error |
+| **Expected on glass** | `hmi portrait-video`, insert card → MJPEG clip plays looping, header reads `PLAYING · SOFTWARE DECODE` |
+| **Known cost** | CPU decode, **demo only**. Product path is zero-copy VPU on a DRM plane (ADR-001) and needs BLK-015 fixed. |
+
+```bash
+cd ~/Projects/elevator-hmi/images-archive
+sha256sum qt-hmi-video.wic   # expect c74e86f65087a75a8f834c815fbac9c578064606634f2823e498436574e1aa37
+sudo rkdeveloptool db loader.bin      # skip this line if the board is in Loader mode
+sudo rkdeveloptool wl 0      qt-hmi-video.wic
+sudo rkdeveloptool wl 64     idblock.img
+sudo rkdeveloptool wl 0x4000 uboot.img
+sudo rkdeveloptool rd
+```
+
+### Preparing the card
+
+FAT32 only — the mount helper mounts `vfat`, and there are no exFAT tools in the
+image, so a factory-formatted 64 GB+ card will silently fail to mount.
+
+```bash
+sudo mkfs.vfat -F 32 -n HMIMEDIA /dev/sdX1
+```
+
+Encode the clip as MJPEG at the pane size (800×600 portrait-video, 640×800
+landscape-video). `-an` matters: `rk809-sound` does not probe on this board and
+an unsatisfied audio sink can stall the pipeline.
+
+```bash
+ffmpeg -i source.mp4 -vf "scale=800:600:force_original_aspect_ratio=increase,crop=800:600" -c:v mjpeg -q:v 5 -r 25 -an ad.avi
+```
+
+Copy `ad.avi` to the card root. Playlist order is filename sort, so prefix
+`01-`, `02-` when there is more than one.
+
+---
+
+## SUPERSEDED (2026-08-19) — qt-hmi-ads.wic — SD ad slideshow LIVE
 
 **Status: recommended for next flash.** The video pane now actually shows media:
 **still images from the SD card play as an ad slideshow**. Stills are a raster

@@ -3,6 +3,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QStorageInfo>
+#include <QVideoFrame>
 
 namespace {
 const QString kMountPath = QStringLiteral("/media/sdcard");
@@ -67,6 +68,34 @@ MediaBackend::MediaBackend(QObject *parent)
 
     m_slide.setInterval(kDefaultSlideMs);
     connect(&m_slide, &QTimer::timeout, this, &MediaBackend::nextImage);
+
+    // Software-decoded playback (DEMO ONLY, see VideoSurface.h). We pull frames
+    // out of a QVideoSink rather than using a VideoOutput item, because the
+    // software scene graph has no video node and would draw nothing.
+    m_player.setVideoSink(&m_sink);
+    // Ads loop forever; there is no operator to press play in a lift car.
+    m_player.setLoops(QMediaPlayer::Infinite);
+    // No QAudioOutput is attached on purpose: rk809-sound does not probe on this
+    // board, and an unsatisfied audio sink can stall the pipeline.
+    connect(&m_sink, &QVideoSink::videoFrameChanged, this,
+            [this](const QVideoFrame &f) {
+                if (!f.isValid())
+                    return;
+                const QImage img = f.toImage();
+                if (img.isNull())
+                    return;
+                m_frame = img;
+                emit frameChanged();
+            });
+    connect(&m_player, &QMediaPlayer::errorOccurred, this,
+            [this](QMediaPlayer::Error, const QString &msg) {
+                // Most likely cause here is an unsupported codec: this image has
+                // jpegdec but NO H.264 decoder (gstreamer1.0-libav is
+                // LICENSE_FLAGS=commercial and deliberately not installed).
+                m_videoError = msg;
+                m_videoPlaying = false;
+                emit videoStateChanged();
+            });
 
     rescan();
 }
@@ -180,6 +209,43 @@ void MediaBackend::rescan()
     m_status = status;
     restartSlideshow();
 
+    // Auto-play: a lift car has no one to press play. Start the first clip when
+    // one appears, and tear playback down when the card goes away so a stale
+    // last frame cannot sit on the panel.
+    if (m_clips.isEmpty()) {
+        if (m_videoPlaying || !m_frame.isNull())
+            stopVideo();
+    } else if (!m_videoPlaying) {
+        playClip(0);
+    }
+
     emit mediaChanged();
     emit slideChanged();
+}
+
+void MediaBackend::playClip(int index)
+{
+    if (index < 0 || index >= m_clips.size())
+        return;
+    m_videoError.clear();
+    m_player.setSource(QUrl::fromLocalFile(m_clips.at(index)));
+    m_player.play();
+    if (!m_videoPlaying) {
+        m_videoPlaying = true;
+        emit videoStateChanged();
+    }
+}
+
+void MediaBackend::stopVideo()
+{
+    m_player.stop();
+    m_player.setSource(QUrl());
+    if (!m_frame.isNull()) {
+        m_frame = QImage();
+        emit frameChanged();
+    }
+    if (m_videoPlaying) {
+        m_videoPlaying = false;
+        emit videoStateChanged();
+    }
 }

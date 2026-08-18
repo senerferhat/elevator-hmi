@@ -144,7 +144,10 @@ case "${1:-}" in
         else
             echo "              (none)"
         fi
-        echo "clips (video, NOT displayable — BLK-015):"
+        # Software decode only: this image has jpegdec but NO H.264 decoder
+        # (gstreamer1.0-libav is LICENSE_FLAGS=commercial). MJPEG plays; H.264
+        # is listed and then fails to decode, which the pane reports on glass.
+        echo "clips (video — MJPEG plays, H.264 will NOT decode):"
         if [ -n "$CLIPS" ]; then
             echo "$CLIPS" | sed 's/^/              /'
         else
