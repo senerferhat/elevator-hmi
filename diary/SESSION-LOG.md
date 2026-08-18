@@ -1895,3 +1895,28 @@ just the DEMO chip. Then `hmi landscape` / `hmi portrait-video`.
 If the app fails to start: `cat /var/log/elevator-hmi.log` — look for `QML:`.
 
 ---
+
+## 2026-08-18 (23:05) — daylight cabin theme (light, colourful)
+
+Owner asked for a light, vibrant theme: the previous look was the generic
+OLED amber-on-black dashboard. Tokens in `main.qml` plus Card/Stat/InfoRow/
+VideoPane/FloorRail/DirectionArrows/door chrome:
+
+- Field: cool sky → warm paper gradient (`#D6E8F8` → `#F7F3EA`)
+- Cards: white, colour stripe by title (teal door, orange load, blue
+  diagnostics, green service, gold activity)
+- Floor number + rail marker: cobalt `#1D4ED8`
+- Motion / DEMO chip: orange `#F97316` (filled chip, white type)
+- Video empty pane: light well, not black hatch
+
+Rebuild `elevator-hmi-image` next; do not flash until SHA is in this log.
+
+### Image
+
+- Hardlinked `images-archive/qt-hmi-daylight.wic`
+  SHA `36e1aabe1f03594263442de2086ec8b21f18189e4fa3bef269185502869180e4`
+- Deploy: `elevator-hmi-image-elevator-hmi-em3566.rootfs-20260818200439.wic`
+- **current flash target:** `qt-hmi-daylight.wic` (after confirming the
+  orientations load-fix GUI is on glass, or instead of it).
+
+---

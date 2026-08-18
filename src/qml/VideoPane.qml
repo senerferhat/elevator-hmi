@@ -9,16 +9,18 @@ Item {
     property var hmi
     clip: true
 
-    readonly property color ink: hmi ? hmi.ink : "#E8ECF2"
-    readonly property color inkMute: hmi ? hmi.inkMute : "#5C6573"
-    readonly property color inkDim: hmi ? hmi.inkDim : "#9AA3B2"
-    readonly property color red: hmi ? hmi.red : "#E85A4A"
-    readonly property color line: hmi ? hmi.line : "#262B33"
+    readonly property color ink: hmi ? hmi.ink : "#142033"
+    readonly property color inkMute: hmi ? hmi.inkMute : "#6A8198"
+    readonly property color inkDim: hmi ? hmi.inkDim : "#3A5168"
+    readonly property color red: hmi ? hmi.red : "#E11D48"
+    readonly property color line: hmi ? hmi.line : "#B7C9DC"
+    readonly property color well: hmi ? hmi.bgElev2 : "#DCE8F4"
+    readonly property color hatch: hmi ? hmi.lineSoft : "#D0DCEC"
     readonly property string monoFont: hmi ? hmi.monoFont : "Liberation Mono"
 
     Rectangle {
         anchors.fill: parent
-        color: "#0B0D10"
+        color: pane.well
 
         Item {
             anchors.fill: parent
@@ -29,7 +31,7 @@ Item {
                     required property int index
                     width: 2
                     height: pane.height * 3
-                    color: "#12151A"
+                    color: pane.hatch
                     x: index * 34 - 320
                     y: -pane.height
                     rotation: 30

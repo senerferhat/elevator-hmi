@@ -10,12 +10,14 @@ Item {
 
     readonly property var floorNames: hmi ? hmi.floorNames : []
     readonly property var car: hmi ? hmi.car : null
-    readonly property color amber: hmi ? hmi.amber : "#E8C84A"
-    readonly property color amberHi: hmi ? hmi.amberHi : "#F5E080"
-    readonly property color inkDim: hmi ? hmi.inkDim : "#9AA3B2"
-    readonly property color inkMute: hmi ? hmi.inkMute : "#5C6573"
-    readonly property color line: hmi ? hmi.line : "#262B33"
-    readonly property color lineSoft: hmi ? hmi.lineSoft : "#1E232B"
+    readonly property color amber: hmi ? hmi.amber : "#F97316"
+    readonly property color amberHi: hmi ? hmi.amberHi : "#FB923C"
+    readonly property color accent: hmi ? hmi.accent : "#1D4ED8"
+    readonly property color accentHi: hmi ? hmi.accentHi : "#60A5FA"
+    readonly property color inkDim: hmi ? hmi.inkDim : "#3A5168"
+    readonly property color inkMute: hmi ? hmi.inkMute : "#6A8198"
+    readonly property color line: hmi ? hmi.line : "#B7C9DC"
+    readonly property color lineSoft: hmi ? hmi.lineSoft : "#D0DCEC"
     readonly property string monoFont: hmi ? hmi.monoFont : "Liberation Mono"
 
     Text {
@@ -80,7 +82,7 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     horizontalAlignment: Text.AlignRight
                     text: rail.floorNames[floorSlot.index]
-                    color: floorSlot.isCurrent ? rail.amber : rail.inkMute
+                    color: floorSlot.isCurrent ? rail.accent : rail.inkMute
                     font.family: rail.monoFont
                     font.pixelSize: floorSlot.isCurrent ? 14 : 12
                     font.bold: floorSlot.isCurrent
@@ -90,7 +92,7 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     width: floorSlot.isCurrent ? 16 : 10
                     height: 1
-                    color: floorSlot.isCurrent ? rail.amber : rail.line
+                    color: floorSlot.isCurrent ? rail.accent : rail.line
                 }
             }
         }
@@ -114,7 +116,7 @@ Item {
                     radius: modelData.d / 2
                     x: -width / 2
                     y: -height / 2
-                    color: rail.amber
+                    color: rail.accent
                     opacity: modelData.a
                 }
             }
@@ -122,7 +124,7 @@ Item {
                 width: 11; height: 11; radius: 6
                 x: -width / 2
                 y: -height / 2
-                color: rail.amberHi
+                color: rail.accentHi
             }
         }
     }

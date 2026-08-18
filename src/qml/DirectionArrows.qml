@@ -10,7 +10,8 @@ Row {
     spacing: 70
 
     readonly property var car: hmi ? hmi.car : null
-    readonly property color amber: hmi ? hmi.amber : "#E8C84A"
+    readonly property color amber: hmi ? hmi.amber : "#F97316"
+    readonly property color mute: hmi ? hmi.inkMute : "#9AADC2"
 
     Repeater {
         model: [1, -1]
@@ -38,7 +39,7 @@ Row {
                 onPaint: {
                     const ctx = getContext("2d");
                     ctx.reset();
-                    ctx.fillStyle = lit ? arrows.amber : "#39414D";
+                    ctx.fillStyle = lit ? arrows.amber : arrows.mute;
                     const w = width, h = height;
                     ctx.beginPath();
                     if (arrowSlot.modelData > 0) {

@@ -179,7 +179,7 @@ Item {
                         id: modeText
                         anchors.centerIn: parent
                         text: view.car.mode
-                        color: view.hmi.amber
+                        color: view.hmi.accent
                         font.family: view.hmi.monoFont
                         font.pixelSize: 12
                         font.letterSpacing: 3
@@ -260,7 +260,7 @@ Item {
                     anchors.top: heroLabel.bottom
                     anchors.topMargin: view.videoMode ? -6 : 4
                     text: view.hmi.floorNames[view.car.currentIndex]
-                    color: view.hmi.amber
+                    color: view.hmi.accent
                     font.family: view.hmi.monoFont
                     font.pixelSize: view.videoMode ? 116 : 200
                     font.bold: true
@@ -397,20 +397,20 @@ Item {
                                 anchors.centerIn: parent
                                 width: 2
                                 height: parent.height - 18
-                                color: view.hmi.amberDim
+                                color: view.hmi.teal
                             }
                         }
 
                         Rectangle {
                             width: 26
                             height: parent.height
-                            color: view.hmi.amberDim
+                            color: view.hmi.teal
                             x: doorGfx.width / 2 - 16 - width - doorGfx.openFrac * 24
                         }
                         Rectangle {
                             width: 26
                             height: parent.height
-                            color: view.hmi.amberDim
+                            color: view.hmi.teal
                             x: doorGfx.width / 2 + 16 + doorGfx.openFrac * 24
                         }
                     }
@@ -614,7 +614,7 @@ Item {
                         }
                         Text {
                             text: logRow.floor
-                            color: view.hmi.amber
+                            color: view.hmi.accent
                             font.family: view.hmi.monoFont
                             font.pixelSize: 11
                             font.bold: true

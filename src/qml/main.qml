@@ -32,19 +32,26 @@ Window {
     color: root.bg
     title: "Elevator HMI"
 
-    readonly property color bg:       "#0E1013"
-    readonly property color bgElev:   "#15181D"
-    readonly property color bgElev2:  "#1C2028"
-    readonly property color line:     "#262B33"
-    readonly property color lineSoft: "#1E232B"
-    readonly property color ink:      "#E8ECF2"
-    readonly property color inkDim:   "#9AA3B2"
-    readonly property color inkMute:  "#5C6573"
-    readonly property color amber:    "#E8C84A"
-    readonly property color amberHi:  "#F5E080"
-    readonly property color amberDim: "#6B5A1F"
-    readonly property color red:      "#E85A4A"
-    readonly property color green:    "#5AE89A"
+    // Daylight cabin — light field, dark type, saturated wayfinding colours.
+    // Replaces the generic OLED amber-on-black dashboard. Software renderer:
+    // Rectangle gradients OK; no ShaderEffect / layer.
+    readonly property color bg:       "#EAF2FA"
+    readonly property color bgElev:   "#FFFFFF"
+    readonly property color bgElev2:  "#DCE8F4"
+    readonly property color line:     "#B7C9DC"
+    readonly property color lineSoft: "#D0DCEC"
+    readonly property color ink:      "#142033"
+    readonly property color inkDim:   "#3A5168"
+    readonly property color inkMute:  "#6A8198"
+    readonly property color accent:   "#1D4ED8"
+    readonly property color accentHi: "#60A5FA"
+    readonly property color amber:    "#F97316"
+    readonly property color amberHi:  "#FB923C"
+    readonly property color amberDim: "#FDBA74"
+    readonly property color red:      "#E11D48"
+    readonly property color green:    "#059669"
+    readonly property color teal:     "#0D9488"
+    readonly property color gold:     "#D97706"
 
     readonly property string monoFont: "Liberation Mono"
     readonly property string uiFont:   "Liberation Sans"
@@ -214,6 +221,15 @@ Window {
         logEvent(floorNames[car.currentIndex], "SYSTEM READY");
     }
 
+    Rectangle {
+        anchors.fill: parent
+        gradient: Gradient {
+            GradientStop { position: 0.0; color: "#D6E8F8" }
+            GradientStop { position: 0.45; color: "#EAF2FA" }
+            GradientStop { position: 1.0; color: "#F7F3EA" }
+        }
+    }
+
     // Landscape content is 1280×800, centered then rotated so it fills the
     // native 800×1280 window. Portrait content is 800×1280 unrotated.
     //
@@ -252,17 +268,17 @@ Window {
             anchors.bottomMargin: 16
             width: demoLabel.implicitWidth + 28
             height: 36
-            radius: 2
+            radius: 4
             z: 50
-            color: root.bgElev
-            border.color: root.line
+            color: root.amber
+            border.color: root.amber
             border.width: 1
 
             Text {
                 id: demoLabel
                 anchors.centerIn: parent
                 text: "DEMO  ·  " + root.demoPhase
-                color: root.amber
+                color: "#FFFFFF"
                 font.family: root.monoFont
                 font.pixelSize: 11
                 font.letterSpacing: 2

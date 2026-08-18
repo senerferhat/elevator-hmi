@@ -4,13 +4,13 @@ Item {
     id: info
     property string label: ""
     property string value: ""
-    property color valueColor: "#E8ECF2"
+    property color valueColor: "#142033"
     height: 26
 
     Text {
         anchors.verticalCenter: parent.verticalCenter
         text: info.label
-        color: "#9AA3B2"
+        color: "#3A5168"
         font.family: "Liberation Mono"
         font.pixelSize: 11
         font.letterSpacing: 2

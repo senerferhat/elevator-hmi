@@ -5,12 +5,12 @@ Column {
     property string label: ""
     property string value: ""
     property string unit: ""
-    property color valueColor: "#E8ECF2"
+    property color valueColor: "#142033"
     spacing: 4
 
     Text {
         text: stat.label
-        color: "#5C6573"
+        color: "#6A8198"
         font.family: "Liberation Mono"
         font.pixelSize: 10
         font.letterSpacing: 2
@@ -26,7 +26,7 @@ Column {
         }
         Text {
             text: stat.unit
-            color: "#5C6573"
+            color: "#6A8198"
             font.family: "Liberation Mono"
             font.pixelSize: 10
             anchors.bottom: parent.bottom

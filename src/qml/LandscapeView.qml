@@ -155,7 +155,7 @@ Item {
                         anchors.top: compactLabel.bottom
                         anchors.topMargin: -4
                         text: view.hmi.floorNames[view.car.currentIndex]
-                        color: view.hmi.amber
+                        color: view.hmi.accent
                         font.family: view.hmi.monoFont
                         font.pixelSize: 140
                         font.bold: true
@@ -256,7 +256,7 @@ Item {
                             Rectangle {
                                 width: view.car.doorPhase === "CLOSED" ? 20 : 6
                                 height: 42
-                                color: view.hmi.amberDim
+                                color: view.hmi.teal
                                 Behavior on width { NumberAnimation { duration: 400 } }
                             }
                             Rectangle {
@@ -275,7 +275,7 @@ Item {
                             Rectangle {
                                 width: view.car.doorPhase === "CLOSED" ? 20 : 6
                                 height: 42
-                                color: view.hmi.amberDim
+                                color: view.hmi.teal
                                 Behavior on width { NumberAnimation { duration: 400 } }
                             }
                         }
@@ -390,7 +390,7 @@ Item {
                                 }
                                 Text {
                                     text: floor
-                                    color: view.hmi.amber
+                                    color: view.hmi.accent
                                     font.family: view.hmi.monoFont
                                     font.pixelSize: 9
                                     font.bold: true
@@ -496,7 +496,7 @@ Item {
                         id: fullModeText
                         anchors.centerIn: parent
                         text: view.car.mode
-                        color: view.hmi.amber
+                        color: view.hmi.accent
                         font.family: view.hmi.monoFont
                         font.pixelSize: 12
                         font.letterSpacing: 3
@@ -631,7 +631,7 @@ Item {
                                 }
                                 Text {
                                     text: floor
-                                    color: view.hmi.amber
+                                    color: view.hmi.accent
                                     font.family: view.hmi.monoFont
                                     font.pixelSize: 11
                                     font.bold: true
@@ -719,7 +719,7 @@ Item {
 
                             Rectangle {
                                 anchors.fill: parent
-                                color: "#0A0C10"
+                                color: "#FFFFFF"
                                 border.color: view.hmi.lineSoft
                                 border.width: 1
                             }
@@ -734,7 +734,7 @@ Item {
                                         required property int index
                                         width: doorStage.width / 32
                                         height: 8
-                                        color: index % 2 === 0 ? view.hmi.amber : "#000000"
+                                        color: index % 2 === 0 ? view.hmi.teal : "#FFFFFF"
                                     }
                                 }
                             }
@@ -748,7 +748,7 @@ Item {
                                         required property int index
                                         width: doorStage.width / 32
                                         height: 8
-                                        color: index % 2 === 0 ? view.hmi.amber : "#000000"
+                                        color: index % 2 === 0 ? view.hmi.teal : "#FFFFFF"
                                     }
                                 }
                             }
@@ -758,8 +758,8 @@ Item {
                                 y: 8
                                 width: doorStage.width / 2
                                 height: doorStage.height - 16
-                                color: "#1A1E26"
-                                border.color: "#2A2F38"
+                                color: view.hmi.teal
+                                border.color: view.hmi.line
                                 border.width: 1
                                 Rectangle {
                                     anchors.right: parent.right
@@ -767,7 +767,7 @@ Item {
                                     anchors.verticalCenter: parent.verticalCenter
                                     width: 2
                                     height: parent.height * 0.6
-                                    color: view.hmi.amberDim
+                                    color: view.hmi.teal
                                 }
                             }
                             Rectangle {
@@ -775,8 +775,8 @@ Item {
                                 y: 8
                                 width: doorStage.width / 2
                                 height: doorStage.height - 16
-                                color: "#1A1E26"
-                                border.color: "#2A2F38"
+                                color: view.hmi.teal
+                                border.color: view.hmi.line
                                 border.width: 1
                                 Rectangle {
                                     anchors.left: parent.left
@@ -784,7 +784,7 @@ Item {
                                     anchors.verticalCenter: parent.verticalCenter
                                     width: 2
                                     height: parent.height * 0.6
-                                    color: view.hmi.amberDim
+                                    color: view.hmi.teal
                                 }
                             }
                         }
@@ -891,7 +891,7 @@ Item {
                 anchors.top: fullHeroLabel.bottom
                 anchors.topMargin: -8
                 text: view.hmi.floorNames[view.car.currentIndex]
-                color: view.hmi.amber
+                color: view.hmi.accent
                 font.family: view.hmi.monoFont
                 font.pixelSize: 220
                 font.bold: true

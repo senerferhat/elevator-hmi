@@ -7,6 +7,16 @@
 > milestone-level summaries only.
 
 
+## 2026-08-18 — daylight cabin theme (light, colourful)
+
+**Agent:** continuation
+
+- Light theme: sky field, white cards with colour stripes (teal door,
+  orange load, blue diagnostics, green service, gold activity), cobalt
+  floor number, orange DEMO/motion. Software-renderer safe.
+- **Image:** `images-archive/qt-hmi-daylight.wic`
+  SHA `36e1aabe1f03594263442de2086ec8b21f18189e4fa3bef269185502869180e4`.
+
 ## 2026-08-18 — QML views failed to load (only DEMO chip); fixed
 
 **Agent:** continuation
@@ -32,6 +42,14 @@
 - **Image:** `images-archive/qt-hmi-orientations.wic`
   SHA `0a3a6f6b892fbe80446b3e5ca1cc7b5be7df6fef9893133a3c2d69a9f6482984`.
 - Video panes still empty (BLK-015 + next-task SD player).
+
+## 2026-08-18 — daylight cabin theme (light, colourful)
+
+**Agent:** continuation
+
+- **Image:** `images-archive/qt-hmi-daylight.wic`
+  SHA `36e1aabe1f03594263442de2086ec8b21f18189e4fa3bef269185502869180e4`.
+
 
 ## 2026-08-18 — first Qt 6.8.3 EGLFS image built (qt-hmi.wic)
 
