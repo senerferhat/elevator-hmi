@@ -2028,3 +2028,71 @@ do not reopen 0022/0023/0024.
 - **current flash target:** `qt-hmi-daylight.wic` (hash above). `KAS_EXIT=0`.
 
 ---
+## 2026-08-19 — SD ad slideshow is live; video still gated on BLK-015
+
+**Shipped:** the video pane now displays real media. Still images from the SD
+card play as an **ad slideshow**. This is not a workaround for BLK-015 — it
+sidesteps it by construction: QML `Image` is a raster blit, so it renders through
+the software renderer into `/dev/fb0`, the one path that works on this board. No
+GPU, no KMS, no VPU involved.
+
+Video is unchanged and still blocked. Clips are inventoried and named, and the
+pane says so explicitly (`VIDEO BLOCKED (BLK-015)`) rather than showing a play
+button that does nothing.
+
+### What changed
+
+- **`MediaBackend`** now scans images as well as clips and owns the slideshow:
+  `imageSource` / `imageName` / `imageIndex` / `imageCount` / `hasImages`, a
+  7 s timer (`slideIntervalMs`, clamped to >=1 s so a bad value cannot spin a
+  core on a GPU-less board), and `nextImage()` / `refresh()`.
+  A rescan keeps showing the current file if it still exists, so the 1.5 s poll
+  does not restart the slideshow whenever anything on the card changes.
+- **`VideoPane.qml`** renders the slide: `PreserveAspectCrop` (letterboxed ads
+  look like a fault on a fixed-function display), `sourceSize` capped to the pane
+  so a 12 MP JPEG cannot allocate ~48 MB on a 2 GB board, `cache: false`,
+  fade-in on `Image.Ready`, an `n / N` counter, and a captioned footer with its
+  own scrim so it stays readable over a photo. The hatch and NO SOURCE plate hide
+  only once a still has **actually decoded** — a file that fails to decode must
+  not leave a blank pane.
+- **`hmi media`** dumps the SD state over UART: mount, slot devices (mmcblk0 is
+  deliberately excluded — it is the eMMC), ads, and clips. Answers "why is the
+  pane empty" without guessing: silent slot vs unmounted vs empty card.
+
+### Format support — checked, not assumed
+
+The image ships `libjpeg62`, `libpng16-16` and qtbase's `libqjpeg.so` /
+`libqgif.so`. `qtimageformats` is **not** installed, so the accepted extensions
+are exactly `.jpg .jpeg .png .bmp .gif`. webp/tiff are excluded on purpose: they
+would list as playable and then render nothing.
+
+### Verified
+
+Build 0 errors, `BUILD_EXIT=0` under `set -o pipefail`. Checked the built RPM
+rather than the recipe: the binary exports `imageSource` / `imageCount` /
+`hasImages` / `slideIntervalMs` / `nextImage`, the shipped `VideoPane.qml`
+carries the slideshow, and `hmi` carries the `media` subcommand. All 9 QML files
+lint with 0 errors.
+
+**Not yet verified on glass** — the slideshow has not been seen on the panel. The
+serial port was held by minicom during this session, so no on-target run was
+made. Test ad PNGs were generated for a tmpfs test but not transferred.
+
+- **New flash target:** `images-archive/qt-hmi-ads.wic`
+- **SHA-256:** `bf709056f8c7bd6eca3782f1cadea362fcda6f1502d177e17acd1d956f92a56c`
+
+### Lab check
+
+```bash
+hmi media
+hmi portrait-video
+```
+
+Insert a FAT32 card with a couple of `.jpg`. Expect the pane to fill with the
+photo, rotate every 7 s, and show `READY · N ADS` plus `n / N`. With only `.mp4`
+present the pane must still read `NO SOURCE` — that is correct, not a fault.
+
+Without a card, the same path can be exercised with a tmpfs:
+`mount -t tmpfs tmpfs /media/sdcard` then copy an image in.
+
+---

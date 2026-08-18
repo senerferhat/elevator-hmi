@@ -1,9 +1,21 @@
 import QtQuick
 
-// Video pane chrome (design: Vertical Video / Landscape Video).
-// Stage 1: SD mount + clip scan via the C++ `media` context property.
-// Stage 2 (after BLK-015): put Qt Multimedia VideoOutput in this well.
-// Software-renderer safe: hatch is rotated Rectangles, not a shader.
+// Video / advertising pane (design: Vertical Video / Landscape Video).
+//
+// Two media paths, and only one of them can reach the glass today:
+//
+//   IMAGES — LIVE. `Image` is a raster blit, so stills decode and display fine
+//     under the software renderer on linuxfb. This is the ad slideshow.
+//
+//   CLIPS — LISTED, NOT PLAYED. BLK-015: KMS never latches, so Qt Multimedia
+//     would decode and still show nothing. The pane names the clip and keeps
+//     the NO SOURCE plate rather than faking playback.
+//
+// Stage 2 (after BLK-015): put VideoOutput in this same well so it inherits the
+// landscape rotation. Do NOT use a separate kmssink overlay — a DRM plane lives
+// in physical 800×1280 coordinates and would not follow QML `rotation`.
+//
+// Software-renderer safe: hatch is rotated Rectangles, no shaders.
 
 Item {
     id: pane
@@ -16,6 +28,11 @@ Item {
     readonly property string clipName: src ? src.clipName : ""
     readonly property string cardStatus: src ? src.status : "NO CARD"
 
+    readonly property int imageCount: src ? src.imageCount : 0
+    readonly property bool haveImages: src ? src.hasImages : false
+    readonly property string imageName: src ? src.imageName : ""
+    readonly property int imageIndex: src ? src.imageIndex : 0
+
     readonly property color ink: hmi ? hmi.ink : "#142033"
     readonly property color inkMute: hmi ? hmi.inkMute : "#6A8198"
     readonly property color inkDim: hmi ? hmi.inkDim : "#3A5168"
@@ -27,27 +44,44 @@ Item {
     readonly property color hatch: hmi ? hmi.lineSoft : "#D0DCEC"
     readonly property string monoFont: hmi ? hmi.monoFont : "Liberation Mono"
 
+    // True once a still is actually decoded — only then do we hide the chrome
+    // underneath. A file that fails to decode must NOT leave a blank pane.
+    readonly property bool showingImage: slide.status === Image.Ready && pane.haveImages
+
     readonly property color statusDot: pane.cardStatus === "READY" ? pane.green
                                        : pane.cardStatus === "EMPTY" ? pane.amber
                                        : pane.red
-    readonly property string statusLabel: pane.cardStatus === "READY"
-        ? ("READY · " + pane.clipCount + (pane.clipCount === 1 ? " CLIP" : " CLIPS"))
-        : pane.cardStatus === "EMPTY" ? "SD · EMPTY"
-        : "NO CARD"
+
+    readonly property string statusLabel: {
+        if (pane.cardStatus !== "READY")
+            return pane.cardStatus === "EMPTY" ? "SD · EMPTY" : "NO CARD";
+        var bits = [];
+        if (pane.imageCount > 0)
+            bits.push(pane.imageCount + (pane.imageCount === 1 ? " AD" : " ADS"));
+        if (pane.clipCount > 0)
+            bits.push(pane.clipCount + (pane.clipCount === 1 ? " CLIP" : " CLIPS"));
+        return "READY · " + bits.join(" · ");
+    }
+
+    // Centre plate text, shown only when there is no still on screen.
     readonly property string subLabel: !pane.haveCard ? "NO CARD"
         : pane.clipCount > 0 ? pane.clipName.toUpperCase()
         : "SD CARD · EMPTY"
-    readonly property string footerLabel: pane.clipCount > 0
-        ? ("—  " + pane.clipName.toUpperCase() + "  —")
+
+    readonly property string footerLabel: pane.showingImage
+        ? ("—  " + pane.imageName.toUpperCase() + "  —")
+        : pane.clipCount > 0 ? ("—  " + pane.clipName.toUpperCase() + "  ·  VIDEO BLOCKED (BLK-015)  —")
         : "—  NO CLIP LOADED  —"
 
     Rectangle {
         anchors.fill: parent
         color: pane.well
 
+        // ---- Hatch (visible whenever there is no decoded frame) ----------
         Item {
             anchors.fill: parent
             clip: true
+            visible: !pane.showingImage
             Repeater {
                 model: 46
                 delegate: Rectangle {
@@ -63,6 +97,37 @@ Item {
             }
         }
 
+        // ---- Ad slideshow (LIVE path) ------------------------------------
+        Image {
+            id: slide
+            anchors.fill: parent
+            source: pane.src ? pane.src.imageSource : ""
+            asynchronous: true
+            // Ads are large photos and this board has 2 GB with no GPU; cap the
+            // decode to the pane so a 12 MP JPEG does not allocate 48 MB.
+            sourceSize.width: Math.max(1, Math.round(pane.width))
+            sourceSize.height: Math.max(1, Math.round(pane.height))
+            // Fill the well: an ad with letterboxing looks like a bug on a
+            // fixed-function display.
+            fillMode: Image.PreserveAspectCrop
+            cache: false
+            visible: pane.showingImage
+
+            // Fade each slide in. The source swap itself is instant, so animate
+            // on the Ready transition rather than on the property.
+            onStatusChanged: if (status === Image.Ready) slideFade.restart()
+            NumberAnimation {
+                id: slideFade
+                target: slide
+                property: "opacity"
+                from: 0.0
+                to: 1.0
+                duration: 400
+                easing.type: Easing.InOutQuad
+            }
+        }
+
+        // ---- Header ------------------------------------------------------
         Row {
             x: 20
             y: 18
@@ -74,7 +139,7 @@ Item {
             }
             Text {
                 text: pane.statusLabel
-                color: pane.ink
+                color: pane.showingImage ? "white" : pane.ink
                 font.family: pane.monoFont
                 font.pixelSize: 12
                 font.letterSpacing: 2
@@ -85,16 +150,20 @@ Item {
             anchors.right: parent.right
             anchors.rightMargin: 20
             y: 18
-            text: "SAFETY · 720P"
-            color: pane.inkMute
+            text: pane.showingImage
+                  ? ((pane.imageIndex + 1) + " / " + pane.imageCount)
+                  : "SAFETY · 720P"
+            color: pane.showingImage ? "white" : pane.inkMute
             font.family: pane.monoFont
             font.pixelSize: 11
             font.letterSpacing: 2
         }
 
+        // ---- NO SOURCE plate (hidden while a still is up) ------------------
         Column {
             anchors.centerIn: parent
             spacing: 16
+            visible: !pane.showingImage
 
             Rectangle {
                 width: 96; height: 96; radius: 48
@@ -137,11 +206,13 @@ Item {
             }
         }
 
+        // ---- Transport (decorative: no touch controller wired) -------------
         Row {
             x: 20
             anchors.bottom: parent.bottom
             anchors.bottomMargin: 18
             spacing: 12
+            visible: !pane.showingImage
 
             Repeater {
                 model: ["PLAY", "UNMUTE"]
@@ -164,16 +235,28 @@ Item {
                 }
             }
         }
-        Text {
+
+        // ---- Footer caption ------------------------------------------------
+        // Over a photo this needs its own backing or it becomes unreadable.
+        Rectangle {
             anchors.right: parent.right
-            anchors.rightMargin: 20
             anchors.bottom: parent.bottom
-            anchors.bottomMargin: 30
-            text: pane.footerLabel
-            color: pane.inkMute
-            font.family: pane.monoFont
-            font.pixelSize: 11
-            font.letterSpacing: 2
+            anchors.rightMargin: 14
+            anchors.bottomMargin: 24
+            width: footer.implicitWidth + 20
+            height: footer.implicitHeight + 12
+            radius: 2
+            color: pane.showingImage ? Qt.rgba(0, 0, 0, 0.45) : "transparent"
+
+            Text {
+                id: footer
+                anchors.centerIn: parent
+                text: pane.footerLabel
+                color: pane.showingImage ? "white" : pane.inkMute
+                font.family: pane.monoFont
+                font.pixelSize: 11
+                font.letterSpacing: 2
+            }
         }
     }
 }

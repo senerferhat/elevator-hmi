@@ -36,7 +36,39 @@ below, to avoid a second stale pointer existing alongside the current one.)*
 
 ---
 
-## CURRENT TEST TARGET (2026-08-18) — qt-hmi-daylight.wic — wrap 52 + SD chrome
+## CURRENT TEST TARGET (2026-08-19) — qt-hmi-ads.wic — SD ad slideshow LIVE
+
+**Status: recommended for next flash.** The video pane now actually shows media:
+**still images from the SD card play as an ad slideshow**. Stills are a raster
+blit, so they work under the software renderer with no GPU and no KMS — unlike
+video, which stays blocked by BLK-015 and is listed but never faked.
+
+| Field | Value |
+|---|---|
+| **Archive file** | `~/Projects/elevator-hmi/images-archive/qt-hmi-ads.wic` |
+| **WIC SHA-256** | `bf709056f8c7bd6eca3782f1cadea362fcda6f1502d177e17acd1d956f92a56c` |
+| **Deploy name** | `elevator-hmi-image-elevator-hmi-em3566.rootfs-20260818210110.wic` |
+| **What changed** | `MediaBackend` also scans images and drives a 7 s slideshow; `VideoPane` renders them (PreserveAspectCrop, fade-in, `n / N` counter, caption); `hmi media` dumps SD state over UART |
+| **Expected on glass** | `hmi portrait-video`, insert a FAT32 card with `.jpg/.png` → the pane fills with the photo and rotates every 7 s. With only `.mp4` on the card the pane still says `NO SOURCE` + `VIDEO BLOCKED (BLK-015)`. |
+| **On-target** | `hmi media`, `hmi portrait-video`, `hmi wrap` (52) |
+
+```bash
+cd ~/Projects/elevator-hmi/images-archive
+sha256sum qt-hmi-ads.wic   # expect bf709056f8c7bd6eca3782f1cadea362fcda6f1502d177e17acd1d956f92a56c
+sudo rkdeveloptool db loader.bin
+sudo rkdeveloptool wl 0      qt-hmi-ads.wic
+sudo rkdeveloptool wl 64     idblock.img
+sudo rkdeveloptool wl 0x4000 uboot.img
+sudo rkdeveloptool rd
+```
+
+Supported ad formats are limited to what qtbase can decode in this image —
+`.jpg .jpeg .png .bmp .gif`. `qtimageformats` is NOT installed, so webp/tiff are
+deliberately not listed: they would show as playable and then render nothing.
+
+---
+
+## SUPERSEDED (2026-08-18) — qt-hmi-daylight.wic — wrap 52 + SD chrome
 
 **Status: recommended for next flash.** Daylight theme, openFrac boot fix,
 **52 px** wrap (lab-fitted), and Stage 1 SD plumbing: udev mounts VFAT

@@ -1,25 +1,36 @@
 #include "MediaBackend.h"
 
 #include <QDir>
-#include <QFile>
 #include <QFileInfo>
 #include <QStorageInfo>
 
 namespace {
 const QString kMountPath = QStringLiteral("/media/sdcard");
 const int kMaxDepth = 2;
+// Long enough to read an ad, short enough that a lab demo shows it rotating.
+const int kDefaultSlideMs = 7000;
+
+bool hasSuffix(const QString &lower, std::initializer_list<const char *> exts)
+{
+    for (const char *e : exts) {
+        if (lower.endsWith(QLatin1String(e)))
+            return true;
+    }
+    return false;
+}
 
 bool isVideo(const QString &name)
 {
-    const QString lower = name.toLower();
-    return lower.endsWith(QLatin1String(".mp4"))
-        || lower.endsWith(QLatin1String(".mkv"))
-        || lower.endsWith(QLatin1String(".mov"))
-        || lower.endsWith(QLatin1String(".m4v"))
-        || lower.endsWith(QLatin1String(".avi"))
-        || lower.endsWith(QLatin1String(".webm"))
-        || lower.endsWith(QLatin1String(".ts"))
-        || lower.endsWith(QLatin1String(".m2ts"));
+    return hasSuffix(name.toLower(),
+                     { ".mp4", ".mkv", ".mov", ".m4v", ".avi", ".webm", ".ts", ".m2ts" });
+}
+
+// Only formats qtbase can actually decode in this image: libqjpeg + built-in
+// PNG/BMP + libqgif. Deliberately NOT webp/tiff — qtimageformats is not
+// installed, so those would list as playable and then render nothing.
+bool isImage(const QString &name)
+{
+    return hasSuffix(name.toLower(), { ".jpg", ".jpeg", ".png", ".bmp", ".gif" });
 }
 
 bool pathIsMounted(const QString &path)
@@ -27,8 +38,9 @@ bool pathIsMounted(const QString &path)
     const QStorageInfo info(path);
     if (!info.isValid() || !info.isReady())
         return false;
-    // QStorageInfo on an empty unmounted dir reports the parent filesystem
-    // (root). Require the mount point itself.
+    // QStorageInfo on an empty unmounted dir reports the PARENT filesystem
+    // (rootfs), which would look like a mounted card with no files. Require the
+    // mount point itself.
     return QFileInfo(info.rootPath()).canonicalFilePath()
         == QFileInfo(path).canonicalFilePath();
 }
@@ -45,9 +57,17 @@ MediaBackend::MediaBackend(QObject *parent)
 
     connect(&m_watcher, &QFileSystemWatcher::directoryChanged,
             this, &MediaBackend::rescan);
+
+    // udev + inotify should cover insert/remove, but a card can also appear
+    // without either firing usefully (mount races, whole-disk vs partition), so
+    // poll as a backstop. Cheap: a stat plus a shallow readdir.
     connect(&m_poll, &QTimer::timeout, this, &MediaBackend::rescan);
     m_poll.setInterval(1500);
     m_poll.start();
+
+    m_slide.setInterval(kDefaultSlideMs);
+    connect(&m_slide, &QTimer::timeout, this, &MediaBackend::nextImage);
+
     rescan();
 }
 
@@ -58,7 +78,49 @@ QString MediaBackend::clipName() const
     return QFileInfo(m_clips.first()).fileName();
 }
 
-void MediaBackend::scanDir(const QString &path, int depth, QStringList *out)
+QUrl MediaBackend::imageSource() const
+{
+    if (m_images.isEmpty() || m_imageIndex < 0 || m_imageIndex >= m_images.size())
+        return QUrl();
+    return QUrl::fromLocalFile(m_images.at(m_imageIndex));
+}
+
+QString MediaBackend::imageName() const
+{
+    if (m_images.isEmpty() || m_imageIndex < 0 || m_imageIndex >= m_images.size())
+        return QString();
+    return QFileInfo(m_images.at(m_imageIndex)).fileName();
+}
+
+void MediaBackend::setSlideIntervalMs(int ms)
+{
+    // Guard against a 0/negative interval turning the slideshow into a busy
+    // loop that would peg a core on a device with no GPU to spare.
+    const int clamped = qMax(1000, ms);
+    if (clamped == m_slide.interval())
+        return;
+    m_slide.setInterval(clamped);
+    emit slideIntervalChanged();
+}
+
+void MediaBackend::nextImage()
+{
+    if (m_images.size() < 2)
+        return;
+    m_imageIndex = (m_imageIndex + 1) % m_images.size();
+    emit slideChanged();
+}
+
+void MediaBackend::restartSlideshow()
+{
+    if (m_images.size() > 1) {
+        m_slide.start();
+    } else {
+        m_slide.stop();
+    }
+}
+
+void MediaBackend::scanDir(const QString &path, int depth, QStringList *clips, QStringList *images)
 {
     if (depth > kMaxDepth)
         return;
@@ -67,36 +129,57 @@ void MediaBackend::scanDir(const QString &path, int depth, QStringList *out)
                                            QDir::Name);
     for (const QFileInfo &info : entries) {
         if (info.isDir()) {
-            scanDir(info.absoluteFilePath(), depth + 1, out);
+            scanDir(info.absoluteFilePath(), depth + 1, clips, images);
             continue;
         }
-        if (isVideo(info.fileName()))
-            out->append(info.absoluteFilePath());
+        const QString name = info.fileName();
+        if (isVideo(name))
+            clips->append(info.absoluteFilePath());
+        else if (isImage(name))
+            images->append(info.absoluteFilePath());
     }
 }
 
 void MediaBackend::rescan()
 {
     const bool nowMounted = pathIsMounted(m_mountPath);
-    QStringList next;
+    QStringList nextClips;
+    QStringList nextImages;
     QString status;
+
     if (!nowMounted) {
         status = QStringLiteral("NO CARD");
     } else {
-        scanDir(m_mountPath, 0, &next);
-        if (next.isEmpty())
-            status = QStringLiteral("EMPTY");
-        else
-            status = QStringLiteral("READY");
+        scanDir(m_mountPath, 0, &nextClips, &nextImages);
+        status = (nextClips.isEmpty() && nextImages.isEmpty())
+            ? QStringLiteral("EMPTY")
+            : QStringLiteral("READY");
         if (!m_watcher.directories().contains(m_mountPath))
             m_watcher.addPath(m_mountPath);
     }
 
-    if (nowMounted == m_mounted && next == m_clips && status == m_status)
+    const bool sameMedia = (nowMounted == m_mounted)
+        && (nextClips == m_clips)
+        && (nextImages == m_images)
+        && (status == m_status);
+    if (sameMedia)
         return;
 
+    // Keep showing the same file across a rescan when it is still present;
+    // otherwise the poll would restart the slideshow every time anything on the
+    // card changed.
+    const QString showing = imageName().isEmpty() ? QString() : m_images.value(m_imageIndex);
+
     m_mounted = nowMounted;
-    m_clips = next;
+    m_clips = nextClips;
+    m_images = nextImages;
+
+    const int keptIndex = showing.isEmpty() ? -1 : m_images.indexOf(showing);
+    m_imageIndex = keptIndex >= 0 ? keptIndex : 0;
+
     m_status = status;
+    restartSlideshow();
+
     emit mediaChanged();
+    emit slideChanged();
 }
