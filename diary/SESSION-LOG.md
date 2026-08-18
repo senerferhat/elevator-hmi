@@ -1648,3 +1648,80 @@ gap. Otherwise: `cat /sys/kernel/debug/dri/0/summary` during the run to see
 which plane the VOP is scanning out.
 
 ---
+## 2026-08-18 (cont.) — Qt/modetest render but nothing reaches the glass
+
+**State: OPEN.** The Qt image runs correctly; no client except direct `/dev/fb0`
+writes can put pixels on the panel.
+
+### Established (do not re-test)
+
+- **The app is alive.** `ps` shows `386 root 775m S /usr/bin/elevator-hmi`,
+  sleeping, no errors in `/var/log/elevator-hmi.log`. It never crashed.
+- **Qt's EGLFS stack initialises fully.** Mali blob loads
+  (`arm_release_ver: g13p0-01eac0`), `DSI1` selected, `800x1280@60`,
+  `Chose plane 96 (crtc 112)`, gbm surface created, mode set, 3 FBs added.
+- **`/dev/fb0` writes DO display.** White fill → white on glass.
+- **`modetest` with a DUMB buffer also shows nothing.** So this is not Qt, not
+  Mali, not GBM. `modetest -M rockchip -s 191@112:800x1280` sets the mode
+  ("setting mode 800x1280-60.08Hz on connectors 191, crtc 112") and the glass
+  does not change.
+- **vblank and page flips work.** `modetest -v` reports a steady `60.08Hz`, and
+  the VOP IRQ (`46: … fe040000.vop`) advanced 33703 → 33823 in 2 s = 60/s.
+- **DRM software state updates but hardware does not follow.** While Qt ran,
+  `/sys/kernel/debug/dri/0/summary` showed `Smart1-win0` pointing at
+  `addr 0x3ec000`, yet writing into the fbdev buffer (`0x7d0000`) is what
+  changed the glass.
+- **Modeset teardown IS visible.** Ctrl+C on modetest produces a brief off/on
+  flash — a full modeset reaches the hardware; plane/FB swaps apparently do not.
+- Connector `191` = `DSI-1`, connected, one mode `800x1280 60.08`, CRTC `112`.
+
+### Falsified this session (do not revisit)
+
+- *Missing `import QtQuick.Window`.* `QtQuick`'s own `plugins.qmltypes` exports
+  `QtQuick/Window`; proven by a qmllint control test (bogus type IS flagged,
+  `Window` is not).
+- *App crashes / exits early.* `Done(2)` and `Done(1)` were a missing test file
+  and a failed `/root` redirect (`/root` does not exist on this rootfs — root's
+  home is `/home/root`). `kill %1` produced the other.
+- *Missing fonts explain the blank screen.* Fonts ARE genuinely missing and are
+  fixed in `qt-hmi-fonts.wic`, but they are NOT why nothing displays — a plain
+  red/green QML and a dumb-buffer modetest are equally invisible.
+- *`init_sent` guard in patch 0021 makes init one-shot.* Checked the patch:
+  `jadard_unprepare()` clears the flag, so a real teardown re-sends init.
+- *vblank/page-flip interrupts dead.* Refuted by `modetest -v` at 60.08 Hz and
+  the IRQ counter.
+- *fbcon/Qt DRM contention.* `echo 0 > /sys/class/vtconsole/vtcon1/bind`
+  changed nothing.
+- *Qt legacy vs atomic KMS path.* Both `QT_QPA_EGLFS_KMS_ATOMIC=1` and
+  `QT_QPA_EGLFS_ALWAYS_SET_MODE=1` changed nothing. NOTE: it was never confirmed
+  that the atomic flag actually took effect — grep the `qt.qpa.eglfs.kms` log
+  for `Atomic` to check before fully closing this one.
+
+### Instrument error to avoid repeating
+
+The "white fill still works after Qt ran" result was **white written onto an
+already-white screen** — a test that cannot fail. It was wrongly taken as proof
+the panel was still live. The screen has been white since the first fill, so
+**no observation since then has confirmed the panel still updates.**
+
+### THE open question — run this first
+
+```bash
+dd if=/dev/zero of=/dev/fb0 bs=1024 count=4000
+```
+
+- **Goes black** → panel live; fault is that Qt's/modetest's buffers are not the
+  ones being fetched.
+- **Stays white** → the panel froze at the first modeset, and every "still
+  white" result since has been a retained image, not a working display.
+
+### Serial MCP (added 2026-08-18)
+
+`serial-mcp-server` 0.1.3 installed via pipx; registered in Claude Code as
+`serial` with `SERIAL_MCP_MIRROR=ro`. Board UART is **`/dev/ttyACM0`**
+(1a86 CH34x, `usb-1a86_USB_Single_Serial_5671005445-if00`), 115200 8N1, user is
+in `dialout`. **MCP tools only load at session start** — restart Claude Code to
+use them. The port is exclusive: close any screen/minicom first; with mirroring
+on, attach read-only via `screen /tmp/serial-mcp0 115200`.
+
+---
