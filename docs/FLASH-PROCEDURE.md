@@ -36,7 +36,36 @@ below, to avoid a second stale pointer existing alongside the current one.)*
 
 ---
 
-## CURRENT TEST TARGET (2026-08-18) — qt-hmi-fonts.wic — Qt image **with fonts**
+## CURRENT TEST TARGET (2026-08-18) — qt-hmi-linuxfb.wic — **HMI renders on glass**
+
+**Status: recommended for next flash.** First image where the Qt HMI actually
+displays. Uses `linuxfb` + software rendering instead of EGLFS — **KMS scanout
+does not reach this panel (BLK-015)**; `modetest` with a dumb buffer is as
+invisible as Qt. Includes the fonts fix, so text should render for the first time.
+
+| Field | Value |
+|---|---|
+| **Archive file** | `~/Projects/elevator-hmi/images-archive/qt-hmi-linuxfb.wic` |
+| **WIC SHA-256** | `e202c6bce9705ac043fa5f4b3169b9294f39b066c7c62d78a0e8ee133ff494ed` |
+| **Deploy name** | `elevator-hmi-image-elevator-hmi-em3566.rootfs-20260818181923.wic` |
+| **What changed** | `QT_QPA_PLATFORM=linuxfb`, `QT_QUICK_BACKEND=software`; init script unbinds `vtcon1` on start (fbcon shares `/dev/fb0`) and rebinds on stop; `liberation-fonts` + `fontconfig-utils` |
+| **Expected on glass** | Tux/fbcon briefly, then the Qt HMI **with text**: floor number, direction arrow, 12-floor ladder, `IN SERVICE` |
+| **Known cost** | No Mali GPU (software rendering). **GStreamer VPU video will NOT work through linuxfb** — needs BLK-015 fixed. |
+| **On-target checks** | `/var/log/elevator-hmi.log`, `fc-list \| head`, `/etc/init.d/elevator-hmi status` |
+
+```bash
+cd ~/Projects/elevator-hmi/images-archive
+sha256sum qt-hmi-linuxfb.wic   # expect e202c6bce9705ac043fa5f4b3169b9294f39b066c7c62d78a0e8ee133ff494ed
+sudo rkdeveloptool db loader.bin
+sudo rkdeveloptool wl 0      qt-hmi-linuxfb.wic
+sudo rkdeveloptool wl 64     idblock.img
+sudo rkdeveloptool wl 0x4000 uboot.img
+sudo rkdeveloptool rd
+```
+
+---
+
+## SUPERSEDED (2026-08-18) — qt-hmi-fonts.wic — Qt image with fonts (EGLFS, does not display)
 
 **Status: recommended for next flash.** Identical to `qt-hmi.wic` plus the fonts that
 image was missing entirely, and an init script that reports real start failures.

@@ -21,29 +21,57 @@ NAME=elevator-hmi
 PIDFILE=/var/run/${NAME}.pid
 LOGFILE=/var/log/${NAME}.log
 
-# EGLFS with the KMS/GBM backend, matching the qtbase PACKAGECONFIG
-# ("kms gbm gles2 eglfs") and rockchip-libmali's gbm blob variant. Qt would
-# normally auto-detect this, but pinning it makes boot behaviour deterministic
-# and failures easier to read.
-export QT_QPA_PLATFORM=eglfs
-export QT_QPA_EGLFS_INTEGRATION=eglfs_kms
+# PLATFORM: linuxfb + software rendering, NOT eglfs. See BLK-015.
+#
+# 2026-08-18: KMS scanout is broken on this kernel. No KMS client can get a new
+# buffer onto the panel: `modetest` with a plain dumb buffer is as invisible as
+# Qt/EGLFS. Two independent planes on VP1 (Smart1-win0, Esmart1-win0) commit at
+# 60 Hz, vblank fires, and the vop2 driver logs the correct address every single
+# frame (rockchipdrm debug=1) -- yet the hardware keeps scanning out the buffer
+# latched at boot. Only writes INTO that already-latched buffer ever appear,
+# which is why `dd`-ing /dev/fb0 was the one test that ever worked on this board.
+#
+# linuxfb sidesteps it entirely: it renders in software straight into /dev/fb0,
+# i.e. the path that provably works. Verified on glass 2026-08-18 (red/green test
+# QML, then this application).
+#
+# CONSEQUENCES, do not lose these:
+#   - No Mali GPU acceleration. CPU-only rendering (ADR-001 assumed EGLFS/Mali).
+#   - GStreamer zero-copy VPU video (CLAUDE.md §1 Media) needs DRM planes and
+#     will NOT composite through linuxfb. The kernel bug still has to be fixed
+#     before video is possible; this unblocks the UI only.
+#
+# TO REVERT once KMS scanout is fixed: restore the four EGLFS lines below and
+# delete the linuxfb ones. Do not "just try eglfs" without re-running the
+# modetest dumb-buffer check first -- that is the cheap kill test for this bug.
+#   export QT_QPA_PLATFORM=eglfs
+#   export QT_QPA_EGLFS_INTEGRATION=eglfs_kms
+#   export QT_QPA_EGLFS_HIDECURSOR=1
+#   (and drop QT_QUICK_BACKEND)
+export QT_QPA_PLATFORM=linuxfb
+# linuxfb provides no OpenGL context; Qt Quick must use its software renderer or
+# it logs "This plugin does not support createPlatformOpenGLContext!" and draws
+# nothing.
+export QT_QUICK_BACKEND=software
+export QT_QPA_FB_HIDECURSOR=1
 
 # Qt wants XDG_RUNTIME_DIR; without it Qt warns and falls back to /tmp.
 export XDG_RUNTIME_DIR=/run/user/0
-
-# The panel has no touch controller wired on this bring-up board, and there is
-# no cursor to show on a fixed-function HMI.
-export QT_QPA_EGLFS_HIDECURSOR=1
 
 case "$1" in
     start)
         echo -n "Starting ${NAME}: "
         mkdir -p "${XDG_RUNTIME_DIR}"
         chmod 0700 "${XDG_RUNTIME_DIR}"
-        # NOTE: the framebuffer console (CONFIG_FRAMEBUFFER_CONSOLE, enabled
-        # 2026-08-07) also owns the DRM device. Qt/EGLFS takes DRM master when
-        # it starts; if the console repaints over the UI, blank the console
-        # with: echo 0 > /sys/class/vtconsole/vtcon1/bind
+        # The framebuffer console (CONFIG_FRAMEBUFFER_CONSOLE) draws into the
+        # SAME /dev/fb0 that linuxfb renders into, so it will repaint the login
+        # prompt and cursor straight over the HMI. Unbind it before starting.
+        # (Under the old EGLFS config this was only a theoretical contention;
+        # with linuxfb it is a guaranteed conflict.) Kept non-fatal: on a kernel
+        # without fbcon the node simply does not exist.
+        if [ -w /sys/class/vtconsole/vtcon1/bind ]; then
+            echo 0 > /sys/class/vtconsole/vtcon1/bind 2>/dev/null || true
+        fi
         start-stop-daemon --start --background --make-pidfile \
             --pidfile "${PIDFILE}" --startas /bin/sh -- \
             -c "exec ${DAEMON} >> ${LOGFILE} 2>&1"
@@ -68,6 +96,11 @@ case "$1" in
         echo -n "Stopping ${NAME}: "
         start-stop-daemon --stop --pidfile "${PIDFILE}" --retry 5 --oknodo
         rm -f "${PIDFILE}"
+        # Give the console back so the panel is usable for diagnostics once the
+        # HMI is stopped; otherwise the screen keeps the app's last frame.
+        if [ -w /sys/class/vtconsole/vtcon1/bind ]; then
+            echo 1 > /sys/class/vtconsole/vtcon1/bind 2>/dev/null || true
+        fi
         echo "OK"
         ;;
     restart|force-reload)

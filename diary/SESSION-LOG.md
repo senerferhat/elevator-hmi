@@ -1725,3 +1725,54 @@ use them. The port is exclusive: close any screen/minicom first; with mirroring
 on, attach read-only via `screen /tmp/serial-mcp0 115200`.
 
 ---
+## 2026-08-18 (cont.) — Qt renders on the panel via linuxfb; KMS scanout is broken (BLK-015)
+
+**Result: the HMI is on the glass.** `QT_QPA_PLATFORM=linuxfb` +
+`QT_QUICK_BACKEND=software` renders correctly — verified with a red/green test
+QML and then `/usr/bin/elevator-hmi` itself.
+
+**Root cause of the black screen: BLK-015.** Nothing that goes through KMS
+reaches the panel. `modetest` with a plain dumb buffer fails exactly like
+Qt/EGLFS, while the vop2 driver logs the correct address every frame at 60 Hz
+and vblank fires 60/s. The hardware keeps scanning the buffer latched at boot;
+only writes *into* that buffer appear. Full details, evidence, and the six
+falsified hypotheses are in `diary/BLOCKERS.md` BLK-015.
+
+**Working directly on the board.** Installed `serial-mcp-server` and registered
+it in Claude Code, but MCP tools only load at session start, so this session
+drove the console over Bash + pyserial instead. **The console is 1500000 baud**,
+not 115200 — that cost one dead-end round (zero bytes) and was found in the
+user's own `minicom -b 1500000` line.
+
+**Instrument discipline, twice.**
+- The "white fill still works" check wrote **white onto an already-white
+  screen** — a test that cannot fail. It was wrongly read as proof the panel was
+  live. The black fill is what actually proved it.
+- `YRGB_MST` reading `0x00000000` looked like a smoking gun until it was checked
+  against a **known-working** display, where it also read zero. Write-only
+  register; hypothesis withdrawn before it was reported as a cause.
+
+**Changes.**
+- `elevator-hmi.init`: linuxfb + software backend; unbinds `vtcon1` on start
+  (fbcon draws into the same `/dev/fb0` and would repaint over the HMI) and
+  rebinds on stop. Full revert instructions in the file for when KMS is fixed.
+- `elevator-hmi-image.bb`: `profile.d` / `environment.d` now export linuxfb +
+  software, so an interactive `qml foo.qml` behaves like the service.
+- Fonts (`liberation-fonts`, `fontconfig-utils`) from the earlier commit are in
+  this image, so text should render for the first time.
+
+**⚠ Not fixed, and must not be forgotten:** linuxfb costs the **Mali GPU**, and
+**GStreamer zero-copy VPU video needs DRM planes and cannot composite through
+linuxfb**. Video remains impossible until BLK-015 is fixed. ADR-001 assumed
+EGLFS/Mali; this is a documented deviation, not a new decision.
+
+- **New flash target:** `images-archive/qt-hmi-linuxfb.wic`
+- **SHA-256:** `e202c6bce9705ac043fa5f4b3169b9294f39b066c7c62d78a0e8ee133ff494ed`
+- Build: 0 errors, `BUILD_EXIT=0` under `set -o pipefail`; shipped init script
+  verified from the built RPM (linuxfb + vtcon1 lines present).
+
+**Next:** boot the vendor's own Debian/Buildroot image and run the same
+`modetest`. That separates "we broke it" from "the BSP can't do KMS on VP1",
+and finally gives a working reference to diff against.
+
+---

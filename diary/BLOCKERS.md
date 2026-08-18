@@ -7,7 +7,60 @@
 
 ## Open Blockers
 
-*(none blocking the display gate — BLK-014 closed 2026-08-07, see Resolved section.)*
+### BLK-015 — KMS scanout never reaches the panel (VOP2/VP1) — 🔴 **OPEN 2026-08-18**
+**Opened:** 2026-08-18
+**Severity:** HIGH for media — **worked around for UI** (linuxfb), see below.
+
+**Symptom.** No KMS client can put a new buffer on the panel. Qt/EGLFS, and
+**`modetest` with a plain dumb buffer**, are equally invisible. Only writes
+*into the framebuffer that is already latched* (`/dev/fb0`) ever appear.
+
+**Evidence (all measured on target 2026-08-18, serial console).**
+- `modetest -M rockchip -s 191@112:800x1280` sets the mode ("setting mode
+  800x1280-60.08Hz on connectors 191, crtc 112") — glass unchanged.
+- `modetest -v` runs at a steady **60.08 Hz**; VOP IRQ 46 (`fe040000.vop`)
+  advances 33703 → 33823 in 2 s = exactly 60/s. **vblank and page flips work.**
+- With `rockchipdrm debug=1` (`VOP_DEBUG_PLANE`), the driver logs the correct
+  address **every frame**:
+  `vp1 update Smart1-win0[800x1280@(0,0)->800x1280@(0,0)] zpos[1] fmt[XR24]
+  addr[0x00000000bb8000] ... by kworker/u8:0`, alternating with the second
+  flip buffer. So the **driver is programming scanout correctly**.
+- Two independent planes on VP1 (`Smart1-win0` **96** and `Esmart1-win0` **120**)
+  active simultaneously, each with its own buffer — **neither latches**.
+- While a client owned the plane, writing into the fbdev buffer still changed the
+  glass → the hardware never left the buffer latched at boot.
+- **No** IOMMU page faults, no VOP errors in `dmesg`.
+- Full modeset teardown IS visible (Ctrl+C on modetest flashes the panel off/on),
+  so modesets reach hardware; only plane/buffer updates fail to latch.
+- Single display device: `card0` = `rockchip display-subsystem`; `card1` is the
+  **NPU** (`rknpu`). `/dev/fb0` is `rockchipdrmfb` on that same device.
+
+**Falsified — do NOT retry:** `YRGB_MST` reading `0x0` (it reads 0 even when the
+display works — write-only/shadowed); dead vblank; fbdev/fbcon fighting the
+client (with fbcon unbound the two addresses are just the client's own
+front/back buffers, 121 vs 120); per-plane bug; kernel config gaps
+(`CONFIG_ROCKCHIP_VOP2=y`, `ROCKCHIP_DW_MIPI_DSI=y`, `PHY_ROCKCHIP_INNO_DSIDPHY=y`,
+`ROCKCHIP_IOMMU=y` all set); `loader_protect` (only gates `vop2_clk_reset`).
+
+**Workaround IN EFFECT (UI only).** `QT_QPA_PLATFORM=linuxfb` +
+`QT_QUICK_BACKEND=software` — Qt renders in software directly into `/dev/fb0`,
+the path that provably works. **Verified on glass 2026-08-18**: red/green test
+QML, then `/usr/bin/elevator-hmi` itself. The init script also unbinds
+`vtcon1` because fbcon draws into the same `/dev/fb0`.
+
+**Why this is still HIGH.** The workaround costs the **Mali GPU** (ADR-001
+assumed EGLFS/Mali) and, more seriously, **GStreamer zero-copy VPU video
+(CLAUDE.md §1 Media) needs DRM planes and cannot composite through linuxfb.**
+Video is impossible until this is fixed.
+
+**Next step (not yet done):** boot the **vendor's own Debian/Buildroot image**
+on this board and run the identical `modetest` command. That single test
+separates "our kernel/DTS broke plane latching" from "this vendor BSP cannot do
+KMS on VP1 at all", and gives a working reference to diff against — the thing
+that was missing throughout BLK-014.
+
+**Tracked in:** `CLAUDE.md` §2, `docs/FLASH-PROCEDURE.md`,
+`meta-hmi-app/recipes-qt/elevator-hmi-app/files/elevator-hmi.init` (revert notes).
 
 ---
 

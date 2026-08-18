@@ -88,8 +88,16 @@ IMAGE_INSTALL += " \
 ROOTFS_POSTPROCESS_COMMAND:append = "elevator_hmi_qt_eglfs_env;"
 
 elevator_hmi_qt_eglfs_env() {
+    # linuxfb + software rendering, NOT eglfs — see BLK-015 and the long comment
+    # in meta-hmi-app/recipes-qt/elevator-hmi-app/files/elevator-hmi.init.
+    # Short version: KMS scanout does not reach the panel on this kernel (even
+    # `modetest` with a dumb buffer is invisible), so Qt renders in software
+    # straight into /dev/fb0, which is the only path that works. This makes an
+    # interactive `qml foo.qml` over the serial console behave the same as the
+    # HMI service, instead of silently drawing nothing.
     install -d ${IMAGE_ROOTFS}${sysconfdir}/profile.d
-    printf '%s\n' 'export QT_QPA_PLATFORM=eglfs' > ${IMAGE_ROOTFS}${sysconfdir}/profile.d/qt-eglfs.sh
+    printf '%s\n%s\n' 'export QT_QPA_PLATFORM=linuxfb' 'export QT_QUICK_BACKEND=software' \
+        > ${IMAGE_ROOTFS}${sysconfdir}/profile.d/qt-eglfs.sh
     chmod 0755 ${IMAGE_ROOTFS}${sysconfdir}/profile.d/qt-eglfs.sh
 
     # NOTE (2026-08-07): /etc/environment.d is a **systemd** mechanism and this
@@ -101,6 +109,7 @@ elevator_hmi_qt_eglfs_env() {
     # §8, which assumes systemd for PAL and the watchdog, and AGENTS TASK-116).
     # Anything auto-starting the app must set QT_QPA_PLATFORM itself.
     install -d ${IMAGE_ROOTFS}${sysconfdir}/environment.d
-    printf '%s\n' 'QT_QPA_PLATFORM=eglfs' > ${IMAGE_ROOTFS}${sysconfdir}/environment.d/90-qt-eglfs.conf
+    printf '%s\n%s\n' 'QT_QPA_PLATFORM=linuxfb' 'QT_QUICK_BACKEND=software' \
+        > ${IMAGE_ROOTFS}${sysconfdir}/environment.d/90-qt-eglfs.conf
     chmod 0644 ${IMAGE_ROOTFS}${sysconfdir}/environment.d/90-qt-eglfs.conf
 }
