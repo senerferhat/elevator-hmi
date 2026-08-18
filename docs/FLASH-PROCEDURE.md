@@ -36,9 +36,38 @@ below, to avoid a second stale pointer existing alongside the current one.)*
 
 ---
 
-## CURRENT TEST TARGET (2026-08-18) — qt-hmi-linuxfb.wic — **HMI renders on glass**
+## CURRENT TEST TARGET (2026-08-18) — qt-hmi-layouts.wic — HTML demo GUI, CLI layouts
 
-**Status: recommended for next flash.** First image where the Qt HMI actually
+**Status: recommended for next flash.** Portrait 800×1280 HMI from
+`design/elevator-hmi` (Vertical + Vertical Video). linuxfb + software
+rendering (BLK-015). Demo cycle always runs. Switch layouts on the board
+with `hmi car` / `hmi video` (no tweaks menu). Video pane is empty until
+the SD-card player task.
+
+| Field | Value |
+|---|---|
+| **Archive file** | `~/Projects/elevator-hmi/images-archive/qt-hmi-layouts.wic` |
+| **WIC SHA-256** | `92c19eeb6ec57952af1a33ba4702bdc62e4274a3f89e8cd8fa621128116eb502` |
+| **git HEAD** | `a25793d` |
+| **Deploy name** | `elevator-hmi-image-elevator-hmi-em3566.rootfs-20260818190945.wic` |
+| **Expected on glass** | Full elevator GUI (floor rail, hero number, DEST/SPEED/ETA, cards, activity log) with `DEMO · TRAVEL/DOOR/DWELL`. After `hmi video`: same GUI compacted under an empty `NO SOURCE / SD CARD · EMPTY` pane. |
+| **On-target** | `hmi` / `hmi car` / `hmi video` ; `/var/log/elevator-hmi.log` |
+
+```bash
+cd ~/Projects/elevator-hmi/images-archive
+sha256sum qt-hmi-layouts.wic   # expect 92c19eeb6ec57952af1a33ba4702bdc62e4274a3f89e8cd8fa621128116eb502
+sudo rkdeveloptool db loader.bin
+sudo rkdeveloptool wl 0      qt-hmi-layouts.wic
+sudo rkdeveloptool wl 64     idblock.img
+sudo rkdeveloptool wl 0x4000 uboot.img
+sudo rkdeveloptool rd
+```
+
+---
+
+## SUPERSEDED (2026-08-18) — qt-hmi-linuxfb.wic — first HMI on glass
+
+**Status: superseded** by `qt-hmi-layouts.wic`. First image where the Qt HMI actually
 displays. Uses `linuxfb` + software rendering instead of EGLFS — **KMS scanout
 does not reach this panel (BLK-015)**; `modetest` with a dumb buffer is as
 invisible as Qt. Includes the fonts fix, so text should render for the first time.

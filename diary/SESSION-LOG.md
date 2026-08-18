@@ -1818,3 +1818,14 @@ hmi video      # GUI + empty video pane
 ```
 
 ---
+
+## 2026-08-18 (22:10) — qt-hmi-layouts.wic built
+
+- 5958 tasks, all succeeded, `KAS_EXIT=0`, 0 `ERROR: Task`.
+- Hardlinked `images-archive/qt-hmi-layouts.wic`
+  SHA `92c19eeb6ec57952af1a33ba4702bdc62e4274a3f89e8cd8fa621128116eb502`
+- App payload: `/usr/bin/elevator-hmi`, `/usr/bin/hmi`,
+  `/usr/share/elevator-hmi/main.qml` (51 KB), init script.
+- **current flash target:** `qt-hmi-layouts.wic` (SHA above).
+
+---
