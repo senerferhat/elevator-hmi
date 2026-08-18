@@ -1829,3 +1829,43 @@ hmi video      # GUI + empty video pane
 - **current flash target:** `qt-hmi-layouts.wic` (SHA above).
 
 ---
+
+## 2026-08-18 (22:22) — both orientations installed (portrait + landscape)
+
+Product requirement: ship **all four** HTML designs, not portrait-only.
+`docs/roadmap-v1.md` is cited in CLAUDE.md §9 but **is not in the tree**.
+HANDOFF-2026-08-17 had "panel orientation = product decision, deferred."
+The design index (`design/elevator-hmi/index.html`) is the spec: Vertical,
+Vertical Video, Landscape, Landscape + Video.
+
+Implemented:
+
+- `portrait` / `portrait-video` — native 800×1280 (aliases `car` / `video`).
+- `landscape` / `landscape-video` — 1280×800 stage **rotated** 90° (or 270°)
+  onto the portrait framebuffer. Not `QT_QPA_FB_ROTATION` — linuxfb already
+  writes the boot-latched `/dev/fb0` (BLK-015); plugin rotate is untested.
+- `hmi rot 90|270` persists `/etc/elevator-hmi.rotation` if the car mount
+  is the other way up.
+- Video panes stay empty (`NO SOURCE` / `SD CARD · EMPTY`). Demo cycle
+  unchanged.
+
+### On-target
+
+```bash
+hmi
+hmi portrait
+hmi portrait-video
+hmi landscape
+hmi landscape-video
+hmi rot 270
+```
+
+### Image
+
+- Hardlinked `images-archive/qt-hmi-orientations.wic`
+  SHA `0a3a6f6b892fbe80446b3e5ca1cc7b5be7df6fef9893133a3c2d69a9f6482984`
+- Deploy: `elevator-hmi-image-elevator-hmi-em3566.rootfs-20260818192134.wic`
+- **current flash target:** `qt-hmi-orientations.wic` (SHA above).
+- `KAS_EXIT=0`, app RPM ships all 9 QML files under `/usr/share/elevator-hmi/`.
+
+---

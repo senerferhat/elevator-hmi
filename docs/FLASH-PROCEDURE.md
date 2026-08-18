@@ -36,13 +36,52 @@ below, to avoid a second stale pointer existing alongside the current one.)*
 
 ---
 
-## CURRENT TEST TARGET (2026-08-18) — qt-hmi-layouts.wic — HTML demo GUI, CLI layouts
+## CURRENT TEST TARGET (2026-08-18) — qt-hmi-orientations.wic — portrait + landscape
 
-**Status: recommended for next flash.** Portrait 800×1280 HMI from
-`design/elevator-hmi` (Vertical + Vertical Video). linuxfb + software
-rendering (BLK-015). Demo cycle always runs. Switch layouts on the board
-with `hmi car` / `hmi video` (no tweaks menu). Video pane is empty until
-the SD-card player task.
+**Status: recommended for next flash.** Four HTML designs installed
+(portrait, portrait-video, landscape, landscape-video). Native panel is
+still 800×1280; landscape is a 1280×800 stage rotated onto that
+framebuffer (`hmi rot 90|270`). linuxfb + software rendering (BLK-015).
+Demo cycle always runs. Video panes are empty until the SD-card player
+task.
+
+| Field | Value |
+|---|---|
+| **Archive file** | `~/Projects/elevator-hmi/images-archive/qt-hmi-orientations.wic` |
+| **WIC SHA-256** | `0a3a6f6b892fbe80446b3e5ca1cc7b5be7df6fef9893133a3c2d69a9f6482984` |
+| **git HEAD** | `659a29e` |
+| **Deploy name** | `elevator-hmi-image-elevator-hmi-em3566.rootfs-20260818192134.wic` |
+| **Expected on glass** | Portrait full HMI with `DEMO · TRAVEL/DOOR/DWELL`. After `hmi landscape`: same car state in the 1280×800 layout, rotated onto the portrait panel. After `hmi portrait-video` / `hmi landscape-video`: empty `NO SOURCE / SD CARD · EMPTY` pane. |
+| **On-target** | `hmi` / `hmi portrait` / `hmi portrait-video` / `hmi landscape` / `hmi landscape-video` / `hmi rot 90\|270` |
+| **Aliases** | `hmi car` = portrait, `hmi video` = portrait-video |
+
+```bash
+cd ~/Projects/elevator-hmi/images-archive
+sha256sum qt-hmi-orientations.wic   # expect 0a3a6f6b892fbe80446b3e5ca1cc7b5be7df6fef9893133a3c2d69a9f6482984
+sudo rkdeveloptool db loader.bin
+sudo rkdeveloptool wl 0      qt-hmi-orientations.wic
+sudo rkdeveloptool wl 64     idblock.img
+sudo rkdeveloptool wl 0x4000 uboot.img
+sudo rkdeveloptool rd
+```
+
+After login on serial:
+
+```bash
+hmi                    # show current layout + rotation
+hmi portrait           # 800×1280 full HMI
+hmi portrait-video     # 800×1280 + empty video pane on top
+hmi landscape          # 1280×800 full HMI, rotated onto the panel
+hmi landscape-video    # 1280×800, video left, HMI right, rotated
+hmi rot 270            # if landscape is the wrong way up in the car
+```
+
+---
+
+## SUPERSEDED (2026-08-18) — qt-hmi-layouts.wic — HTML demo GUI, CLI layouts
+
+**Status: superseded** by `qt-hmi-orientations.wic` (adds landscape). Portrait-only
+800×1280 HMI from `design/elevator-hmi` (Vertical + Vertical Video).
 
 | Field | Value |
 |---|---|
@@ -50,18 +89,7 @@ the SD-card player task.
 | **WIC SHA-256** | `92c19eeb6ec57952af1a33ba4702bdc62e4274a3f89e8cd8fa621128116eb502` |
 | **git HEAD** | `a25793d` |
 | **Deploy name** | `elevator-hmi-image-elevator-hmi-em3566.rootfs-20260818190945.wic` |
-| **Expected on glass** | Full elevator GUI (floor rail, hero number, DEST/SPEED/ETA, cards, activity log) with `DEMO · TRAVEL/DOOR/DWELL`. After `hmi video`: same GUI compacted under an empty `NO SOURCE / SD CARD · EMPTY` pane. |
-| **On-target** | `hmi` / `hmi car` / `hmi video` ; `/var/log/elevator-hmi.log` |
-
-```bash
-cd ~/Projects/elevator-hmi/images-archive
-sha256sum qt-hmi-layouts.wic   # expect 92c19eeb6ec57952af1a33ba4702bdc62e4274a3f89e8cd8fa621128116eb502
-sudo rkdeveloptool db loader.bin
-sudo rkdeveloptool wl 0      qt-hmi-layouts.wic
-sudo rkdeveloptool wl 64     idblock.img
-sudo rkdeveloptool wl 0x4000 uboot.img
-sudo rkdeveloptool rd
-```
+| **On-target** | `hmi` / `hmi car` / `hmi video` |
 
 ---
 

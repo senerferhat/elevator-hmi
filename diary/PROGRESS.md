@@ -7,6 +7,21 @@
 > milestone-level summaries only.
 
 
+## 2026-08-18 — both orientations installed (portrait + landscape)
+
+**Agent:** continuation
+
+- Product goal: HMI supports **landscape and portrait**. The four
+  `design/elevator-hmi` HTML variants are all installed and CLI-switchable
+  (`hmi portrait` / `portrait-video` / `landscape` / `landscape-video`).
+  Landscape is a 1280×800 QML stage rotated onto the native 800×1280
+  framebuffer (`hmi rot 90|270`). Panel hardware is unchanged (portrait
+  scanout). `docs/roadmap-v1.md` is missing from the tree; HANDOFF
+  orientation row closed.
+- **Image:** `images-archive/qt-hmi-orientations.wic`
+  SHA `0a3a6f6b892fbe80446b3e5ca1cc7b5be7df6fef9893133a3c2d69a9f6482984`.
+- Video panes still empty (BLK-015 + next-task SD player).
+
 ## 2026-08-18 — first Qt 6.8.3 EGLFS image built (qt-hmi.wic)
 
 **Agent:** continuation (takeover mid-build)
