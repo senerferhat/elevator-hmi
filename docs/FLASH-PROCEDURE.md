@@ -38,8 +38,9 @@ below, to avoid a second stale pointer existing alongside the current one.)*
 
 ## CURRENT TEST TARGET (2026-08-18) — qt-hmi-orientations.wic — portrait + landscape
 
-**Status: recommended for next flash.** Four HTML designs installed
-(portrait, portrait-video, landscape, landscape-video). Native panel is
+**Status: recommended for next flash.** Replaces the first orientations
+image (`0a3a6f6b…`) which only showed the DEMO chip — `Loader.setSource`
+resolved against cwd `/`. Four HTML designs installed. Native panel is
 still 800×1280; landscape is a 1280×800 stage rotated onto that
 framebuffer (`hmi rot 90|270`). linuxfb + software rendering (BLK-015).
 Demo cycle always runs. Video panes are empty until the SD-card player
@@ -48,16 +49,16 @@ task.
 | Field | Value |
 |---|---|
 | **Archive file** | `~/Projects/elevator-hmi/images-archive/qt-hmi-orientations.wic` |
-| **WIC SHA-256** | `0a3a6f6b892fbe80446b3e5ca1cc7b5be7df6fef9893133a3c2d69a9f6482984` |
-| **git HEAD** | `659a29e` |
-| **Deploy name** | `elevator-hmi-image-elevator-hmi-em3566.rootfs-20260818192134.wic` |
+| **WIC SHA-256** | `d45ed163958d9ee4a148ccb13d67ba32fb865fd3b2e3d22e670cc6628e97b6a5` |
+| **git HEAD** | *(this commit)* |
+| **Deploy name** | `elevator-hmi-image-elevator-hmi-em3566.rootfs-20260818194759.wic` |
 | **Expected on glass** | Portrait full HMI with `DEMO · TRAVEL/DOOR/DWELL`. After `hmi landscape`: same car state in the 1280×800 layout, rotated onto the portrait panel. After `hmi portrait-video` / `hmi landscape-video`: empty `NO SOURCE / SD CARD · EMPTY` pane. |
 | **On-target** | `hmi` / `hmi portrait` / `hmi portrait-video` / `hmi landscape` / `hmi landscape-video` / `hmi rot 90\|270` |
 | **Aliases** | `hmi car` = portrait, `hmi video` = portrait-video |
 
 ```bash
 cd ~/Projects/elevator-hmi/images-archive
-sha256sum qt-hmi-orientations.wic   # expect 0a3a6f6b892fbe80446b3e5ca1cc7b5be7df6fef9893133a3c2d69a9f6482984
+sha256sum qt-hmi-orientations.wic   # expect d45ed163958d9ee4a148ccb13d67ba32fb865fd3b2e3d22e670cc6628e97b6a5
 sudo rkdeveloptool db loader.bin
 sudo rkdeveloptool wl 0      qt-hmi-orientations.wic
 sudo rkdeveloptool wl 64     idblock.img

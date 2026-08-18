@@ -212,26 +212,37 @@ Window {
     Component.onCompleted: {
         logEvent(floorNames[car.currentIndex], "CAR CALL ACCEPTED");
         logEvent(floorNames[car.currentIndex], "SYSTEM READY");
-        stage.setSource(root.landscape ? "LandscapeView.qml" : "PortraitView.qml",
-                        { "hmi": root });
     }
 
     // Landscape content is 1280×800, centered then rotated so it fills the
     // native 800×1280 window. Portrait content is 800×1280 unrotated.
+    //
+    // Do NOT Loader.setSource("PortraitView.qml"): the daemon's cwd is /, so a
+    // relative URL looks for /PortraitView.qml, the Loader stays empty, and
+    // the only thing on glass is this file's DEMO chip (seen 2026-08-18).
+    // Sibling types in /usr/share/elevator-hmi/ are implicit imports of
+    // main.qml — instantiate them directly.
     Item {
         id: stageHost
+        // Portrait: same size as the window (native 800×1280).
+        // Landscape: 1280×800 centered, then rotated onto that window.
+        // Do not mix anchors.fill with these sizes — that fights the
+        // landscape geometry.
+        width: root.landscape ? 1280 : parent.width
+        height: root.landscape ? 800 : parent.height
         anchors.centerIn: parent
-        width: root.landscape ? 1280 : 800
-        height: root.landscape ? 800 : 1280
         rotation: root.landscape ? root.stageRotation : 0
+        transformOrigin: Item.Center
 
-        Loader {
-            id: stage
+        PortraitView {
             anchors.fill: parent
-            onStatusChanged: {
-                if (status === Loader.Error)
-                    console.error("HMI view failed to load:", source)
-            }
+            visible: !root.landscape
+            hmi: root
+        }
+        LandscapeView {
+            anchors.fill: parent
+            visible: root.landscape
+            hmi: root
         }
 
         Rectangle {

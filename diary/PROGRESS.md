@@ -7,6 +7,17 @@
 > milestone-level summaries only.
 
 
+## 2026-08-18 — QML views failed to load (only DEMO chip); fixed
+
+**Agent:** continuation
+
+- On-glass: `qt-hmi-orientations.wic` `0a3a6f6b…` showed only `DEMO · TRAVEL`
+  at the bottom. `Loader.setSource("PortraitView.qml")` resolved against
+  cwd `/`. Fixed by instantiating the views directly.
+- **Image:** `images-archive/qt-hmi-orientations.wic`
+  SHA `d45ed163958d9ee4a148ccb13d67ba32fb865fd3b2e3d22e670cc6628e97b6a5`
+  (same archive name, new bits).
+
 ## 2026-08-18 — both orientations installed (portrait + landscape)
 
 **Agent:** continuation

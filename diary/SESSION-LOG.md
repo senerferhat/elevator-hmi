@@ -1869,3 +1869,29 @@ hmi rot 270
 - `KAS_EXIT=0`, app RPM ships all 9 QML files under `/usr/share/elevator-hmi/`.
 
 ---
+
+## 2026-08-18 (22:48) — fix empty glass: views never loaded
+
+Owner report on `qt-hmi-orientations.wic` (SHA `0a3a6f6b…`): only the
+`DEMO · TRAVEL/DOOR` chip at the bottom of the panel, all layouts. That chip
+lives in `main.qml`; the rest of the UI was in `PortraitView.qml` /
+`LandscapeView.qml` loaded via `Loader.setSource("PortraitView.qml")`.
+The sysvinit daemon's cwd is `/`, so the relative URL resolved to
+`/PortraitView.qml` (missing). Loader stayed empty; process still ran
+(init printed OK).
+
+Fix: instantiate `PortraitView` / `LandscapeView` as sibling types of
+`main.qml` (no Loader, no relative URL). QML warnings now go to
+`/var/log/elevator-hmi.log`.
+
+**current flash target:** `images-archive/qt-hmi-orientations.wic`
+SHA `d45ed163958d9ee4a148ccb13d67ba32fb865fd3b2e3d22e670cc6628e97b6a5`
+Deploy: `elevator-hmi-image-elevator-hmi-em3566.rootfs-20260818194759.wic`
+(replaces the broken `0a3a6f6b…` hardlink of the same archive name).
+
+On glass after flash: full portrait GUI (floor rail, hero, cards), not
+just the DEMO chip. Then `hmi landscape` / `hmi portrait-video`.
+
+If the app fails to start: `cat /var/log/elevator-hmi.log` — look for `QML:`.
+
+---

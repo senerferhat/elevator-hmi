@@ -1,5 +1,7 @@
 #include <QGuiApplication>
+#include <QList>
 #include <QQmlApplicationEngine>
+#include <QQmlError>
 #include <QStringList>
 #include <QUrl>
 #include <cstdio>
@@ -90,6 +92,11 @@ int main(int argc, char *argv[])
 
     QQmlApplicationEngine engine;
     engine.addImportPath(QStringLiteral("/usr/share/elevator-hmi"));
+    QObject::connect(&engine, &QQmlApplicationEngine::warnings,
+                     [](const QList<QQmlError> &warnings) {
+                         for (const QQmlError &e : warnings)
+                             std::fprintf(stderr, "QML: %s\n", qPrintable(e.toString()));
+                     });
     engine.load(QUrl::fromLocalFile(QStringLiteral("/usr/share/elevator-hmi/main.qml")));
     if (engine.rootObjects().isEmpty()) {
         return 1;
