@@ -11,6 +11,7 @@
 // Qt image for no benefit in a fixed-function HMI that has no generic widgets.
 
 import QtQuick
+import QtQuick.Window
 
 Window {
     id: root
@@ -232,12 +233,13 @@ Window {
         // ---- Footer / provenance -------------------------------------------
         // Static provenance line. QML has no reliable runtime accessor for the
         // Qt version (Qt.application.version is the *app* version), and the Qt
-        // release is fixed by ADR-001 / the pinned meta-qt6 lts-6.8.7 branch,
+        // release is fixed by ADR-001a / the pinned meta-qt6 public 6.8.3
+        // branch (Qt 6.8 LTS is commercial-only),
         // so state it literally rather than inventing a lookup.
         Text {
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
-            text: "LMT101SX006C · 800×1280 · Qt 6.8 LTS · EGLFS"
+            text: "LMT101SX006C · 800×1280 · Qt 6.8.3 · EGLFS"
             color: "#39414d"
             font.pixelSize: 22
         }

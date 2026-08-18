@@ -58,6 +58,29 @@ IMAGE_INSTALL += " \
     libgpiod-tools \
 "
 
+# Fonts. The first Qt image (2026-08-17) shipped libfontconfig1 and libfreetype6
+# — pulled in as qtbase *library* dependencies — but not one font FILE.
+#
+# /etc/fonts was NOT missing: the fontconfig recipe's main package is renamed to
+# libfontconfig1 by the Debian packaging rules (PKG:fontconfig = libfontconfig1)
+# and it carries fonts.conf + conf.d. Only the fonts themselves were absent, so
+# `fontconfig` below is redundant-but-explicit — it resolves to libfontconfig1.
+#
+# Qt resolves QML `Text` through fontconfig, so with no font installed every
+# text element renders blank: no floor number, no labels, no ladder digits. On
+# this HMI's dark background that is visually indistinguishable from a dead
+# panel — the same failure shape that made BLK-014 take two months.
+#
+# liberation-fonts is in poky (metric-compatible with Arial/Helvetica, ships
+# Regular/Bold/Italic so font.bold in the QML resolves). fontconfig-utils gives
+# fc-list / fc-match for diagnosing font problems on target, and provides the
+# fc-cache that the fontcache class postinst runs.
+IMAGE_INSTALL += " \
+    fontconfig \
+    fontconfig-utils \
+    liberation-fonts \
+"
+
 # No X11, no Wayland, no display manager — EGLFS only.
 # DISTRO_FEATURES x11/wayland already removed in meta-hmi-platform/conf/distro/elevator-hmi.conf (TASK-108).
 # Do not repeat DISTRO_FEATURES:remove here — it cannot be reliably modified in an image recipe.

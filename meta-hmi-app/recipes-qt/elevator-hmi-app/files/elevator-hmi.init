@@ -47,7 +47,22 @@ case "$1" in
         start-stop-daemon --start --background --make-pidfile \
             --pidfile "${PIDFILE}" --startas /bin/sh -- \
             -c "exec ${DAEMON} >> ${LOGFILE} 2>&1"
-        echo "OK"
+        # --background forks and returns success as soon as the child is
+        # spawned, regardless of whether it survives. On 2026-08-18 this printed
+        # "OK" for an app that exited immediately (QML load error), which made
+        # the failure invisible in the boot log and sent us looking at the
+        # panel. Confirm the process is actually still alive before claiming OK,
+        # and put the reason on the console where it will be seen.
+        sleep 2
+        if [ -f "${PIDFILE}" ] && kill -0 "$(cat "${PIDFILE}")" 2>/dev/null; then
+            echo "OK"
+        else
+            echo "FAILED"
+            echo "--- last lines of ${LOGFILE} ---"
+            tail -n 20 "${LOGFILE}" 2>/dev/null
+            echo "--------------------------------"
+            exit 1
+        fi
         ;;
     stop)
         echo -n "Stopping ${NAME}: "
