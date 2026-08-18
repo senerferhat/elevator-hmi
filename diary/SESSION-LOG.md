@@ -1789,3 +1789,32 @@ Pushed the five local commits that were still ahead of `origin/develop`
 (`7c82fe3` fonts → `1ec4831` serial-mcp gitignore).
 
 ---
+
+## 2026-08-18 (22:15) — finish the vertical demo GUI; CLI layout switch
+
+Claude Code's QML port of the 800×1280 HTML was left at the session limit
+with a TWEAKS button. Finished it:
+
+- Dropped the on-glass tweaks control (no touch on this panel).
+- Demo cycle always runs (TRAVEL / DOOR / DWELL) — amber `DEMO · phase`
+  chip at the bottom right.
+- Two layouts from the HTML, selected on the command line:
+  `car` = full portrait HMI, `video` = compacted HMI under an empty
+  video pane (`NO SOURCE` / `SD CARD · EMPTY`). No playback yet
+  (BLK-015 + next-task SD reader).
+- Helper `/usr/bin/hmi {car|video}` writes `/etc/elevator-hmi.layout`
+  and restarts the sysvinit service. Survives reboot.
+- Fonts named Liberation Sans/Mono to match what the image actually
+  ships (not Inter / JetBrains / Roboto).
+
+Rebuild `elevator-hmi-image` next so this can be flashed.
+
+### On-target after flash
+
+```bash
+hmi            # show current
+hmi car        # full elevator GUI
+hmi video      # GUI + empty video pane
+```
+
+---

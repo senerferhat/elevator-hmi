@@ -58,6 +58,17 @@ export QT_QPA_FB_HIDECURSOR=1
 # Qt wants XDG_RUNTIME_DIR; without it Qt warns and falls back to /tmp.
 export XDG_RUNTIME_DIR=/run/user/0
 
+# Layout persisted by `hmi car` / `hmi video`. Default is the full portrait GUI.
+LAYOUT_FILE=/etc/elevator-hmi.layout
+LAYOUT=car
+if [ -r "$LAYOUT_FILE" ]; then
+    LAYOUT=$(cat "$LAYOUT_FILE")
+fi
+case "$LAYOUT" in
+    car|video) ;;
+    *) LAYOUT=car ;;
+esac
+
 case "$1" in
     start)
         echo -n "Starting ${NAME}: "
@@ -74,7 +85,7 @@ case "$1" in
         fi
         start-stop-daemon --start --background --make-pidfile \
             --pidfile "${PIDFILE}" --startas /bin/sh -- \
-            -c "exec ${DAEMON} >> ${LOGFILE} 2>&1"
+            -c "exec ${DAEMON} ${LAYOUT} >> ${LOGFILE} 2>&1"
         # --background forks and returns success as soon as the child is
         # spawned, regardless of whether it survives. On 2026-08-18 this printed
         # "OK" for an app that exited immediately (QML load error), which made
@@ -110,7 +121,7 @@ case "$1" in
         ;;
     status)
         if [ -f "${PIDFILE}" ] && kill -0 "$(cat "${PIDFILE}")" 2>/dev/null; then
-            echo "${NAME} is running (pid $(cat "${PIDFILE}"))"
+            echo "${NAME} is running (pid $(cat "${PIDFILE}")) layout=${LAYOUT}"
             exit 0
         fi
         echo "${NAME} is not running"

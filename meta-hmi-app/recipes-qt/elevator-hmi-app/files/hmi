@@ -1,0 +1,51 @@
+#!/bin/sh
+# Switch the on-glass HMI layout without rebuilding.
+#
+#   hmi              show the current layout
+#   hmi car          full portrait elevator GUI (800×1280)
+#   hmi video        same GUI with empty video pane on top (SD playback later)
+#
+# Persists in /etc/elevator-hmi.layout so the sysvinit script starts the
+# same variant after reboot. Restarts /etc/init.d/elevator-hmi.
+
+LAYOUT_FILE=/etc/elevator-hmi.layout
+INIT=/etc/init.d/elevator-hmi
+
+current() {
+    if [ -r "$LAYOUT_FILE" ]; then
+        cat "$LAYOUT_FILE"
+    else
+        echo car
+    fi
+}
+
+usage() {
+    echo "Usage: hmi [car|video]"
+    echo "Current: $(current)"
+}
+
+case "${1:-}" in
+    "")
+        usage
+        exit 0
+        ;;
+    -h|--help)
+        usage
+        exit 0
+        ;;
+    car|video)
+        echo "$1" > "$LAYOUT_FILE"
+        echo "layout $1 (saved $LAYOUT_FILE)"
+        if [ -x "$INIT" ]; then
+            "$INIT" restart
+        else
+            echo "init script missing; start manually: elevator-hmi $1"
+            exit 1
+        fi
+        ;;
+    *)
+        echo "unknown layout: $1"
+        usage
+        exit 2
+        ;;
+esac

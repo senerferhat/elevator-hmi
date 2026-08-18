@@ -31,6 +31,7 @@ SRC_URI = "file://CMakeLists.txt \
            file://main.cpp \
            file://main.qml \
            file://elevator-hmi.init \
+           file://hmi \
            file://COPYING \
            "
 
@@ -47,6 +48,8 @@ INITSCRIPT_PARAMS = "defaults 99 01"
 do_install:append() {
     install -d ${D}${sysconfdir}/init.d
     install -m 0755 ${WORKDIR}/elevator-hmi.init ${D}${sysconfdir}/init.d/elevator-hmi
+    install -d ${D}${bindir}
+    install -m 0755 ${WORKDIR}/hmi ${D}${bindir}/hmi
 }
 
 # CMake installs main.qml to ${datadir}/elevator-hmi (see CMakeLists.txt and

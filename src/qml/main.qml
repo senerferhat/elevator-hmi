@@ -1,9 +1,10 @@
 // Elevator HMI — car display
 //
 // Target: LMT101SX006C, 800x1280 PORTRAIT, RK3566, Qt 6.8.
-// Implements design/elevator-hmi "Elevator HMI Vertical" (+ the "Vertical Video"
-// variant, toggled by `videoMode`). Design tokens below are lifted verbatim from
-// the HTML so the two stay comparable.
+// Implements design/elevator-hmi "Elevator HMI Vertical" and "Vertical Video"
+// at the panel's native 800×1280. Layout is selected from the command line
+// (`elevator-hmi car` / `elevator-hmi video`, or the `hmi` helper) — there is
+// no on-glass tweaks menu. The trip simulator (demo cycle) always runs.
 //
 // RENDERING CONSTRAINTS — READ BEFORE EDITING (see diary/BLOCKERS.md BLK-015):
 // This runs under QT_QPA_PLATFORM=linuxfb with QT_QUICK_BACKEND=software, because
@@ -48,16 +49,31 @@ Window {
     readonly property color red:      "#E85A4A"
     readonly property color green:    "#5AE89A"
 
-    // Substitutes for the design's JetBrains Mono / Inter, which we cannot
-    // redistribute here. Installed via ttf-dejavu / ttf-roboto in the image
-    // recipe; if either is missing fontconfig substitutes rather than failing.
-    readonly property string monoFont: "DejaVu Sans Mono"
-    readonly property string uiFont:   "Roboto"
+    // Substitutes for the design's JetBrains Mono / Inter. The image ships
+    // liberation-fonts (see elevator-hmi-image.bb); fontconfig will fall back
+    // if a name is missing rather than rendering blank Text (that looked like
+    // a dead panel on 2026-08-18).
+    readonly property string monoFont: "Liberation Mono"
+    readonly property string uiFont:   "Liberation Sans"
 
-    // Video-pane variant ("Elevator HMI Vertical Video"). The pane renders its
-    // NO SOURCE state — actual playback needs DRM planes and cannot composite
-    // through linuxfb (BLK-015), so SD-card video is a later step.
-    property bool videoMode: false
+    // "car" = full portrait HMI. "video" = HTML "Vertical Video" with the
+    // top half reserved for SD-card playback (empty placeholder for now).
+    // The C++ binary (and the `hmi` helper) pass this as argv[1].
+    property string layout: {
+        var args = Qt.application.arguments;
+        for (var i = 1; i < args.length; ++i) {
+            if (args[i] === "car" || args[i] === "video")
+                return args[i];
+            if (args[i].indexOf("--layout=") === 0)
+                return args[i].substring(9);
+        }
+        return "car";
+    }
+    property bool videoMode: layout === "video"
+
+    // Demo-cycle phase, driven by the trip simulator. Replaces the old
+    // TWEAKS control: the panel always animates a car, no operator menu.
+    property string demoPhase: "IDLE"
 
     // =====================================================================
     // Mock car state
@@ -140,11 +156,13 @@ Window {
         onTriggered: {
             if (car.doorPhase === "OPENING") {
                 car.doorPhase = "OPEN";
+                root.demoPhase = "DWELL";
                 interval = 2600;
                 return;
             }
             if (car.doorPhase === "OPEN") {
                 car.doorPhase = "CLOSING";
+                root.demoPhase = "DOOR";
                 interval = 900;
                 return;
             }
@@ -158,6 +176,7 @@ Window {
                 car.loadPercent = Math.min(100, Math.max(0,
                     car.loadPercent + Math.floor(Math.random() * 50) - 20));
                 root.logEvent(root.floorNames[car.currentIndex], "DOOR CYCLE");
+                root.demoPhase = (next === car.currentIndex) ? "IDLE" : "TRAVEL";
                 interval = 900;
                 return;
             }
@@ -167,11 +186,13 @@ Window {
                 car.speedMs = 0.0;
                 car.etaSec = 0;
                 car.doorPhase = "OPENING";
+                root.demoPhase = "DOOR";
                 root.logEvent(root.floorNames[car.currentIndex], "ARRIVED · IDLE");
                 interval = 900;
                 return;
             }
 
+            root.demoPhase = "TRAVEL";
             car.currentIndex += car.direction;
             const remaining = Math.abs(car.destIndex - car.currentIndex);
             car.speedMs = remaining === 0 ? 0.0 : Math.min(2.5, 0.8 + remaining * 0.35);
@@ -438,7 +459,7 @@ Window {
                         anchors.horizontalCenter: parent.horizontalCenter
                     }
                     Text {
-                        text: "USE TWEAKS → LOAD VIDEO"
+                        text: "SD CARD · EMPTY"
                         color: root.inkMute
                         font.family: root.monoFont
                         font.pixelSize: 11
@@ -1270,35 +1291,30 @@ Window {
         }
     }
 
-    // ---- TWEAKS ------------------------------------------------------------
-    // Toggles the video-pane variant so both designs can be shown on the bench
-    // without reflashing. The panel has no touch controller wired yet, so this
-    // is reachable only with a pointer today — sized per the design regardless.
+    // ---- DEMO CYCLE (replaces the HTML tweaks control) --------------------
+    // Always-on trip simulator. Layout switching is a CLI concern (`hmi car`
+    // / `hmi video`), not an on-glass button — the panel has no touch.
     Rectangle {
-        id: tweaks
         anchors.right: parent.right
         anchors.rightMargin: 24
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: 20
-        width: 132
-        height: 44
-        radius: 22
+        anchors.bottomMargin: 16
+        width: demoLabel.implicitWidth + 28
+        height: 36
+        radius: 2
         z: 50
         color: root.bgElev
         border.color: root.line
         border.width: 1
 
         Text {
+            id: demoLabel
             anchors.centerIn: parent
-            text: root.videoMode ? "TWEAKS ▼" : "TWEAKS ▲"
-            color: root.ink
+            text: "DEMO  ·  " + root.demoPhase
+            color: root.amber
             font.family: root.monoFont
-            font.pixelSize: 12
+            font.pixelSize: 11
             font.letterSpacing: 2
-        }
-        MouseArea {
-            anchors.fill: parent
-            onClicked: root.videoMode = !root.videoMode
         }
     }
 }
