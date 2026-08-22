@@ -36,7 +36,45 @@ below, to avoid a second stale pointer existing alongside the current one.)*
 
 ---
 
-## ✅ CURRENT / CONFIRMED-GOOD (2026-08-22) — qt-hmi-noroute.wic — SD VIDEO PLAYS
+## CURRENT TEST TARGET (2026-08-22) — qt-hmi-eglfs.wic — **EGLFS + Mali on VP0**
+
+**Status: flash and test.** BLK-015 is RESOLVED — the panel was on VP1, which
+cannot latch plane updates on this board. Moved to VP0, where `modetest` shows a
+stable colour grid on glass. This image drops the linuxfb + software-rendering
+workaround and returns to ADR-001: **EGLFS + Mali-G52**.
+
+| Field | Value |
+|---|---|
+| **Archive file** | `~/Projects/elevator-hmi/images-archive/qt-hmi-eglfs.wic` |
+| **WIC SHA-256** | `111380879877d28a72063f2882857c5a2686313669b4615bd219f5cbbd9b72d7` |
+| **Change** | `QT_QPA_PLATFORM=eglfs` (was linuxfb+software); DSI on VP0 |
+| **Verified in artifact** | shipped init exports eglfs/eglfs_kms, no `QT_QUICK_BACKEND`; DTB has `dsi0_in_vp0` okay; `rockchip-libmali` installed |
+
+```bash
+cd ~/Projects/elevator-hmi/images-archive
+sha256sum qt-hmi-eglfs.wic   # expect 111380879877d28a72063f2882857c5a2686313669b4615bd219f5cbbd9b72d7
+sudo rkdeveloptool wl 0      qt-hmi-eglfs.wic
+sudo rkdeveloptool wl 64     idblock.img
+sudo rkdeveloptool wl 0x4000 uboot.img
+sudo rkdeveloptool rd
+```
+
+**Rollback if the HMI does not paint:** `qt-hmi-noroute.wic` (below) is the
+software-rendered image with SD video confirmed working. Before rolling back,
+run the kill test — it separates a Qt problem from a scanout problem:
+
+```bash
+modetest -M rockchip -s 191:800x1280
+```
+
+A stable colour grid means KMS is fine and the fault is Qt configuration.
+**Probe `REG_CFG_DONE` only with a STATIC modeset** — during `modetest -v` the
+VP bit reads set almost always because a flip is nearly always pending, which is
+normal and previously caused a wrong diagnosis.
+
+---
+
+## ✅ PREVIOUS CONFIRMED-GOOD (2026-08-22) — qt-hmi-noroute.wic — SD VIDEO PLAYS (software)
 
 **Status: verified on glass.** SD card mounts, the clip is found, and the video
 plays on the panel (software decode). This is the image to flash.

@@ -21,39 +21,27 @@ NAME=elevator-hmi
 PIDFILE=/var/run/${NAME}.pid
 LOGFILE=/var/log/${NAME}.log
 
-# PLATFORM: linuxfb + software rendering, NOT eglfs. See BLK-015.
+# PLATFORM: EGLFS + Mali. Restored 2026-08-22 after BLK-015 was RESOLVED.
 #
-# 2026-08-18: KMS scanout is broken on this kernel. No KMS client can get a new
-# buffer onto the panel: `modetest` with a plain dumb buffer is as invisible as
-# Qt/EGLFS. Two independent planes on VP1 (Smart1-win0, Esmart1-win0) commit at
-# 60 Hz, vblank fires, and the vop2 driver logs the correct address every single
-# frame (rockchipdrm debug=1) -- yet the hardware keeps scanning out the buffer
-# latched at boot. Only writes INTO that already-latched buffer ever appear,
-# which is why `dd`-ing /dev/fb0 was the one test that ever worked on this board.
+# BLK-015 was the DSI panel sitting on VP1, which cannot latch plane updates on
+# this board. With the panel moved to VP0 (see the BLK-015 block in
+# meta-hmi-platform/.../elevator-hmi-boardcon-em3566-v3.dts) KMS scanout works:
+# `modetest -M rockchip -s 191:800x1280` shows a stable colour grid on glass.
+# That removes the reason for the linuxfb + software-rendering detour and puts
+# us back on ADR-001 (EGLFS, Mali-G52), which is also the prerequisite for
+# zero-copy VPU video.
 #
-# linuxfb sidesteps it entirely: it renders in software straight into /dev/fb0,
-# i.e. the path that provably works. Verified on glass 2026-08-18 (red/green test
-# QML, then this application).
-#
-# CONSEQUENCES, do not lose these:
-#   - No Mali GPU acceleration. CPU-only rendering (ADR-001 assumed EGLFS/Mali).
-#   - GStreamer zero-copy VPU video (CLAUDE.md §1 Media) needs DRM planes and
-#     will NOT composite through linuxfb. The kernel bug still has to be fixed
-#     before video is possible; this unblocks the UI only.
-#
-# TO REVERT once KMS scanout is fixed: restore the four EGLFS lines below and
-# delete the linuxfb ones. Do not "just try eglfs" without re-running the
-# modetest dumb-buffer check first -- that is the cheap kill test for this bug.
-#   export QT_QPA_PLATFORM=eglfs
-#   export QT_QPA_EGLFS_INTEGRATION=eglfs_kms
-#   export QT_QPA_EGLFS_HIDECURSOR=1
-#   (and drop QT_QUICK_BACKEND)
-export QT_QPA_PLATFORM=linuxfb
-# linuxfb provides no OpenGL context; Qt Quick must use its software renderer or
-# it logs "This plugin does not support createPlatformOpenGLContext!" and draws
-# nothing.
-export QT_QUICK_BACKEND=software
-export QT_QPA_FB_HIDECURSOR=1
+# FALLBACK if the HMI does not paint: the software path still works and is one
+# edit away -- swap the two eglfs lines below for:
+#     export QT_QPA_PLATFORM=linuxfb
+#     export QT_QUICK_BACKEND=software
+# and re-flash. Before doing that, run the cheap kill test first:
+#     modetest -M rockchip -s <connector>@<crtc>:800x1280
+# a stable pattern means KMS is fine and the fault is in Qt's configuration,
+# not in scanout.
+export QT_QPA_PLATFORM=eglfs
+export QT_QPA_EGLFS_INTEGRATION=eglfs_kms
+export QT_QPA_EGLFS_HIDECURSOR=1
 
 # Qt wants XDG_RUNTIME_DIR; without it Qt warns and falls back to /tmp.
 export XDG_RUNTIME_DIR=/run/user/0
