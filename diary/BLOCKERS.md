@@ -110,6 +110,73 @@ SHA256 `809f19968c8fe0b650ea2a806b8c5751234459cd54f52c416be41ca82b882327`
 modetest -M rockchip -s <connector>@<crtc>:800x1280
 ```
 
+#### 2026-08-22 RESULT — route fix FALSIFIED; driver proven correct
+
+Flashed `qt-hmi-noroute.wic` and ran the kill test on target. **Glass showed
+white — modetest still invisible. BLK-015 unchanged.**
+
+`dmesg` also showed the logo path was already inert regardless:
+```
+OF: fdt: Reserved memory: failed to reserve memory for node 'drm-logo@0' ... size 0 MiB
+rockchip-drm display-subsystem: failed to parse loader memory
+```
+`rockchip_drm_show_logo()` returns at `init_loader_memory()` **before** it
+iterates the routes, so `vop2_crtc_loader_protect()` was never reached even with
+`route_dsi0` enabled. The hypothesis was wrong on its own terms.
+
+Useful by-product: with the plane state reporting `addr: 0x0`, the panel still
+displayed the `/dev/fb0` white fill. **So `/dev/fb0`'s memory IS the buffer
+latched at boot** — which is precisely why writing to it is the only thing that
+has ever worked.
+
+#### THE DECISIVE MEASUREMENT — the driver is doing everything right
+
+With `rockchipdrm debug=9` (`VOP_DEBUG_PLANE | VOP_DEBUG_CFG_DONE`), during a
+4-second modetest run: **241 plane updates, 243 cfg_done writes**, paired 1:1:
+```
+vp1 update Smart1-win0[800x1280@(0,0)->800x1280@(0,0)] zpos[1] fmt[XR24] addr[0x3e8000]
+cfg_done: 0x8002
+vp1 update Smart1-win0[800x1280@(0,0)->800x1280@(0,0)] zpos[1] fmt[XR24] addr[0x7d0000]
+cfg_done: 0x8002
+```
+`0x8002` = `RK3568_VOP2_GLB_CFG_DONE_EN (BIT 15) | BIT(1)` = **the VP1 latch
+trigger**. A "missing `<<16` write-mask" theory was checked and **rejected**: the
+driver carries an explicit comment that on RK3568 the VP config-done bits "stand
+on the first three bits ... **without mask bit**". 0x8002 is correct.
+
+So, every frame at 60 Hz, the driver:
+1. programs the new scanout address,
+2. writes the correct config-done latch trigger for VP1,
+and the hardware keeps scanning the buffer latched at boot.
+
+**Conclusion: this is not a DTS problem and not a userspace problem. The driver
+issues correct register writes that the hardware does not act on.**
+
+#### STRONGEST REMAINING LEAD — our VOP2 driver is older than the vendor's
+
+The BSP source contains a materially different driver:
+
+| | `rockchip_drm_vop2.c` |
+|---|---|
+| Boardcon rkr5 (Mar 2025) | **451,378 bytes** |
+| ours (meta-rockchip pin) | **423,258 bytes** |
+
+3,541-line diff; **28 functions exist only in the vendor's driver**, including:
+- `vop2_handle_post_buf_empty` + rate limiter — the VOP2 display-FIFO underrun
+  interrupt. **We have no handler for it at all.**
+- `vop2_set_aclk_rate` — our DTB carries `rockchip,aclk-normal-mode-rates` but
+  our driver has no code to consume it.
+- `vop2_iommu_fault_handler`
+
+meta-rockchip's pinned `linux-rockchip` is not Boardcon's BSP. For this board the
+BSP is the reference.
+
+**Recommended next step:** build against the vendor VOP2 driver — either move the
+kernel to Boardcon's `em3566_linux6.1-rkr5` or backport
+`drivers/gpu/drm/rockchip/` from it. That is a substantial change and should be
+its own task, but it is now the best-supported path and everything cheaper has
+been eliminated.
+
 #### Separate lead for the `wrap 52` hack (not BLK-015)
 
 Vendor: `dsi,flags = <(MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_VIDEO_BURST | MIPI_DSI_MODE_LPM)>`
