@@ -36,7 +36,54 @@ below, to avoid a second stale pointer existing alongside the current one.)*
 
 ---
 
-## CURRENT TEST TARGET (2026-08-22) — qt-hmi-cinema.wic — media-first layouts
+## CURRENT TEST TARGET (2026-08-22, later) — qt-hmi-vp0.wic — **BLK-015 candidate fix**
+
+**Status: flash this and run the kill test.** Moves the DSI panel from Video
+Port 1 to Video Port 0, matching Boardcon's own device tree. VP1 is where plane
+commits never latch (BLK-015). Contains everything from `qt-hmi-cinema.wic`.
+
+| Field | Value |
+|---|---|
+| **Archive file** | `~/Projects/elevator-hmi/images-archive/qt-hmi-vp0.wic` |
+| **WIC SHA-256** | `b1df6fa5d5aedff54322aa0c8d0a4c468122d015ceb6da1956ddb5158fdfd16e` |
+| **Deploy name** | `elevator-hmi-image-elevator-hmi-em3566.rootfs-20260822105549.wic` |
+| **Change** | `dsi0 -> VP0`, `hdmi -> VP1` (was: EVB default, dsi0 on VP1) |
+| **Evidence** | Boardcon DTB decompiled from `library/EM3566/Linux6.1/Image/update-buildroot-lvds.img`: VP0 = dsi0/dsi1/edp, VP1 = hdmi/lvds |
+
+```bash
+cd ~/Projects/elevator-hmi/images-archive
+sha256sum qt-hmi-vp0.wic   # expect b1df6fa5d5aedff54322aa0c8d0a4c468122d015ceb6da1956ddb5158fdfd16e
+sudo rkdeveloptool db loader.bin      # skip if the board is in Loader mode
+sudo rkdeveloptool wl 0      qt-hmi-vp0.wic
+sudo rkdeveloptool wl 64     idblock.img
+sudo rkdeveloptool wl 0x4000 uboot.img
+sudo rkdeveloptool rd
+```
+
+### KILL TEST — run this first, before anything else
+
+```bash
+modetest -M rockchip -c | grep -A3 -i "DSI\|connected"
+```
+
+Then, with the connector id and crtc id it prints:
+
+```bash
+modetest -M rockchip -s <CONNECTOR>@<CRTC>:800x1280
+```
+
+- **Test pattern on glass** -> BLK-015 is FIXED. KMS scanout works. Next: revert
+  the HMI to EGLFS/Mali (see `elevator-hmi.init`), then wire VPU video.
+- **Still nothing** -> the port was not the cause. Next diagnostic is the vendor
+  image itself: flash `library/EM3566/Linux6.1/Image/update-buildroot-hdmi.img`
+  with an HDMI monitor and run the same command under Boardcon's kernel.
+
+Also confirm the panel still lights at all (`hmi` should start as before). If the
+panel goes dark on VP0, revert this image and say so — that is information too.
+
+---
+
+## SUPERSEDED (2026-08-22) — qt-hmi-cinema.wic — media-first layouts
 
 **Status: recommended for next flash.** Adds two video-first layouts on top of
 the SD-slot fix and software MJPEG playback.

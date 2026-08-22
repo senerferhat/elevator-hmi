@@ -2288,3 +2288,78 @@ be copied to it.
 3. `hmi landscape-full`.
 
 ---
+## 2026-08-22 — BLK-015 candidate fix from the vendor's own device tree
+
+**Correction first:** I previously told the owner the vendor images were not in
+`library/` and would have to come from Boardcon. **That was wrong** — I searched
+with too narrow a pattern. `library/EM3566/Linux6.1/` contains four prebuilt
+images (buildroot and debian12, LVDS and HDMI variants) and a 20 GB BSP source
+tarball. 36 GB of vendor material was sitting there the whole time.
+
+### Method
+
+Rather than extract the 20 GB tarball (single-threaded bzip2, only 24 GB free),
+pulled Boardcon's shipped **DTB straight out of the prebuilt image** by scanning
+`update-buildroot-lvds.img` for the DTB magic `d00dfeed`, then decompiled it and
+diffed against ours.
+
+### Finding
+
+Video-port assignment is **opposite**:
+
+| | VP0 | VP1 |
+|---|---|---|
+| **Vendor (works)** | **dsi0**, dsi1, edp | hdmi, lvds |
+| **Ours (broken)** | hdmi, dsi1, edp | **dsi0**, lvds |
+
+We inherit the Rockchip **EVB's** assignment, which gives VP0 to HDMI because
+the EVB ships an HDMI display:
+```
+rk3566-evb2-lp4x-v10.dtsi:190  &dsi0_in_vp0 { status = "disabled"; };
+rk3566-evb2-lp4x-v10.dtsi:194  &dsi0_in_vp1 { status = "okay";     };
+rk3566-evb2-lp4x-v10.dtsi:541  &route_dsi0  { connect = <&vp1_out_dsi0>; };
+rk3568-evb.dtsi:1077           &hdmi_in_vp0 { status = "okay";     };
+```
+Correct for the EVB. Wrong for this product, which has no HDMI at all — and
+**VP1 is exactly where scanout never latches.**
+
+Diffed every other property of the two VOP nodes: identical apart from phandle
+renumbering. The port assignment is the difference.
+
+### Two other vendor confirmations, free
+
+- The vendor DTB has **no RK809 PMIC node at all** (`grep -c` = 0). This board
+  genuinely has none, so our deletions were right.
+- Vendor `sdmmc0` uses **one regulator for both `vmmc` and `vqmmc`** and has **no
+  `sd-uhs-sdr104`** — independently the same shape as yesterday's SD fix.
+
+### Change
+
+`elevator-hmi-boardcon-em3566-v3.dts`: dsi0 → VP0, hdmi → VP1, mirroring the
+vendor. HDMI moved rather than deleted so the port stays usable as a diagnostic.
+
+Verified in the rebuilt DTB, not the source: `dsi@fe060000` endpoint@0 (VP0)
+`okay`, endpoint@1 (VP1) `disabled`, VOP `port@0 endpoint@0` = dsi0, `port@1
+endpoint@3` = hdmi. Now identical in shape to the vendor's.
+
+- **New flash target:** `images-archive/qt-hmi-vp0.wic`
+- **SHA-256:** `b1df6fa5d5aedff54322aa0c8d0a4c468122d015ceb6da1956ddb5158fdfd16e`
+
+### NOT confirmed
+
+The board was **powered off** all session (CH34x present, no Rockchip USB
+device, silent console), so this is a reasoned candidate, not a proven fix.
+Kill test after flashing:
+```
+modetest -M rockchip -s <connector>@<crtc>:800x1280
+```
+Pattern on glass = BLK-015 fixed, and the entire linuxfb / software-decode
+detour can be unwound (EGLFS + Mali + VPU video, H.264 straight off the card).
+Nothing = the port was not the cause, and the next step is flashing
+`update-buildroot-hdmi.img` with an HDMI monitor to test VP1 under Boardcon's
+own kernel.
+
+Also worth checking: whether the panel still lights at all on VP0. A dark panel
+is information too, and means revert.
+
+---

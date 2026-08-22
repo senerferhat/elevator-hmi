@@ -53,11 +53,53 @@ assumed EGLFS/Mali) and, more seriously, **GStreamer zero-copy VPU video
 (CLAUDE.md §1 Media) needs DRM planes and cannot composite through linuxfb.**
 Video is impossible until this is fixed.
 
-**Next step (not yet done):** boot the **vendor's own Debian/Buildroot image**
-on this board and run the identical `modetest` command. That single test
-separates "our kernel/DTS broke plane latching" from "this vendor BSP cannot do
-KMS on VP1 at all", and gives a working reference to diff against — the thing
-that was missing throughout BLK-014.
+### 2026-08-22 — CANDIDATE FIX FOUND (vendor DTB comparison)
+
+The vendor materials were in `library/` all along — I previously said they were
+not, having searched too narrowly. `library/EM3566/Linux6.1/` holds four
+prebuilt images and the 20 GB BSP source.
+
+Decompiled Boardcon's own DTB out of
+`Image/update-buildroot-lvds.img` and compared video-port assignment:
+
+| | VP0 | VP1 |
+|---|---|---|
+| **Vendor (works)** | **dsi0**, dsi1, edp | hdmi, lvds |
+| **Ours (broken)** | hdmi, dsi1, edp | **dsi0**, lvds |
+
+We inherit the **Rockchip EVB's** assignment, which gives VP0 to HDMI because
+the EVB ships an HDMI display:
+```
+rk3566-evb2-lp4x-v10.dtsi:190  &dsi0_in_vp0 { status = "disabled"; };
+rk3566-evb2-lp4x-v10.dtsi:194  &dsi0_in_vp1 { status = "okay";     };
+rk3566-evb2-lp4x-v10.dtsi:541  &route_dsi0  { connect = <&vp1_out_dsi0>; };
+rk3568-evb.dtsi:1077           &hdmi_in_vp0 { status = "okay";     };
+```
+That is correct for the EVB and wrong for this product, which has no HDMI and
+only the LMT101 on DSI0 — and **VP1 is precisely where scanout never latches.**
+
+Everything else about the two VOP nodes is identical (properties diffed; only
+phandle renumbering differs), so the port assignment is the difference.
+
+**Fix applied** in `elevator-hmi-boardcon-em3566-v3.dts`: dsi0 → VP0, hdmi → VP1,
+mirroring the vendor. Verified in the rebuilt DTB: `dsi@fe060000` endpoint@0
+(VP0) is `okay`, endpoint@1 (VP1) `disabled`, and VOP `port@0 endpoint@0` now
+carries dsi0.
+
+**NOT yet confirmed to fix BLK-015** — the board was powered off. Kill test:
+```
+modetest -M rockchip -s <connector>@<crtc>:800x1280
+```
+A visible test pattern means KMS scanout works and the whole linuxfb /
+software-decode detour can be unwound (EGLFS + Mali + VPU video).
+
+Image: `images-archive/qt-hmi-vp0.wic`
+SHA256 `b1df6fa5d5aedff54322aa0c8d0a4c468122d015ceb6da1956ddb5158fdfd16e`
+
+**If it does NOT fix it:** the vendor images are now known to exist — flash
+`update-buildroot-hdmi.img` with an HDMI monitor and run the same modetest to
+test VP1 under the vendor's own kernel. That still separates "our build" from
+"BSP defect".
 
 **Tracked in:** `CLAUDE.md` §2, `docs/FLASH-PROCEDURE.md`,
 `meta-hmi-app/recipes-qt/elevator-hmi-app/files/elevator-hmi.init` (revert notes).
