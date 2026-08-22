@@ -243,60 +243,47 @@
 };
 
 /*
- * BLK-015 — move the DSI panel from Video Port 1 to Video Port 0.
+ * BLK-015 — disable the U-Boot logo handover (route_dsi0).
  *
- * WHY: we inherit the Rockchip EVB's video-port assignment, which hands VP0 to
- * HDMI and pushes the DSI panel onto VP1:
- *     rk3566-evb2-lp4x-v10.dtsi:190  &dsi0_in_vp0 { status = "disabled"; };
- *     rk3566-evb2-lp4x-v10.dtsi:194  &dsi0_in_vp1 { status = "okay";     };
- *     rk3566-evb2-lp4x-v10.dtsi:541  &route_dsi0  { connect = <&vp1_out_dsi0>; };
- *     rk3568-evb.dtsi:1077           &hdmi_in_vp0 { status = "okay";     };
- * That is right for the EVB, which ships an HDMI display. It is wrong for this
- * product, which has no HDMI at all and only the LMT101 on DSI0.
+ * EVIDENCE. Boardcon's own MIPI device tree for THIS board
+ * (library/EM3566/Linux6.1/Source/.../boardcon-em3566-v3-v3.0-mipi.dtsi:322)
+ * reads:
+ *     &route_dsi0 { status = "disabled"; connect = <&vp1_out_dsi0>; };
+ * We inherit rk3566-evb2-lp4x-v10.dtsi:541, which sets it "okay".
  *
- * Boardcon's OWN device tree for this board does the opposite. Decompiled from
- * their shipped image (library/EM3566/Linux6.1/Image/update-buildroot-lvds.img):
- *     VP0 = dsi0, dsi1, edp
- *     VP1 = hdmi, lvds
+ * WHY IT MATTERS. rockchip_drm_show_logo() walks the "route" children and skips
+ * any that are not available, so an "okay" route makes the kernel take over the
+ * bootloader's display. That path calls vop2_crtc_loader_protect(crtc, true),
+ * which does NOT go through an atomic commit:
+ *     vp->loader_protect = true;
+ *     vop2->active_vp_mask |= BIT(vp->id);
+ *     vop2_initial(crtc);
+ *     if (VOP_WIN_GET(vop2, win, enable)) {     // primary win already on
+ *             win->pd->ref_count++;
+ *             vp->enabled_win_mask |= BIT(win->phys_id);
+ *     }
+ *     drm_crtc_vblank_on(crtc);
+ * It adopts the window the loader left enabled and marks it as owned. That is
+ * the shape of BLK-015: later commits are accepted, vblank runs, the driver
+ * programs the right address every frame — and the hardware keeps scanning the
+ * buffer latched at boot.
  *
- * And VP1 is exactly where BLK-015 lives: plane commits are accepted, page
- * flips complete at 60 Hz, the vop2 driver logs the correct scanout address
- * every frame — and the hardware never latches it. Only writes into the buffer
- * latched at boot reach the glass. modetest with a plain dumb buffer fails
- * identically to Qt, so it is below all of our userspace.
+ * NOTE ON VIDEO PORT. An earlier revision of this file moved dsi0 to VP0 on the
+ * theory that VP1 was faulty. That was WRONG and has been reverted: the vendor's
+ * working MIPI config uses VP1 too (dsi0_in_vp1 okay, connect = vp1_out_dsi0).
+ * The VP0 idea came from their LVDS image, where DSI is disabled and its port
+ * assignment is just an unused default. We now match the vendor exactly and
+ * change only this one variable.
  *
- * This has NOT yet been confirmed to fix BLK-015 — the board was powered off
- * when this was written. It is a single-variable change with a cheap kill test:
+ * NOT YET CONFIRMED — kill test after flashing:
  *     modetest -M rockchip -s <connector>@<crtc>:800x1280
- * If a test pattern appears on glass, KMS scanout works and the whole linuxfb /
- * software-decode detour can be unwound (EGLFS + Mali + VPU video).
+ * A visible pattern means KMS scanout works and the linuxfb / software-decode
+ * detour can be unwound (EGLFS + Mali + VPU video).
  *
- * HDMI is moved to VP1 rather than deleted, mirroring the vendor. It costs
- * nothing on a product with no HDMI connector, and it keeps the port usable as
- * a diagnostic: if VP1 turns out to be broken for HDMI too, that is a strong
- * signal to take to Boardcon/Rockchip.
+ * Cost of disabling it: no kernel "logo" handover of the U-Boot framebuffer.
+ * We do not use one — fbcon plus CONFIG_LOGO draws the boot penguin, and the
+ * panel is fully initialised by patch 0021 in drm_panel prepare().
  */
-&dsi0_in_vp0 {
-	status = "okay";
-};
-
-&dsi0_in_vp1 {
-	status = "disabled";
-};
-
 &route_dsi0 {
-	status = "okay";
-	connect = <&vp0_out_dsi0>;
-};
-
-&hdmi_in_vp0 {
 	status = "disabled";
-};
-
-&hdmi_in_vp1 {
-	status = "okay";
-};
-
-&route_hdmi {
-	connect = <&vp1_out_hdmi>;
 };

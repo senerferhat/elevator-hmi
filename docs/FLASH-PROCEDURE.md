@@ -36,7 +36,57 @@ below, to avoid a second stale pointer existing alongside the current one.)*
 
 ---
 
-## CURRENT TEST TARGET (2026-08-22, later) — qt-hmi-vp0.wic — **BLK-015 candidate fix**
+## CURRENT TEST TARGET (2026-08-22, later) — qt-hmi-noroute.wic — **BLK-015 candidate**
+
+**Status: flash this and run the kill test.** Disables the U-Boot logo handover
+(`route_dsi0`), matching Boardcon's own MIPI device tree. That handover calls
+`vop2_crtc_loader_protect()`, which adopts the bootloader's window outside the
+atomic path — the shape of BLK-015. One variable changed; DSI stays on VP1.
+
+| Field | Value |
+|---|---|
+| **Archive file** | `~/Projects/elevator-hmi/images-archive/qt-hmi-noroute.wic` |
+| **WIC SHA-256** | `809f19968c8fe0b650ea2a806b8c5751234459cd54f52c416be41ca82b882327` |
+| **Deploy name** | `elevator-hmi-image-elevator-hmi-em3566.rootfs-20260822111148.wic` |
+| **Change** | `&route_dsi0 { status = "disabled"; }` |
+| **Evidence** | `boardcon-em3566-v3-v3.0-mipi.dtsi:322` from the vendor BSP source |
+
+An earlier `qt-hmi-vp0.wic` (move DSI to VP0) was built on a hypothesis the
+vendor's MIPI DTS then falsified — they use VP1 too. It was deleted unflashed.
+
+```bash
+cd ~/Projects/elevator-hmi/images-archive
+sha256sum qt-hmi-noroute.wic   # expect 809f19968c8fe0b650ea2a806b8c5751234459cd54f52c416be41ca82b882327
+sudo rkdeveloptool db loader.bin      # skip if the board is in Loader mode
+sudo rkdeveloptool wl 0      qt-hmi-noroute.wic
+sudo rkdeveloptool wl 64     idblock.img
+sudo rkdeveloptool wl 0x4000 uboot.img
+sudo rkdeveloptool rd
+```
+
+### KILL TEST — run before anything else
+
+```bash
+modetest -M rockchip -c | grep -B2 -A6 connected
+```
+
+```bash
+modetest -M rockchip -s <CONNECTOR>@<CRTC>:800x1280
+```
+
+- **Pattern on glass** -> BLK-015 FIXED. Unwind the detour: EGLFS + Mali, VPU
+  video, H.264 straight off the card.
+- **Nothing** -> next is the vendor image itself:
+  `library/EM3566/Linux6.1/Image/update-buildroot-hdmi.img` with an HDMI monitor.
+
+Note: with the logo route off there is no U-Boot logo handover. fbcon +
+CONFIG_LOGO still draws the boot penguin, and patch 0021 initialises the panel
+in `prepare()`, so the panel should light exactly as before. If it does not,
+that is information — revert and say so.
+
+---
+
+## SUPERSEDED — qt-hmi-vp0.wic (deleted, never flashed)
 
 **Status: flash this and run the kill test.** Moves the DSI panel from Video
 Port 1 to Video Port 0, matching Boardcon's own device tree. VP1 is where plane

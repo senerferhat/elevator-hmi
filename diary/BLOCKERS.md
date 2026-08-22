@@ -53,53 +53,77 @@ assumed EGLFS/Mali) and, more seriously, **GStreamer zero-copy VPU video
 (CLAUDE.md §1 Media) needs DRM planes and cannot composite through linuxfb.**
 Video is impossible until this is fixed.
 
-### 2026-08-22 — CANDIDATE FIX FOUND (vendor DTB comparison)
+### 2026-08-22 — vendor BSP compared; candidate fix = disable the logo route
 
 The vendor materials were in `library/` all along — I previously said they were
 not, having searched too narrowly. `library/EM3566/Linux6.1/` holds four
-prebuilt images and the 20 GB BSP source.
+prebuilt images **and** a 20 GB BSP source tarball containing
+**`boardcon-em3566-v3-v3.0-mipi.dtsi`** — Boardcon's own MIPI-DSI config for
+this exact board.
 
-Decompiled Boardcon's own DTB out of
-`Image/update-buildroot-lvds.img` and compared video-port assignment:
+#### FALSIFIED: "DSI is on the wrong video port"
 
-| | VP0 | VP1 |
-|---|---|---|
-| **Vendor (works)** | **dsi0**, dsi1, edp | hdmi, lvds |
-| **Ours (broken)** | hdmi, dsi1, edp | **dsi0**, lvds |
-
-We inherit the **Rockchip EVB's** assignment, which gives VP0 to HDMI because
-the EVB ships an HDMI display:
+First hypothesis was that VP1 was at fault and dsi0 should move to VP0, based on
+their **LVDS** image's DTB. **Wrong.** In that build DSI is disabled, so its port
+assignment is an unused default. Boardcon's actual MIPI config uses **VP1, same
+as us**:
 ```
-rk3566-evb2-lp4x-v10.dtsi:190  &dsi0_in_vp0 { status = "disabled"; };
-rk3566-evb2-lp4x-v10.dtsi:194  &dsi0_in_vp1 { status = "okay";     };
-rk3566-evb2-lp4x-v10.dtsi:541  &route_dsi0  { connect = <&vp1_out_dsi0>; };
-rk3568-evb.dtsi:1077           &hdmi_in_vp0 { status = "okay";     };
+boardcon-em3566-v3-v3.0-mipi.dtsi:314  &dsi0_in_vp0 { status = "disabled"; };
+boardcon-em3566-v3-v3.0-mipi.dtsi:318  &dsi0_in_vp1 { status = "okay";     };
+boardcon-em3566-v3-v3.0-mipi.dtsi:322  &route_dsi0  { status = "disabled";
+                                                     connect = <&vp1_out_dsi0>; };
 ```
-That is correct for the EVB and wrong for this product, which has no HDMI and
-only the LMT101 on DSI0 — and **VP1 is precisely where scanout never latches.**
+The VP0 change was built, then reverted before ever being flashed. **VP1 is not
+the problem.**
 
-Everything else about the two VOP nodes is identical (properties diffed; only
-phandle renumbering differs), so the port assignment is the difference.
+#### CANDIDATE: `route_dsi0` — the U-Boot logo handover
 
-**Fix applied** in `elevator-hmi-boardcon-em3566-v3.dts`: dsi0 → VP0, hdmi → VP1,
-mirroring the vendor. Verified in the rebuilt DTB: `dsi@fe060000` endpoint@0
-(VP0) is `okay`, endpoint@1 (VP1) `disabled`, and VOP `port@0 endpoint@0` now
-carries dsi0.
+The real difference in that same block: the vendor sets `route_dsi0` to
+**disabled**. We inherit `rk3566-evb2-lp4x-v10.dtsi:541`, which sets it `okay`.
 
-**NOT yet confirmed to fix BLK-015** — the board was powered off. Kill test:
+`rockchip_drm_show_logo()` walks the `route` children and skips unavailable
+ones, so an `okay` route makes the kernel adopt the bootloader's display. That
+path calls `vop2_crtc_loader_protect(crtc, true)`, which bypasses atomic commit
+entirely (`rockchip_drm_vop2.c:6804`):
+```c
+vp->loader_protect = true;
+vop2->active_vp_mask |= BIT(vp->id);
+vop2_initial(crtc);
+if (VOP_WIN_GET(vop2, win, enable)) {   /* primary win already on from U-Boot */
+        win->pd->ref_count++;
+        vp->enabled_win_mask |= BIT(win->phys_id);
+}
+drm_crtc_vblank_on(crtc);
+```
+It adopts the window the loader left enabled and marks it owned. That is the
+shape of BLK-015: commits accepted, vblank running, correct address programmed
+every frame, hardware still scanning the boot buffer.
+
+**Applied:** `&route_dsi0 { status = "disabled"; }` — one variable, matching the
+vendor. Verified in the rebuilt DTB (`route-dsi0 disabled`, DSI still VP1).
+
+Image: `images-archive/qt-hmi-noroute.wic`
+SHA256 `809f19968c8fe0b650ea2a806b8c5751234459cd54f52c416be41ca82b882327`
+
+**NOT CONFIRMED** — board powered off all session. Kill test:
 ```
 modetest -M rockchip -s <connector>@<crtc>:800x1280
 ```
-A visible test pattern means KMS scanout works and the whole linuxfb /
-software-decode detour can be unwound (EGLFS + Mali + VPU video).
 
-Image: `images-archive/qt-hmi-vp0.wic`
-SHA256 `b1df6fa5d5aedff54322aa0c8d0a4c468122d015ceb6da1956ddb5158fdfd16e`
+#### Separate lead for the `wrap 52` hack (not BLK-015)
 
-**If it does NOT fix it:** the vendor images are now known to exist — flash
-`update-buildroot-hdmi.img` with an HDMI monitor and run the same modetest to
-test VP1 under the vendor's own kernel. That still separates "our build" from
-"BSP defect".
+Vendor: `dsi,flags = <(MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_VIDEO_BURST | MIPI_DSI_MODE_LPM)>`
+Ours (patch 0019): `MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_NO_EOT_PACKET`, burst
+deliberately OFF for the LMT101 path ("VENDOR-CLOCK-MATCH, PLL_CLOCK=420").
+A constant horizontal shift that wraps is the classic signature of a DSI/VOP
+timing mismatch in **non-burst** mode; burst re-syncs each line. Worth testing
+as a single variable after BLK-015 is settled.
+
+#### Two free confirmations from the vendor DTB
+
+- No RK809 PMIC node at all — this board genuinely has none.
+- `sdmmc0` uses one regulator for both `vmmc`/`vqmmc` and has **no
+  `sd-uhs-sdr104`** — independently the same shape as our SD fix.
 
 **Tracked in:** `CLAUDE.md` §2, `docs/FLASH-PROCEDURE.md`,
 `meta-hmi-app/recipes-qt/elevator-hmi-app/files/elevator-hmi.init` (revert notes).

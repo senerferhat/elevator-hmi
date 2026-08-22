@@ -2363,3 +2363,54 @@ Also worth checking: whether the panel still lights at all on VP0. A dark panel
 is information too, and means revert.
 
 ---
+## 2026-08-22 (cont.) — vendor BSP read; VP0 theory falsified, logo route is the candidate
+
+**Correction to the previous entry.** The VP0 hypothesis was wrong and has been
+reverted before it was ever flashed.
+
+The 20 GB BSP tarball finished extracting and contains
+**`boardcon-em3566-v3-v3.0-mipi.dtsi`** — Boardcon's own MIPI-DSI config for this
+exact board. It uses **VP1, exactly like us**:
+```
+&dsi0_in_vp0 { status = "disabled"; };
+&dsi0_in_vp1 { status = "okay"; };
+&route_dsi0  { status = "disabled"; connect = <&vp1_out_dsi0>; };
+```
+My VP0 reading came from their **LVDS** image's DTB, where DSI is disabled and
+its port assignment is therefore an unused default. I took an artefact for a
+signal. `qt-hmi-vp0.wic` was deleted unflashed.
+
+**The real difference in that same block:** the vendor sets `route_dsi0` to
+**disabled**; we inherit `rk3566-evb2-lp4x-v10.dtsi:541` setting it `okay`.
+
+`rockchip_drm_show_logo()` processes only routes that are available, so an
+`okay` route makes the kernel adopt the bootloader's display via
+`vop2_crtc_loader_protect(crtc, true)` — which bypasses atomic commit and adopts
+the window U-Boot left enabled (`vp->enabled_win_mask |= BIT(win->phys_id)`,
+`win->pd->ref_count++`, `vop2_initial()`, `drm_crtc_vblank_on()`).
+
+That is precisely the shape of BLK-015: commits accepted, vblank at 60 Hz, the
+right address programmed every frame, hardware still scanning the boot buffer.
+
+**Applied:** `&route_dsi0 { status = "disabled"; }`. One variable versus the last
+working image. Verified in the rebuilt DTB.
+
+- **New flash target:** `images-archive/qt-hmi-noroute.wic`
+- **SHA-256:** `809f19968c8fe0b650ea2a806b8c5751234459cd54f52c416be41ca82b882327`
+
+### Separate lead recorded for `wrap 52`
+
+Vendor uses `MIPI_DSI_MODE_VIDEO | VIDEO_BURST | LPM`; our patch 0019
+deliberately runs the LMT101 path **non-burst** (`PLL_CLOCK=420`). A constant
+horizontal shift that wraps is the classic signature of a DSI/VOP timing
+mismatch in non-burst mode. Test it as a single variable *after* BLK-015.
+
+### Free confirmations from the vendor DTB
+
+- No RK809 PMIC node at all — the board genuinely has none.
+- `sdmmc0`: one regulator for both supplies, no `sd-uhs-sdr104` — the same shape
+  our SD fix arrived at independently.
+
+**Still nothing verified on glass** — the board was powered off all session.
+
+---
