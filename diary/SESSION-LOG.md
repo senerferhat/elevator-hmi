@@ -2414,3 +2414,60 @@ mismatch in non-burst mode. Test it as a single variable *after* BLK-015.
 **Still nothing verified on glass** — the board was powered off all session.
 
 ---
+## 2026-08-22 — ✅ SD-CARD VIDEO PLAYS ON THE PANEL (confirmed on glass)
+
+**Owner confirmed: the video plays on the screen.** First video on this display,
+and the whole SD path is verified end to end on hardware.
+
+### Confirmed working
+
+- **SD slot** (`63b6313`): `fe2b0000.mmc` now probes instead of sitting in
+  "deferred probe pending". Boot log:
+  `dwmmc_rockchip fe2b0000.mmc: DW MMC controller at irq 72`.
+  `/dev/mmcblk1` + `/dev/mmcblk1p1` appear; udev mounts `/media/sdcard` vfat rw.
+- **MediaBackend**: `hmi media` lists `/media/sdcard/01-latest.avi`.
+- **Playback**: `hmi landscape-full` → process in `R` state at **121 % CPU**,
+  system 58 % idle. Log shows the expected software path
+  (`QRhi ... No RHI backend. Using CPU conversion.`); the PulseAudio warning is
+  harmless because the clip has no audio track.
+- **Clip**: 1280x720 MJPEG q92, 25 fps, no audio, 1.85 GB, transcoded from the
+  owner's 1920x1080@60 H.264 source. 1280x720 maps 1:1 onto the rotated
+  1280x800 stage, so no per-frame rescale.
+
+**Confirmed-good image: `images-archive/qt-hmi-noroute.wic`**
+SHA-256 `809f19968c8fe0b650ea2a806b8c5751234459cd54f52c416be41ca82b882327`
+(contains the media-first layouts, the SD DTS fix, software MJPEG playback, the
+ad slideshow and `hmi media`).
+
+### Still open — BLK-015, and it is now tightly bounded
+
+Video reaches the glass through **software decode into /dev/fb0**, NOT the VPU.
+The 60 fps hardware path still needs BLK-015. What this session eliminated, with
+evidence rather than opinion:
+
+- DTS video-port routing (vendor uses VP1 too — their own MIPI dtsi)
+- the logo/loader route (`show_logo` bails at `init_loader_memory` regardless)
+- **the driver version** — Boardcon's vop2 is 28 KB larger but every display-path
+  function is byte-identical, so their kernel would behave the same here
+- our userspace, the DSI/VP choice, the legacy-cursor hack (not in our branch)
+- the IOMMU — boot log shows `Adding to iommu group 9`, so the IOVAs are valid
+
+And the driver is provably correct at register level: 241 plane updates / 243
+`cfg_done` writes paired 1:1, `0x8002` = the right VP1 latch trigger, 60 Hz.
+
+The one remaining question is binary: does KMS scanout work on this board under
+ANY kernel? Test: flash `library/EM3566/Linux6.1/Image/update-buildroot-hdmi.img`
+with an HDMI monitor and run the same `modetest`. Displays -> keep hunting with a
+working reference. Blank -> Boardcon/Rockchip defect, escalate with the
+register-level evidence already recorded.
+
+### New defect found, not fixed
+
+```
+rockchip-pinctrl: pin gpio0-22 already requested by fe060000.dsi.0;
+                  cannot claim for fe6e0030.pwm
+```
+`gpio0-22` = GPIO0_C6 = panel XRES. The backlight PWM wants the same pin and
+loses, so the backlight cannot be PWM-dimmed. Also blocks R-04 adaptive dimming.
+
+---

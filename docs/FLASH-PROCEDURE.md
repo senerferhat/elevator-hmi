@@ -36,7 +36,43 @@ below, to avoid a second stale pointer existing alongside the current one.)*
 
 ---
 
-## CURRENT TEST TARGET (2026-08-22, later) — qt-hmi-noroute.wic — **BLK-015 candidate**
+## ✅ CURRENT / CONFIRMED-GOOD (2026-08-22) — qt-hmi-noroute.wic — SD VIDEO PLAYS
+
+**Status: verified on glass.** SD card mounts, the clip is found, and the video
+plays on the panel (software decode). This is the image to flash.
+
+| Field | Value |
+|---|---|
+| **Archive file** | `~/Projects/elevator-hmi/images-archive/qt-hmi-noroute.wic` |
+| **WIC SHA-256** | `809f19968c8fe0b650ea2a806b8c5751234459cd54f52c416be41ca82b882327` |
+| **Contains** | media-first layouts, SD slot DTS fix, software MJPEG playback, ad slideshow, `hmi media` |
+| **Verified** | `/dev/mmcblk1` present, `/media/sdcard` mounted, clip listed, playback at ~121 % CPU with 58 % system idle |
+
+On the board after flashing:
+
+```bash
+hmi media
+```
+
+```bash
+hmi landscape-full
+```
+
+Clip must be **MJPEG** (no H.264 decoder in this image — `gstreamer1.0-libav` is
+`LICENSE_FLAGS = "commercial"`). Encode at the source resolution so it maps 1:1
+onto the rotated 1280x800 stage:
+
+```bash
+gst-launch-1.0 -e filesrc location=IN.mp4 ! qtdemux name=d d.video_0 ! queue ! h264parse ! avdec_h264 ! videoconvert ! videoscale ! videorate ! video/x-raw,width=1280,height=720,framerate=25/1 ! jpegenc quality=92 ! avimux ! filesink location=01-latest.avi
+```
+
+NOTE: `&route_dsi0 { status = "disabled"; }` is carried in this image. It was a
+BLK-015 candidate that did NOT fix it, but it matches Boardcon's own MIPI dtsi
+and is harmless — the panel and video both work with it.
+
+---
+
+## SUPERSEDED — qt-hmi-noroute.wic as BLK-015 candidate
 
 **Status: flash this and run the kill test.** Disables the U-Boot logo handover
 (`route_dsi0`), matching Boardcon's own MIPI device tree. That handover calls
