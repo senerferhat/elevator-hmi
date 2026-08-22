@@ -289,27 +289,60 @@
 };
 
 /*
- * BLK-015 — VP0 was TESTED ON HARDWARE and FALSIFIED. Kept on VP1 (vendor's
- * choice) so we match Boardcon's own MIPI dtsi and the verified-good image.
+ * BLK-015 — RESOLVED 2026-08-22. Move the DSI panel from VP1 to VP0.
  *
- * The measurement that motivated moving to VP0: RK3568_REG_CFG_DONE at
- * fe040000 is self-clearing, and on VP1 the VP bit stayed set forever while
- * commits were in flight, i.e. the hardware never consumed the latch request.
+ * VP1 CANNOT LATCH PLANE UPDATES ON THIS BOARD. VP0 CAN. Confirmed on glass:
+ * with DSI on VP0, `modetest -M rockchip -s 191:800x1280` puts a stable colour
+ * grid on the panel. On VP1 the same command, and every KMS client including
+ * Qt/EGLFS, produced nothing at all for weeks -- only writes into the
+ * boot-latched buffer via /dev/fb0 ever appeared.
  *
- * Moving DSI to VP0 was built, flashed and measured. Result:
- *     baseline idle        fe040000: 00008000
- *     modetest on VP0      fe040000: 00008001  x10   <- VP0 bit STUCK SET
- * Identical to VP1. The VOP consumes config-done on NEITHER port, so this is
- * not a video-port problem and the change bought nothing.
+ * Register confirmation of the mechanism: RK3568_REG_CFG_DONE (fe040000) is
+ * self-clearing. During a STATIC modeset on VP0 it reads 0x00008000 -- VP0 bit
+ * CLEAR, i.e. the hardware consumed the config-done and transferred the shadow
+ * registers to the active bank. On VP1 plane updates never took effect.
  *
- * What the same session also established, so nobody re-treads it:
- *   - The VP really is scanning: the line counter at fe040060 advances
- *     (007d -> 03d7 -> 022e), vblank IRQs run at 60 Hz, and the panel shows
- *     live content from the boot-latched buffer.
- *   - The driver programs the correct address and the correct cfg_done value
- *     every frame (rockchipdrm debug=9: 241 plane updates / 243 cfg_done).
- *   - Boardcon's own vop2 driver is byte-identical to ours in every
- *     display-path function, so their kernel would behave the same.
- * A VOP that scans frames but never consumes config-done is a hardware/BSP
- * level defect, not something fixable in this DTS.
+ * CAUTION for whoever reads this next: sampling that register during
+ * `modetest -v` (continuous 60 Hz page flipping) shows the VP bit SET almost
+ * every time, because a flip is nearly always pending. That is NORMAL and must
+ * not be read as "the hardware never consumes config-done" -- doing exactly
+ * that produced a wrong conclusion during this investigation. Use a STATIC
+ * modeset when probing this register.
+ *
+ * WHY WE INHERITED THE BAD PORT: the Rockchip EVB hands VP0 to HDMI because it
+ * ships an HDMI display, pushing DSI onto VP1:
+ *     rk3566-evb2-lp4x-v10.dtsi:190  &dsi0_in_vp0 { status = "disabled"; };
+ *     rk3566-evb2-lp4x-v10.dtsi:194  &dsi0_in_vp1 { status = "okay";     };
+ *     rk3568-evb.dtsi:1077           &hdmi_in_vp0 { status = "okay";     };
+ * Correct for the EVB, wrong for this product, which has no HDMI at all.
+ * (Boardcon's own MIPI dtsi also uses VP1 -- but their shipped Linux images are
+ * LVDS and HDMI only, so that MIPI path was evidently never validated.)
+ *
+ * CONSEQUENCE: the linuxfb + software-rendering workaround is no longer needed.
+ * EGLFS/Mali and zero-copy VPU video become possible again (ADR-001).
+ *
+ * HDMI is moved to VP1 rather than deleted, so the port stays usable.
  */
+&dsi0_in_vp0 {
+	status = "okay";
+};
+
+&dsi0_in_vp1 {
+	status = "disabled";
+};
+
+&route_dsi0 {
+	connect = <&vp0_out_dsi0>;
+};
+
+&hdmi_in_vp0 {
+	status = "disabled";
+};
+
+&hdmi_in_vp1 {
+	status = "okay";
+};
+
+&route_hdmi {
+	connect = <&vp1_out_hdmi>;
+};

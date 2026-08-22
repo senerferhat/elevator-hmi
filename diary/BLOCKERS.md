@@ -7,7 +7,47 @@
 
 ## Open Blockers
 
-### BLK-015 — KMS scanout never reaches the panel (VOP2/VP1) — 🔴 **OPEN 2026-08-18**
+### BLK-015 — KMS scanout never reaches the panel (VOP2/VP1) — ✅ **RESOLVED 2026-08-22**
+
+> **RESOLUTION: the DSI panel was on the wrong video port. VP1 cannot latch
+> plane updates on this board; VP0 can.**
+>
+> **Proof on glass (2026-08-22):** with `&dsi0_in_vp0 { status = "okay"; }` and
+> `&dsi0_in_vp1 { status = "disabled"; }`, `modetest -M rockchip -s
+> 191:800x1280` displays a **stable colour grid** on the panel. On VP1 the same
+> command — and every KMS client including Qt/EGLFS — produced nothing for
+> weeks; only writes into the boot-latched buffer via `/dev/fb0` ever appeared.
+>
+> **Register confirmation:** `RK3568_REG_CFG_DONE` (fe040000) is self-clearing.
+> During a STATIC modeset on VP0 it reads `0x00008000` — VP0 bit CLEAR, so the
+> hardware consumed the config-done and transferred shadow → active.
+>
+> **Why we inherited the bad port:** the Rockchip EVB gives VP0 to HDMI because
+> it ships an HDMI display, pushing DSI to VP1
+> (`rk3566-evb2-lp4x-v10.dtsi:190/194/541`, `rk3568-evb.dtsi:1077`). Right for
+> the EVB, wrong for a product with no HDMI.
+>
+> **Two wrong turns worth remembering:**
+> 1. VP0 was proposed early, then dropped after reading Boardcon's **LVDS** DTB,
+>    where DSI is disabled and its port assignment is a meaningless default.
+>    Their MIPI dtsi does use VP1 — but their shipped Linux images are LVDS/HDMI
+>    only, so that path was evidently never validated on this silicon.
+> 2. Sampling `REG_CFG_DONE` during `modetest -v` shows the VP bit set almost
+>    always, because a flip is nearly always pending at 60 Hz. That is NORMAL.
+>    Reading it as "the hardware never consumes config-done" produced a
+>    confident, wrong conclusion — and nearly buried the correct fix. **Probe
+>    that register with a STATIC modeset only.**
+>
+> **Consequence:** the `linuxfb` + software-rendering workaround is no longer
+> required. EGLFS/Mali and zero-copy VPU video (ADR-001, CLAUDE.md §1) are
+> unblocked.
+>
+> Also eliminated by test along the way, so nobody re-treads them: the
+> drm/rockchip backport (vendor display path byte-identical, patch at `924fd3b`),
+> the logo/loader route, the legacy-cursor hack (not in our branch), and the
+> IOMMU (attached, group 9).
+
+#### Original report (2026-08-18)
 **Opened:** 2026-08-18
 **Severity:** HIGH for media — **worked around for UI** (linuxfb), see below.
 
