@@ -55,16 +55,19 @@ SRC_URI += "file://0021-drm-panel-jadard-lmt101-init-in-prepare.patch"
 # (POST_BUF_EMPTY), aclk-rate management, an iommu fault handler and its own
 # fbdev implementation that we lack entirely. Full rationale in the patch header.
 # Panel patches above are unaffected: they touch drivers/gpu/drm/panel/.
-# PARKED — WORK IN PROGRESS, DO NOT ENABLE WITHOUT FINISHING THE PORT.
-# The vendor drm/rockchip depends on symbols spread across the vendor kernel:
-#   enum rockchip_drm_error_event_type -> include/uapi/drm/rockchip_drm.h  (DONE,
-#                                          included in the patch)
-#   SYS_STATUS_MULTIVP / SYS_STATUS_SINGLEVP -> include/dt-bindings/soc/
-#                                          rockchip-system-status.h        (TODO)
-#   ROCKCHIP_VOP2_PHY_ID_INVALID          -> include/dt-bindings/display/   (TODO)
-# i.e. this is a different kernel, not a drop-in directory. Enabling it as-is
-# fails do_compile. Left parked so the tree stays buildable.
-# SRC_URI += "file://0030-drm-rockchip-backport-boardcon-rkr5-bsp.patch"
+# BLK-015: the Boardcon rkr5 drm/rockchip backport was ABANDONED, with evidence.
+# The vendor's vop2 driver is 28 KB larger than ours, but every function in the
+# DISPLAY path is byte-identical:
+#     vop2_cfg_done, rk3568_vop2_cfg_done, vop2_crtc_atomic_flush,
+#     vop2_wait_for_fs_by_done_bit_status, vop2_win_atomic_update,
+#     vop2_plane_atomic_update, vop2_crtc_atomic_enable, vop2_initial,
+#     vop2_win_enable
+# The 28 KB is DP-MST, HDCP2, pixel-shift, HDR and error reporting. The one
+# function that looked relevant, vop2_set_aclk_rate, is RK3562/RK3576-only
+# (csu_aclk + devfreq) and never runs on RK3566. So the vendor driver would
+# behave identically here and cannot fix BLK-015.
+# The full 424 KB patch is preserved in git history at commit 924fd3b if it is
+# ever wanted; it is not carried in the tree because it is proven inert.
 # 0022 BIST-IN-PREPARE (2026-07-23, diagnostic-only): vendor TEST 2 arm as a one-shot
 # test, 2s observation dwell, no return-to-video path. SUPERSEDED 2026-08-07 by 0024
 # (master-image two-phase flow). Kept in tree for history; do not re-enable alongside 0024.
