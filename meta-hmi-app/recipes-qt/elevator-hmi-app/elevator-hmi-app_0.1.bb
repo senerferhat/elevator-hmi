@@ -38,6 +38,7 @@ SRC_URI = "file://CMakeLists.txt \
            file://LandscapeView.qml \
            file://FloorRail.qml \
            file://VideoPane.qml \
+           file://SimpleView.qml \
            file://DirectionArrows.qml \
            file://Card.qml \
            file://Stat.qml \

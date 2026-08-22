@@ -2229,3 +2229,62 @@ irrelevant (udev mounts by device node).
 session, so nothing here has been run on the board.
 
 ---
+## 2026-08-22 — media-first layouts + max-quality clip
+
+**Added two video-first layouts** (`SimpleView.qml`), on owner request for a
+simpler GUI with the video dominant:
+
+| `hmi` name | Result |
+|---|---|
+| `simple` | floor number + animated arrows in a narrow strip, video fills the rest |
+| `full` | fullscreen video, no HMI chrome |
+| `landscape-simple` | as simple, rotated — video well ~1000x800 |
+| `landscape-full` | fullscreen rotated — 1280x800 stage |
+
+The strip carries **only** what a passenger needs mid-ride: FLOOR label, the
+floor number, and the animated direction arrows (reusing `DirectionArrows`).
+No cards, no diagnostics, no log, and the DEMO chip is hidden.
+
+**Cinema panes letterbox, they do not crop.** `VideoSurface` gained a `fit`
+property and `VideoPane` gained `fitMedia` / `showChrome`. Cropping a 16:9 clip
+into a portrait well would discard most of the frame; bars are painted black,
+because grey theme bars around a video read as a rendering fault.
+
+**Best picture: `landscape-full` with a 1280x720 clip.** The rotated stage is
+1280x800, so a native-resolution clip maps **1:1 — zero scaling**. That is both
+the sharpest result and the cheapest per frame, since there is no resample.
+
+### Max-quality clip
+
+Re-encoded the owner's demo at the **source** resolution rather than downscaling:
+1280x720, MJPEG q92, 25 fps, no audio -> `demo-video/01-demo-hq.avi`, 1.07 GB.
+Verified 1280x720 @ 25/1 and decoded back through `avidemux ! jpegdec`, the exact
+chain the board uses. The earlier 800x600 q75 file remains as the lighter option
+if 720p software decode proves too heavy.
+
+MJPEG has no inter-frame compression, hence ~1 GB for 5.5 min. That is the price
+of having no H.264 decoder (`gstreamer1.0-libav` is `LICENSE_FLAGS=commercial`).
+
+- **New flash target:** `images-archive/qt-hmi-cinema.wic`
+- **SHA-256:** `6e057d6636897b5640f2c85d23e5f08f9b9f66cdc8b4324a6f09c6b6bfd86fa0`
+
+### Verified / NOT verified
+
+Verified from the built RPM: `SimpleView.qml` shipped, `fitChanged` in the
+binary, `landscape-simple` / `landscape-full` / `cinema` accepted, `hmi` and the
+init script both know the new names. Layout canonicalisation round-tripped for
+every alias, and `bogus` correctly rejected. 10/10 QML files lint clean.
+
+**Nothing verified on glass.** The board was **powered off** this session — the
+CH34x adapter enumerated but no Rockchip USB device and a completely silent
+console. The SD card had also been removed from the PC, so the HQ clip could not
+be copied to it.
+
+### Owner still needs to
+
+1. Copy `demo-video/01-demo-hq.avi` to the card root (and delete the old
+   `01-demo.avi` / `demo_media.mp4` so the HQ clip is the one that plays).
+2. Flash `qt-hmi-cinema.wic`.
+3. `hmi landscape-full`.
+
+---

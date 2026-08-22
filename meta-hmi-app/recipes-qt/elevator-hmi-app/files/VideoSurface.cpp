@@ -28,6 +28,15 @@ void VideoSurface::setBackend(MediaBackend *b)
     update();
 }
 
+void VideoSurface::setFit(bool f)
+{
+    if (m_fit == f)
+        return;
+    m_fit = f;
+    emit fitChanged();
+    update();
+}
+
 void VideoSurface::paint(QPainter *painter)
 {
     if (!m_backend)
@@ -36,10 +45,13 @@ void VideoSurface::paint(QPainter *painter)
     if (img.isNull())
         return;
 
-    // PreserveAspectCrop, to match the still-image slideshow: a letterboxed ad
-    // reads as a fault on a fixed-function display.
+    // Crop by default, to match the still-image slideshow: a letterboxed ad
+    // reads as a fault on a fixed-function display. Cinema layouts set fit=true
+    // instead, because cropping 16:9 into a portrait panel would throw away most
+    // of the frame.
     QSizeF scaled(img.size());
-    scaled.scale(width(), height(), Qt::KeepAspectRatioByExpanding);
+    scaled.scale(width(), height(),
+                 m_fit ? Qt::KeepAspectRatio : Qt::KeepAspectRatioByExpanding);
     const QRectF dst(QPointF((width() - scaled.width()) / 2.0,
                              (height() - scaled.height()) / 2.0),
                      scaled);

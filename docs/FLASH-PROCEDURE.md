@@ -36,7 +36,58 @@ below, to avoid a second stale pointer existing alongside the current one.)*
 
 ---
 
-## CURRENT TEST TARGET (2026-08-19) — qt-hmi-sdvideo.wic — **SD slot fixed** + video
+## CURRENT TEST TARGET (2026-08-22) — qt-hmi-cinema.wic — media-first layouts
+
+**Status: recommended for next flash.** Adds two video-first layouts on top of
+the SD-slot fix and software MJPEG playback.
+
+| Layout | What you get |
+|---|---|
+| `hmi simple` | floor number + animated arrows in a narrow strip, video fills the rest (portrait) |
+| `hmi full` | fullscreen video, no HMI chrome (portrait, letterboxed) |
+| `hmi landscape-simple` | as simple, rotated — video well ~1000x800 |
+| **`hmi landscape-full`** | **fullscreen rotated — 1280x800 stage, best 16:9 picture** |
+
+**Use `landscape-full` with a 1280x720 clip.** The rotated stage is 1280x800, so
+a 1280x720 MJPEG maps **1:1 with no scaling at all** — sharpest possible, and the
+cheapest to decode because there is no resample per frame.
+
+Cinema layouts letterbox (fit) rather than crop: cropping a 16:9 clip into a
+portrait well would throw away most of the frame. Bars are painted black.
+
+| Field | Value |
+|---|---|
+| **Archive file** | `~/Projects/elevator-hmi/images-archive/qt-hmi-cinema.wic` |
+| **WIC SHA-256** | `6e057d6636897b5640f2c85d23e5f08f9b9f66cdc8b4324a6f09c6b6bfd86fa0` |
+| **Deploy name** | `elevator-hmi-image-elevator-hmi-em3566.rootfs-20260822102230.wic` |
+| **Also contains** | SD slot DTS fix (vmmc off the dead RK809), MJPEG playback, ad slideshow, `hmi media` |
+
+```bash
+cd ~/Projects/elevator-hmi/images-archive
+sha256sum qt-hmi-cinema.wic   # expect 6e057d6636897b5640f2c85d23e5f08f9b9f66cdc8b4324a6f09c6b6bfd86fa0
+sudo rkdeveloptool db loader.bin      # skip if the board is in Loader mode
+sudo rkdeveloptool wl 0      qt-hmi-cinema.wic
+sudo rkdeveloptool wl 64     idblock.img
+sudo rkdeveloptool wl 0x4000 uboot.img
+sudo rkdeveloptool rd
+```
+
+### Max-quality clip
+
+Encode at the SOURCE resolution — no downscale, no quality lost, and 1:1 on the
+landscape stage:
+
+```bash
+gst-launch-1.0 -e filesrc location=IN.mp4 ! qtdemux name=d d.video_0 ! queue ! h264parse ! avdec_h264 ! videoconvert ! videorate ! video/x-raw,framerate=25/1 ! jpegenc quality=92 ! avimux ! filesink location=01-demo-hq.avi
+```
+
+1280x720 q92 lands around 1 GB for 5.5 minutes. MJPEG has no inter-frame
+compression — that is the cost of having no H.264 decoder (libav is
+`LICENSE_FLAGS = "commercial"`).
+
+---
+
+## SUPERSEDED (2026-08-19) — qt-hmi-sdvideo.wic — **SD slot fixed** + video
 
 **Status: recommended for next flash.** Fixes the reason the SD slot was dead,
 and carries the software video decode.

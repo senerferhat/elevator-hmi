@@ -43,6 +43,21 @@ static QString canonicalLayout(const QString &s)
         return QStringLiteral("landscape");
     if (s == QLatin1String("landscape-video"))
         return QStringLiteral("landscape-video");
+    // Media-first layouts. Keep these in sync with canonicalLayout() in
+    // main.qml — QML re-parses argv and C++ only validates, so a name accepted
+    // here but unknown there would silently fall back to portrait.
+    if (s == QLatin1String("simple") || s == QLatin1String("portrait-simple")
+        || s == QLatin1String("video-simple"))
+        return QStringLiteral("simple");
+    if (s == QLatin1String("full") || s == QLatin1String("portrait-full")
+        || s == QLatin1String("fullscreen") || s == QLatin1String("video-full")
+        || s == QLatin1String("cinema"))
+        return QStringLiteral("full");
+    if (s == QLatin1String("landscape-simple"))
+        return QStringLiteral("landscape-simple");
+    if (s == QLatin1String("landscape-full") || s == QLatin1String("landscape-fullscreen")
+        || s == QLatin1String("landscape-cinema"))
+        return QStringLiteral("landscape-full");
     return QString();
 }
 

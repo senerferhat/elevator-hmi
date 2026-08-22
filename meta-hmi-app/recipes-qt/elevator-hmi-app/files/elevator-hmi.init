@@ -73,6 +73,7 @@ case "$LAYOUT" in
     car|vertical) LAYOUT=portrait ;;
     video|vertical-video) LAYOUT=portrait-video ;;
     portrait|portrait-video|landscape|landscape-video) ;;
+    simple|full|landscape-simple|landscape-full) ;;
     *) LAYOUT=portrait ;;
 esac
 if [ -r "$ROT_FILE" ]; then

@@ -27,6 +27,7 @@ install(FILES
     LandscapeView.qml
     FloorRail.qml
     VideoPane.qml
+    SimpleView.qml
     DirectionArrows.qml
     Card.qml
     Stat.qml

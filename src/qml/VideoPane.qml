@@ -25,6 +25,13 @@ Item {
     property var hmi
     clip: true
 
+    // Cinema mode (fullscreen / simple layouts): letterbox instead of crop, and
+    // drop the status chrome so the picture is the whole point. Letterbox bars
+    // are painted black rather than the theme well — grey bars around a video
+    // read as a rendering fault.
+    property bool fitMedia: false
+    property bool showChrome: true
+
     readonly property var src: media
     readonly property bool haveCard: src && src.mounted
     readonly property int clipCount: src ? src.clipCount : 0
@@ -96,7 +103,7 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        color: pane.well
+        color: pane.fitMedia && pane.showingMedia ? "black" : pane.well
 
         // ---- Hatch (visible whenever there is no decoded frame) ----------
         Item {
@@ -122,6 +129,7 @@ Item {
         VideoSurface {
             anchors.fill: parent
             backend: pane.src
+            fit: pane.fitMedia
             visible: pane.showingVideo
         }
 
@@ -137,7 +145,7 @@ Item {
             sourceSize.height: Math.max(1, Math.round(pane.height))
             // Fill the well: an ad with letterboxing looks like a bug on a
             // fixed-function display.
-            fillMode: Image.PreserveAspectCrop
+            fillMode: pane.fitMedia ? Image.PreserveAspectFit : Image.PreserveAspectCrop
             cache: false
             visible: pane.showingImage
 
@@ -160,6 +168,7 @@ Item {
             x: 20
             y: 18
             spacing: 8
+            visible: pane.showChrome
             Rectangle {
                 width: 8; height: 8; radius: 4
                 color: pane.statusDot
@@ -178,6 +187,7 @@ Item {
             anchors.right: parent.right
             anchors.rightMargin: 20
             y: 18
+            visible: pane.showChrome
             text: pane.showingVideo ? "PLAYING · SOFTWARE DECODE"
                   : pane.showingImage ? ((pane.imageIndex + 1) + " / " + pane.imageCount)
                   : "SAFETY · 720P"
@@ -240,7 +250,7 @@ Item {
             anchors.bottom: parent.bottom
             anchors.bottomMargin: 18
             spacing: 12
-            visible: !pane.showingMedia
+            visible: pane.showChrome && !pane.showingMedia
 
             Repeater {
                 model: ["PLAY", "UNMUTE"]
@@ -274,6 +284,7 @@ Item {
             width: footer.implicitWidth + 20
             height: footer.implicitHeight + 12
             radius: 2
+            visible: pane.showChrome
             color: pane.showingMedia ? Qt.rgba(0, 0, 0, 0.45) : "transparent"
 
             Text {

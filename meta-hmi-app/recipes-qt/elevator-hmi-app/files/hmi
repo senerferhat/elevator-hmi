@@ -9,6 +9,10 @@
 #   hmi rot 90|270              which way landscape maps onto the portrait panel
 #   hmi wrap N                  circular horizontal shift in pixels (52 default;
 #                               0 disables). Use if the right edge wraps left.
+#   hmi simple                  floor + arrows aside, video fills the rest
+#   hmi full                    fullscreen video, no HMI chrome
+#   hmi landscape-simple        as simple, rotated — best video area for 16:9
+#   hmi landscape-full          fullscreen video rotated — largest 16:9 picture
 #   hmi media                   SD card state: mount, slot devices, ads, clips
 #
 # Aliases (kept from the first demo image):
@@ -54,12 +58,17 @@ canonical_layout() {
         video|vertical-video|portrait-video) echo portrait-video ;;
         landscape|landscape-car) echo landscape ;;
         landscape-video) echo landscape-video ;;
+        simple|portrait-simple|video-simple) echo simple ;;
+        full|portrait-full|fullscreen|video-full|cinema) echo full ;;
+        landscape-simple) echo landscape-simple ;;
+        landscape-full|landscape-fullscreen|landscape-cinema) echo landscape-full ;;
         *) echo "" ;;
     esac
 }
 
 usage() {
     echo "Usage: hmi [portrait|portrait-video|landscape|landscape-video]"
+    echo "       hmi [simple|full|landscape-simple|landscape-full]"
     echo "       hmi rot [90|270]"
     echo "       hmi wrap [N]"
     echo "       hmi media"

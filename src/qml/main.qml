@@ -65,6 +65,17 @@ Window {
             return "landscape";
         if (s === "landscape-video")
             return "landscape-video";
+        // Media-first layouts (SimpleView): strip + video, or fullscreen video.
+        if (s === "simple" || s === "portrait-simple" || s === "video-simple")
+            return "simple";
+        if (s === "full" || s === "portrait-full" || s === "fullscreen"
+            || s === "video-full" || s === "cinema")
+            return "full";
+        if (s === "landscape-simple")
+            return "landscape-simple";
+        if (s === "landscape-full" || s === "landscape-fullscreen"
+            || s === "landscape-cinema")
+            return "landscape-full";
         return "";
     }
 
@@ -85,7 +96,12 @@ Window {
         }
         return found;
     }
-    property bool videoMode: layout.indexOf("video") !== -1
+    // SimpleView layouts: "simple" keeps a narrow floor/arrow strip, "full" is
+    // fullscreen video with no HMI chrome at all.
+    property bool cinema: layout.indexOf("simple") !== -1 || layout.indexOf("full") !== -1
+    property bool cinemaStrip: layout.indexOf("simple") !== -1
+    // Cinema layouts are media layouts too — the pane must be live.
+    property bool videoMode: layout.indexOf("video") !== -1 || cinema
     property bool landscape: layout.indexOf("landscape") === 0
 
     // 90 = clockwise. If the car mount is the other way up: `hmi rot 270`.
@@ -296,13 +312,19 @@ Window {
 
                         PortraitView {
                             anchors.fill: parent
-                            visible: !root.landscape
+                            visible: !root.landscape && !root.cinema
                             hmi: root
                         }
                         LandscapeView {
                             anchors.fill: parent
-                            visible: root.landscape
+                            visible: root.landscape && !root.cinema
                             hmi: root
+                        }
+                        SimpleView {
+                            anchors.fill: parent
+                            visible: root.cinema
+                            hmi: root
+                            showStrip: root.cinemaStrip
                         }
 
                         Rectangle {
@@ -310,6 +332,8 @@ Window {
                             anchors.rightMargin: 24
                             anchors.bottom: parent.bottom
                             anchors.bottomMargin: 16
+                            // Chrome: hidden in the media-first layouts.
+                            visible: !root.cinema
                             width: demoChipLabel.implicitWidth + 28
                             height: 36
                             radius: 4
