@@ -143,3 +143,6 @@ images-archive/
 
 # serial-mcp-server traces/specs (local tooling state, not project source)
 .serial_mcp/
+
+# Demo media scratch (source + transcoded clips, hundreds of MB)
+demo-video/
