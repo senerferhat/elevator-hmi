@@ -177,6 +177,69 @@ kernel to Boardcon's `em3566_linux6.1-rkr5` or backport
 its own task, but it is now the best-supported path and everything cheaper has
 been eliminated.
 
+#### 2026-08-22 — ROOT CAUSE MEASURED: the VOP never consumes config-done
+
+`RK3568_REG_CFG_DONE` (fe040000) is **self-clearing**: the driver writes
+`GLB_CFG_DONE_EN | BIT(vp->id)` and the VOP consumes it at frame start, clearing
+the bit. Sampled directly from `/sys/kernel/debug/dri/0/regs`:
+
+| State | Register | Meaning |
+|---|---|---|
+| idle, VP1 | `0000c000` | no pending bit |
+| modetest on **VP1** | `0000c002` x10 | **VP1 bit stuck set** |
+| idle, VP0 | `00008000` | no pending bit |
+| modetest on **VP0** | `00008001` x10 | **VP0 bit stuck set** |
+
+**The VOP consumes config-done on NEITHER video port.** Shadow registers
+therefore never transfer to the active bank, and the VP keeps scanning whatever
+was latched at boot. This single fact explains every symptom seen since
+2026-08-18.
+
+And it is not for want of frames — the VP is demonstrably running:
+- line counter at `fe040060` advances (`007d` -> `03d7` -> `022e`)
+- vblank IRQ 46 fires 60/s
+- the panel shows live content from the boot-latched buffer
+- the driver programs the right address AND the right cfg_done value every
+  frame (rockchipdrm debug=9: 241 plane updates / 243 cfg_done writes, 1:1)
+
+The driver cannot detect it: `vop2_pending_done_bits()` returns 0 early when the
+only pending bit belongs to the calling VP, so nothing verifies it cleared.
+
+#### FALSIFIED BY TEST (not by argument)
+
+- **Move DSI to VP0.** Built, flashed, measured: VP0 bit sticks exactly like
+  VP1. Not port-specific.
+- **Backport Boardcon's drm/rockchip.** Their vop2 driver is 28 KB larger, but
+  every display-path function is byte-identical
+  (`vop2_cfg_done`, `rk3568_vop2_cfg_done`, `vop2_crtc_atomic_flush`,
+  `vop2_wait_for_fs_by_done_bit_status`, `vop2_win_atomic_update`,
+  `vop2_plane_atomic_update`, `vop2_crtc_atomic_enable`, `vop2_initial`,
+  `vop2_win_enable`). Their kernel would behave the same. Patch abandoned;
+  preserved at commit `924fd3b`.
+- `route_dsi0` logo handover, DTS port routing, the legacy-cursor hack (not in
+  our branch), the IOMMU (`Adding to iommu group 9` — attached), our userspace.
+
+#### STATUS: ESCALATE
+
+A VOP that scans frames continuously but never consumes config-done on any
+video port is a hardware/BSP defect. It is not fixable in our DTS, our
+userspace, or by taking the vendor's driver.
+
+**Defect report for Boardcon / Rockchip:**
+> RK3566 (Boardcon EM3566 v3, CM3566 SoM), kernel 6.1.57-rockchip-standard from
+> meta-rockchip. VOP2 scans out normally: line counter advances, vblank at
+> 60 Hz, panel displays the buffer latched at boot. But `REG_CFG_DONE` bit for
+> the active VP never clears — sampled 10x during a `modetest -v` run on VP1
+> (`0x0000c002`) and again after re-routing DSI to VP0 (`0x00008001`). The
+> driver writes the correct value (`GLB_CFG_DONE_EN | BIT(vp)`) and the correct
+> plane address every frame. Consequently no plane update ever reaches the
+> hardware, and the only way to change the display is writing into the
+> already-latched framebuffer via /dev/fb0. Reproduced with `modetest` and a
+> plain dumb buffer, so no Qt/Mali/GBM involvement.
+
+Workaround in production use: `linuxfb` + software rendering (writes into the
+latched buffer). Costs the Mali GPU and makes zero-copy VPU video impossible.
+
 #### Separate lead for the `wrap 52` hack (not BLK-015)
 
 Vendor: `dsi,flags = <(MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_VIDEO_BURST | MIPI_DSI_MODE_LPM)>`

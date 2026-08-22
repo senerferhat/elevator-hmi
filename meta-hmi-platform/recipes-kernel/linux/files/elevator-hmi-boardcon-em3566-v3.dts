@@ -289,70 +289,27 @@
 };
 
 /*
- * BLK-015 — move the DSI panel from Video Port 1 to Video Port 0.
+ * BLK-015 — VP0 was TESTED ON HARDWARE and FALSIFIED. Kept on VP1 (vendor's
+ * choice) so we match Boardcon's own MIPI dtsi and the verified-good image.
  *
- * MECHANISM (measured on target 2026-08-22, one panel, no second display):
- * RK3568_REG_CFG_DONE at fe040000 is self-clearing: the driver writes
- * GLB_CFG_DONE_EN | BIT(vp->id) and the VOP consumes it at the next frame
- * start, clearing the bit. Sampled 10x while modetest was running:
- *     fe040000: 0000c002   <- VP1 bit (0x2) STUCK SET, never clears
- * and 5x after stopping it:
- *     fe040000: 0000c000   <- clear
- * So on VP1 the hardware NEVER consumes the config-done request. The shadow
- * registers therefore never transfer to the active bank, and the VP keeps
- * scanning the buffer latched at boot. That explains every symptom at once:
- * commits accepted, vblank at 60 Hz, correct address and correct cfg_done value
- * programmed every frame, and nothing on the glass except writes made directly
- * into the already-latched buffer via /dev/fb0.
+ * The measurement that motivated moving to VP0: RK3568_REG_CFG_DONE at
+ * fe040000 is self-clearing, and on VP1 the VP bit stayed set forever while
+ * commits were in flight, i.e. the hardware never consumed the latch request.
  *
- * The driver cannot notice this: vop2_pending_done_bits() returns 0 early when
- * the only pending bit is the caller's own VP ("no need to wait"), so nothing
- * ever verifies the bit actually cleared.
+ * Moving DSI to VP0 was built, flashed and measured. Result:
+ *     baseline idle        fe040000: 00008000
+ *     modetest on VP0      fe040000: 00008001  x10   <- VP0 bit STUCK SET
+ * Identical to VP1. The VOP consumes config-done on NEITHER port, so this is
+ * not a video-port problem and the change bought nothing.
  *
- * WHY VP0: RK3566 is a cut-down RK3568 and the video ports are not equivalent.
- * We inherit the Rockchip EVB's assignment, which hands VP0 to HDMI because the
- * EVB ships an HDMI display (rk3566-evb2-lp4x-v10.dtsi:190/194/541,
- * rk3568-evb.dtsi:1077). This product has no HDMI at all, so VP0 is free.
- *
- * HONEST STATUS: this is a hypothesis with a measured mechanism, not a proven
- * fix. An earlier revision of this file made the same change for a WEAKER
- * reason (a misread of the vendor's LVDS DTB, where DSI is disabled and its
- * port assignment is meaningless) and was reverted without ever being flashed.
- * Note also that Boardcon's own MIPI dtsi
- * (boardcon-em3566-v3-v3.0-mipi.dtsi:318) uses VP1 — but their shipped Linux
- * images are LVDS and HDMI only, so that MIPI path may never have been
- * validated on this hardware.
- *
- * KILL TEST after flashing:
- *     modetest -M rockchip -s <connector>@<crtc>:800x1280
- * and, decisively, sample the register while it runs:
- *     grep -m1 '^fe040000:' /sys/kernel/debug/dri/0/regs
- * If the VP0 bit (0x1) toggles/clears instead of sticking, the hardware is
- * consuming config-done and BLK-015 is fixed.
- *
- * HDMI is moved to VP1 rather than deleted, so the port stays available as a
- * diagnostic.
+ * What the same session also established, so nobody re-treads it:
+ *   - The VP really is scanning: the line counter at fe040060 advances
+ *     (007d -> 03d7 -> 022e), vblank IRQs run at 60 Hz, and the panel shows
+ *     live content from the boot-latched buffer.
+ *   - The driver programs the correct address and the correct cfg_done value
+ *     every frame (rockchipdrm debug=9: 241 plane updates / 243 cfg_done).
+ *   - Boardcon's own vop2 driver is byte-identical to ours in every
+ *     display-path function, so their kernel would behave the same.
+ * A VOP that scans frames but never consumes config-done is a hardware/BSP
+ * level defect, not something fixable in this DTS.
  */
-&dsi0_in_vp0 {
-	status = "okay";
-};
-
-&dsi0_in_vp1 {
-	status = "disabled";
-};
-
-&route_dsi0 {
-	connect = <&vp0_out_dsi0>;
-};
-
-&hdmi_in_vp0 {
-	status = "disabled";
-};
-
-&hdmi_in_vp1 {
-	status = "okay";
-};
-
-&route_hdmi {
-	connect = <&vp1_out_hdmi>;
-};
