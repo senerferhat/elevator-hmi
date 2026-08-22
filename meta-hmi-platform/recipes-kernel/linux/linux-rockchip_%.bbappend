@@ -36,6 +36,35 @@ SRC_URI += "file://0019-drm-panel-jadard-lmt101-vendor-clock-match.patch"
 # mode before drm_panel_enable; enable()-time init rides live-video blanking). Kill test in
 # docs/FLASH-PROCEDURE.md.
 SRC_URI += "file://0021-drm-panel-jadard-lmt101-init-in-prepare.patch"
+
+# BLK-015: replace drivers/gpu/drm/rockchip/ with Boardcon's rkr5 BSP version.
+# Measured on target: the driver programs the scanout address AND writes the
+# correct VP1 cfg_done latch (0x8002) every frame at 60 Hz, and the hardware
+# still never latches. That rules out our DTS and userspace. meta-rockchip pins
+# a linux-rockchip that is not this board's BSP; the vendor's vop2 driver is
+# 28 KB larger and carries a FIFO-underrun handler, aclk-rate management, an
+# iommu fault handler and its own fbdev implementation that we lack entirely.
+# Full rationale in the patch header. Panel patches above are unaffected: they
+# touch drivers/gpu/drm/panel/.
+# BLK-015: replace drivers/gpu/drm/rockchip/ with Boardcon's rkr5 BSP version.
+# Measured on target (rockchipdrm debug=9): the driver programs the scanout
+# address AND writes the correct VP1 cfg_done (0x8002) every frame at 60 Hz, and
+# the hardware still never latches. That rules out our DTS and userspace.
+# meta-rockchip pins a linux-rockchip that is not this board's BSP; the vendor's
+# vop2 driver is 28 KB larger and carries a FIFO-underrun handler
+# (POST_BUF_EMPTY), aclk-rate management, an iommu fault handler and its own
+# fbdev implementation that we lack entirely. Full rationale in the patch header.
+# Panel patches above are unaffected: they touch drivers/gpu/drm/panel/.
+# PARKED — WORK IN PROGRESS, DO NOT ENABLE WITHOUT FINISHING THE PORT.
+# The vendor drm/rockchip depends on symbols spread across the vendor kernel:
+#   enum rockchip_drm_error_event_type -> include/uapi/drm/rockchip_drm.h  (DONE,
+#                                          included in the patch)
+#   SYS_STATUS_MULTIVP / SYS_STATUS_SINGLEVP -> include/dt-bindings/soc/
+#                                          rockchip-system-status.h        (TODO)
+#   ROCKCHIP_VOP2_PHY_ID_INVALID          -> include/dt-bindings/display/   (TODO)
+# i.e. this is a different kernel, not a drop-in directory. Enabling it as-is
+# fails do_compile. Left parked so the tree stays buildable.
+# SRC_URI += "file://0030-drm-rockchip-backport-boardcon-rkr5-bsp.patch"
 # 0022 BIST-IN-PREPARE (2026-07-23, diagnostic-only): vendor TEST 2 arm as a one-shot
 # test, 2s observation dwell, no return-to-video path. SUPERSEDED 2026-08-07 by 0024
 # (master-image two-phase flow). Kept in tree for history; do not re-enable alongside 0024.
